@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/plugins/">
+    <Project Path="plugins/Shinano.Plugin.OnlineCheck/Shinano.Plugin.OnlineCheck.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Shinano.Framework/Shinano.Framework.csproj" />
+    <Project Path="src/Shinano.Host/Shinano.Host.csproj" />
+    <Project Path="src/Shinano.Infrastructure/Shinano.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Shinano.Tests/Shinano.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/SamplePlugins/">
+    <Project Path="tests/SamplePlugins/Shinano.Tests.SamplePluginA/Shinano.Tests.SamplePluginA.csproj" />
+    <Project Path="tests/SamplePlugins/Shinano.Tests.SamplePluginB/Shinano.Tests.SamplePluginB.csproj" />
+  </Folder>
+</Solution>

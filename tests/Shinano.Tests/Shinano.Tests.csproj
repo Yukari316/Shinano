@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing"/>
+    <PackageReference Include="xunit.v3"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Shinano.Host\Shinano.Host.csproj"/>
+    <ProjectReference Include="..\..\plugins\Shinano.Plugin.OnlineCheck\Shinano.Plugin.OnlineCheck.csproj"/>
+    <!-- 测试用插件只需先构建到 artifacts/test-plugins，由插件运行时按插件包加载。 -->
+    <ProjectReference Include="..\SamplePlugins\Shinano.Tests.SamplePluginA\Shinano.Tests.SamplePluginA.csproj" ReferenceOutputAssembly="false"/>
+    <ProjectReference Include="..\SamplePlugins\Shinano.Tests.SamplePluginB\Shinano.Tests.SamplePluginB.csproj" ReferenceOutputAssembly="false"/>
+    <ProjectReference Include="..\..\src\Shinano.Infrastructure\Shinano.Infrastructure.csproj"/>
+  </ItemGroup>
+
+</Project>

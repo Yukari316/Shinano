@@ -1,0 +1,7 @@
+{
+  "id": "online-check",
+  "name": "在线检测",
+  "version": "1.0.0",
+  "description": "私聊“在”、戳一戳与 echo，用于确认 Bot 在线",
+  "entryAssembly": "Shinano.Plugin.OnlineCheck.dll"
+}

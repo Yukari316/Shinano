@@ -1,0 +1,6 @@
+{
+  "id": "sample-a",
+  "name": "测试插件 A",
+  "version": "1.0.0",
+  "entryAssembly": "Shinano.Tests.SamplePluginA.dll"
+}

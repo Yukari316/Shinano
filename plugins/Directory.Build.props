@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"/>
+
+  <!-- 插件按插件包目录布局输出到 artifacts/plugins/<工程名>/，宿主的插件目录可直接指向 artifacts/plugins。 -->
+  <PropertyGroup>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)../artifacts/plugins/$(MSBuildProjectName)/</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest"/>
+    <None Include="assets/**" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Project>
+    <PropertyGroup>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Bot -->
+        <PackageVersion Include="HoshikawaKaguya.Sora" Version="3.2.0"/>
+        <PackageVersion Include="HoshikawaKaguya.Sora.Command" Version="3.2.0"/>
+        <PackageVersion Include="HoshikawaKaguya.Sora.Adapter.Milky" Version="3.2.0"/>
+        <PackageVersion Include="Autofac" Version="9.3.4"/>
+        <!-- Storage -->
+        <PackageVersion Include="SqlSugarCore" Version="5.1.4.221"/>
+        <PackageVersion Include="Npgsql" Version="10.0.3"/>
+        <PackageVersion Include="AWSSDK.S3" Version="4.0.104.4"/>
+        <!-- SqlSugarCore 经 Oracle 驱动传递引用的 8.0.1 有已知漏洞，固定到已修复版本。 -->
+        <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13"/>
+        <!-- Logging -->
+        <PackageVersion Include="Serilog" Version="4.4.0"/>
+        <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0"/>
+        <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1"/>
+        <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0"/>
+        <!-- Test -->
+        <PackageVersion Include="xunit.v3" Version="4.0.2"/>
+        <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0"/>
+    </ItemGroup>
+</Project>

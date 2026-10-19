@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Shinano.Host</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shinano.Framework\Shinano.Framework.csproj"/>
+    <ProjectReference Include="..\Shinano.Infrastructure\Shinano.Infrastructure.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Autofac"/>
+    <PackageReference Include="HoshikawaKaguya.Sora.Adapter.Milky"/>
+    <PackageReference Include="HoshikawaKaguya.Sora.Command"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 内容根目录为程序启动目录，面板静态文件需要随构建输出。 -->
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Shinano.Tests"/>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"/>
+
+  <!-- 测试用插件按插件包目录布局输出到 artifacts/test-plugins/<工程名>/。 -->
+  <PropertyGroup>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)../../artifacts/test-plugins/$(MSBuildProjectName)/</OutputPath>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest"/>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/Shinano.Framework/Shinano.Framework.csproj" Private="false" ExcludeAssets="runtime"/>
+  </ItemGroup>
+</Project>
