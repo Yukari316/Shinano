@@ -71,6 +71,12 @@ public sealed class HostInfrastructure : IDisposable
     /// <summary>媒体下载器，就绪后可用。</summary>
     public MediaDownloader Downloader => RequireReady().Downloader;
 
+    /// <summary>聊天记录、统计与缺口存储，就绪后可用。</summary>
+    public ChatArchiveStore ChatArchive => RequireReady().ChatArchive;
+
+    /// <summary>聊天媒体与合并转发的后台归档，就绪后可用。</summary>
+    public ChatMediaArchiver ChatMediaArchiver => RequireReady().ChatMediaArchiver;
+
     /// <summary>数据库运行中可用性，就绪后可用。</summary>
     public DependencyAvailability DatabaseAvailability => RequireReady().DatabaseAvailability;
 
@@ -106,7 +112,8 @@ public sealed class HostInfrastructure : IDisposable
     }
 
     /// <summary>
-    /// 初始化机器人账号的 schema、聊天表与分区，并登记该账号的分区维护任务。同一账号重复调用直接返回。
+    /// 初始化机器人账号的 schema、聊天记录相关表与分区，把上次进程未完成的媒体归档标记为缺失，
+    /// 并登记该账号的维护任务（分区、统计清理）。同一账号重复调用直接返回。
     /// </summary>
     public async Task InitializeAccountAsync(long selfId, CancellationToken cancellationToken)
     {
@@ -122,14 +129,17 @@ public sealed class HostInfrastructure : IDisposable
                 SchemaMigrator.HOST_OWNER,
                 [],
                 cancellationToken);
-            await ChatMessageTable.EnsureAsync(components.Database, selfId, cancellationToken);
+            await components.ChatArchive.EnsureTablesAsync(selfId, cancellationToken);
+            int interrupted = await components.ChatArchive.MarkInterruptedAsync(selfId, cancellationToken);
+            if (interrupted > 0)
+                _logger.LogWarning("上次运行有 {Count} 条消息的媒体未归档完成，已标记为缺失", interrupted);
             _scheduler.Register(
                 SCHEDULER_OWNER,
-                $"chat-partitions-{selfId}",
+                $"chat-archive-{selfId}",
                 MaintenanceInterval,
-                token => MaintainPartitionsAsync(components, selfId, token),
+                token => MaintainAccountAsync(components, selfId, token),
                 runImmediately: false);
-            await MaintainPartitionsAsync(components, selfId, cancellationToken);
+            await MaintainAccountAsync(components, selfId, cancellationToken);
             _initializedAccounts.Add(selfId);
             _logger.LogInformation("机器人账号 {SelfId} 的数据结构已就绪", selfId);
         }
@@ -174,6 +184,16 @@ public sealed class HostInfrastructure : IDisposable
         _httpClient = new HttpClient();
         ShinanoDatabase database = _database;
         ObjectStorage   storage  = _storage;
+        ChatMediaStore chatMedia = new(database, storage, chatBucket, _loggerFactory.CreateLogger<ChatMediaStore>());
+        MediaDownloader downloader = new(_httpClient, _settings.Media);
+        DependencyAvailability storageAvailability = new(
+            HealthComponent.ObjectStorage,
+            HealthLevel.Degraded,
+            storage.CheckAsync,
+            RecoveryProbeInterval,
+            _health,
+            _time,
+            _logger);
         return new Components
         {
             TimeZone        = timeZone,
@@ -185,12 +205,14 @@ public sealed class HostInfrastructure : IDisposable
                 mediaBucket,
                 _settings.Media,
                 _loggerFactory.CreateLogger<PersistentMediaStore>()),
-            ChatMedia       = new ChatMediaStore(
-                database,
-                storage,
-                chatBucket,
-                _loggerFactory.CreateLogger<ChatMediaStore>()),
-            Downloader      = new MediaDownloader(_httpClient, _settings.Media),
+            ChatMedia       = chatMedia,
+            Downloader      = downloader,
+            ChatArchive     = new ChatArchiveStore(database),
+            ChatMediaArchiver = new ChatMediaArchiver(
+                chatMedia,
+                downloader,
+                storageAvailability,
+                _loggerFactory.CreateLogger<ChatMediaArchiver>()),
             Partitions      = new ChatPartitionMaintainer(database, _loggerFactory.CreateLogger<ChatPartitionMaintainer>()),
             DatabaseAvailability = new DependencyAvailability(
                 HealthComponent.Database,
@@ -200,14 +222,7 @@ public sealed class HostInfrastructure : IDisposable
                 _health,
                 _time,
                 _logger),
-            StorageAvailability = new DependencyAvailability(
-                HealthComponent.ObjectStorage,
-                HealthLevel.Degraded,
-                storage.CheckAsync,
-                RecoveryProbeInterval,
-                _health,
-                _time,
-                _logger)
+            StorageAvailability = storageAvailability
         };
     }
 
@@ -229,7 +244,7 @@ public sealed class HostInfrastructure : IDisposable
             runImmediately: false);
     }
 
-    private async Task MaintainPartitionsAsync(Components components, long selfId, CancellationToken cancellationToken)
+    private async Task MaintainAccountAsync(Components components, long selfId, CancellationToken cancellationToken)
     {
         DateTimeOffset now = _time.GetUtcNow();
         await components.Partitions.EnsurePartitionsAsync(
@@ -244,6 +259,13 @@ public sealed class HostInfrastructure : IDisposable
             components.TimeZone,
             _settings.ChatArchive.RetentionDays,
             cancellationToken);
+        if (_settings.ChatArchive.StatRetentionDays > 0)
+        {
+            DateOnly cutoff = ChatPartitionMaintainer.LocalDate(now, components.TimeZone)
+                                                     .AddDays(-_settings.ChatArchive.StatRetentionDays);
+            int deleted = await components.ChatArchive.DeleteStatsBeforeAsync(selfId, cutoff, cancellationToken);
+            if (deleted > 0) _logger.LogInformation("已清理 {Count} 行早于 {Cutoff} 的发言统计", deleted, cutoff);
+        }
     }
 
     private Components RequireReady() =>
@@ -257,6 +279,8 @@ public sealed class HostInfrastructure : IDisposable
         public required PersistentMediaStore    PersistentMedia      { get; init; }
         public required ChatMediaStore          ChatMedia            { get; init; }
         public required MediaDownloader         Downloader           { get; init; }
+        public required ChatArchiveStore        ChatArchive          { get; init; }
+        public required ChatMediaArchiver       ChatMediaArchiver    { get; init; }
         public required ChatPartitionMaintainer Partitions           { get; init; }
         public required DependencyAvailability  DatabaseAvailability { get; init; }
         public required DependencyAvailability  StorageAvailability  { get; init; }

@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging;
 using Shinano.Infrastructure.Database;
 using Shinano.Infrastructure.Storage;
@@ -65,6 +66,7 @@ public sealed class PersistentMediaStore
         {
             stored = await Db.InTransactionAsync(async () =>
             {
+                // SQL_NEED: 并发保存同一内容时需要单条语句完成"插入或返回已有行"，SqlSugar 不支持 on conflict ... returning。
                 StoredKey row = await Db.Ado.SqlQuerySingleAsync<StoredKey>(
                     """
                     insert into media_object (sha256, size, media_type, object_key, orphaned_at, created_at)
@@ -100,7 +102,7 @@ public sealed class PersistentMediaStore
     public async Task<bool> AddReferenceAsync(long mediaId, MediaReference reference) =>
         await Db.InTransactionAsync(async () =>
         {
-            long? id = await LockMediaAsync("id = @mediaId", new { mediaId });
+            long? id = await LockMediaAsync(item => item.Id == mediaId);
             if (id is null) return false;
             await InsertReferenceAsync(id.Value, reference);
             return true;
@@ -108,11 +110,11 @@ public sealed class PersistentMediaStore
 
     /// <summary>删除插件某个业务键下的全部引用，无引用的媒体进入宽限期。</summary>
     public async Task RemoveReferencesAsync(string pluginId, string refKey) =>
-        await RemoveWhereAsync("plugin_id = @pluginId and ref_key = @refKey", new { pluginId, refKey });
+        await RemoveWhereAsync(reference => reference.PluginId == pluginId && reference.RefKey == refKey);
 
     /// <summary>删除插件的全部引用，用于管理员清除插件数据。</summary>
     public async Task RemovePluginReferencesAsync(string pluginId) =>
-        await RemoveWhereAsync("plugin_id = @pluginId", new { pluginId });
+        await RemoveWhereAsync(reference => reference.PluginId == pluginId);
 
     /// <summary>读取媒体内容；媒体或对象不存在时返回 null。</summary>
     public async Task<StoredObject?> OpenReadAsync(long mediaId, CancellationToken cancellationToken)
@@ -135,6 +137,7 @@ public sealed class PersistentMediaStore
     public async Task<int> CollectOrphansAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         DateTimeOffset cutoff = now - _orphanGrace;
+        // SQL_NEED: 需要 for update skip locked 跳过正被引用而锁定的行，并以 returning 取回待删除对象；SqlSugar 不支持。
         List<string> keys = await Db.InTransactionAsync(async () =>
             await Db.Ado.SqlQueryAsync<string>(
                 """
@@ -164,27 +167,26 @@ public sealed class PersistentMediaStore
     private async Task<long?> TryReferenceExistingAsync(string sha256, MediaReference reference) =>
         await Db.InTransactionAsync(async () =>
         {
-            long? id = await LockMediaAsync("sha256 = @sha256", new { sha256 });
+            long? id = await LockMediaAsync(item => item.Sha256 == sha256);
             if (id is null) return null;
             await InsertReferenceAsync(id.Value, reference);
             return id;
         });
 
-    // 锁定媒体行并清除宽限期标记；调用方必须处于事务中。
-    private async Task<long?> LockMediaAsync(string condition, object parameters)
+    // 清除宽限期标记的更新同时锁定媒体行，回收跳过被锁定的行；调用方必须处于事务中。
+    private async Task<long?> LockMediaAsync(Expression<Func<MediaObjectRecord, bool>> condition)
     {
-        List<long> ids = await Db.Ado.SqlQueryAsync<long>(
-            $"select id from media_object where {condition} for update",
-            parameters);
-        if (ids.Count == 0) return null;
+        int locked = await Db.Updateable<MediaObjectRecord>()
+                             .SetColumns(item => new MediaObjectRecord { OrphanedAt = null })
+                             .Where(condition)
+                             .ExecuteCommandAsync();
+        if (locked == 0) return null;
 
-        await Db.Ado.ExecuteCommandAsync(
-            "update media_object set orphaned_at = null where id = @id",
-            new { id = ids[0] });
-        return ids[0];
+        return await Db.Queryable<MediaObjectRecord>().Where(condition).Select(item => item.Id).FirstAsync();
     }
 
     private async Task InsertReferenceAsync(long mediaId, MediaReference reference) =>
+        // SQL_NEED: 并发登记同一引用时依赖 on conflict do nothing 保持幂等，SqlSugar 不支持。
         await Db.Ado.ExecuteCommandAsync(
             """
             insert into media_ref (media_id, plugin_id, ref_key, self_id, created_at)
@@ -200,27 +202,27 @@ public sealed class PersistentMediaStore
                 now      = DateTimeOffset.UtcNow
             });
 
-    private async Task RemoveWhereAsync(string condition, object parameters) =>
-        // SqlSugar 把数组参数展开为参数列表，因此使用 in (...) 而不是 = any(...)。
+    // 删除引用后，只有确实不再被任何引用指向的媒体进入宽限期。
+    private async Task RemoveWhereAsync(Expression<Func<MediaReferenceRecord, bool>> condition) =>
         await Db.InTransactionAsync(async () =>
         {
-            List<long> mediaIds = await Db.Ado.SqlQueryAsync<long>(
-                $"delete from media_ref where {condition} returning media_id",
-                parameters);
+            List<long> mediaIds = await Db.Queryable<MediaReferenceRecord>()
+                                          .Where(condition)
+                                          .Select(reference => reference.MediaId)
+                                          .Distinct()
+                                          .ToListAsync();
             if (mediaIds.Count == 0) return 0;
 
-            return await Db.Ado.ExecuteCommandAsync(
-                """
-                update media_object m set orphaned_at = @now
-                where m.id in (@mediaIds)
-                  and m.orphaned_at is null
-                  and not exists (select 1 from media_ref r where r.media_id = m.id)
-                """,
-                new
-                {
-                    mediaIds = mediaIds.Distinct().ToArray(),
-                    now      = DateTimeOffset.UtcNow
-                });
+            await Db.Deleteable<MediaReferenceRecord>().Where(condition).ExecuteCommandAsync();
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            return await Db.Updateable<MediaObjectRecord>()
+                           .SetColumns(item => new MediaObjectRecord { OrphanedAt = now })
+                           .Where(item => mediaIds.Contains(item.Id)
+                                          && item.OrphanedAt == null
+                                          && !SqlFunc.Subqueryable<MediaReferenceRecord>()
+                                                     .Where(reference => reference.MediaId == item.Id)
+                                                     .Any())
+                           .ExecuteCommandAsync();
         });
 
     private async Task<string?> FindKeyAsync(long mediaId) =>

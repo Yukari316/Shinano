@@ -11,4 +11,10 @@ public sealed class ChatArchiveOptions
 
     /// <summary>提前创建的未来分区天数，默认 3。</summary>
     public int PartitionDaysAhead { get; set; } = 3;
+
+    /// <summary>宿主归档缓冲可容纳的消息记录数，默认 10000；已满时丢弃新记录并登记归档积压缺口。</summary>
+    public int BufferCapacity { get; set; } = 10000;
+
+    /// <summary>发言统计保留的最近天数；0 表示永久保存（默认）。</summary>
+    public int StatRetentionDays { get; set; }
 }

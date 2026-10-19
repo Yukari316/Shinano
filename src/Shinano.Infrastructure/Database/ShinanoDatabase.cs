@@ -19,7 +19,7 @@ public sealed class ShinanoDatabase : IDisposable
 
     private const int SERVER_VERSION_DIVISOR = 10000;
 
-    private readonly NpgsqlConnectionStringBuilder         _baseConnection;
+    private readonly NpgsqlConnectionStringBuilder             _baseConnection;
     private readonly ConcurrentDictionary<long, SqlSugarScope> _accounts = new();
 
     /// <summary>创建数据库入口，不立即连接。</summary>
@@ -57,6 +57,7 @@ public sealed class ShinanoDatabase : IDisposable
     public async Task<int> GetServerMajorVersionAsync(CancellationToken cancellationToken)
     {
         await using NpgsqlConnection connection = await OpenConnectionAsync(cancellationToken);
+        // SQL_NEED: 读取服务器设置，SqlSugar 没有对应接口；同时用作不依赖 schema 的连接探测。
         await using NpgsqlCommand    command    = new("show server_version_num", connection);
         string versionNum = (string?)await command.ExecuteScalarAsync(cancellationToken) ?? "0";
         return int.Parse(versionNum) / SERVER_VERSION_DIVISOR;
@@ -66,6 +67,7 @@ public sealed class ShinanoDatabase : IDisposable
     public async Task EnsureSchemaAsync(string schema, CancellationToken cancellationToken)
     {
         await using NpgsqlConnection connection = await OpenConnectionAsync(cancellationToken);
+        // SQL_NEED: 创建 schema 是 DDL，且须在该 schema 的 SqlSugar 客户端可用之前执行。
         await using NpgsqlCommand command = new(
             $"create schema if not exists {SchemaNames.RequireIdentifier(schema)}",
             connection);

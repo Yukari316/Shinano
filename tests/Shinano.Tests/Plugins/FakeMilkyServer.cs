@@ -13,19 +13,21 @@ using Microsoft.Extensions.Logging;
 namespace Shinano.Tests.Plugins;
 
 /// <summary>
-/// 测试用的最小 Milky 协议端：提供事件 WebSocket 与 HTTP API，记录 Bot 发出的消息。
-/// 只实现 Shinano 测试用到的接口，其余 API 一律返回成功的空数据。
+/// 测试用的最小 Milky 协议端：提供事件 WebSocket 与 HTTP API，记录 Bot 发出的消息，
+/// 并提供媒体下载地址与合并转发内容。只实现 Shinano 测试用到的接口，其余 API 一律返回成功的空数据。
 /// </summary>
 public sealed class FakeMilkyServer : IAsyncDisposable
 {
     /// <summary>路径前缀。</summary>
     public const string PREFIX = "milky";
 
-    private readonly WebApplication              _app;
-    private readonly ConcurrentQueue<SentMessage> _sent      = new();
-    private readonly SemaphoreSlim               _sentSignal = new(0);
-    private readonly TaskCompletionSource<WebSocket> _socket = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private          long                        _messageSeq = 1000;
+    private readonly WebApplication                          _app;
+    private readonly ConcurrentQueue<SentMessage>            _sent       = new();
+    private readonly ConcurrentDictionary<string, byte[]>    _media      = new();
+    private readonly ConcurrentDictionary<string, JsonArray> _forwards   = new();
+    private readonly SemaphoreSlim                           _sentSignal = new(0);
+    private readonly TaskCompletionSource<WebSocket>         _socket     = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private          long                                    _messageSeq = 1000;
 
     private FakeMilkyServer(WebApplication app, long selfId)
     {
@@ -50,6 +52,7 @@ public sealed class FakeMilkyServer : IAsyncDisposable
         app.UseWebSockets();
         app.Map($"/{PREFIX}/event", server.AcceptEventSocketAsync);
         app.MapPost($"/{PREFIX}/api/{{action}}", server.HandleApiAsync);
+        app.MapGet("/media/{name}", server.ServeMedia);
         await app.StartAsync();
         IServerAddressesFeature addresses =
             app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>().Features.Get<IServerAddressesFeature>()
@@ -59,18 +62,41 @@ public sealed class FakeMilkyServer : IAsyncDisposable
         return server;
     }
 
-    /// <summary>推送一条群消息事件。</summary>
+    /// <summary>登记一个可下载的媒体，返回其地址。</summary>
+    public string RegisterMedia(string name, byte[] content)
+    {
+        _media[name] = content;
+        return $"http://127.0.0.1:{Port}/media/{name}";
+    }
+
+    /// <summary>登记合并转发的内层消息，供 <c>get_forwarded_messages</c> 返回；未登记的转发 ID 返回失败。</summary>
+    public void RegisterForward(string forwardId, JsonArray messages) => _forwards[forwardId] = messages;
+
+    /// <summary>分配一个新的消息序号。</summary>
+    public long NextMessageSeq() => Interlocked.Increment(ref _messageSeq);
+
+    /// <summary>推送一条纯文本群消息事件。</summary>
     public Task PushGroupMessageAsync(long groupId, long senderId, string role, string text) =>
+        PushGroupMessageAsync(groupId, senderId, role, TextSegments(text), NextMessageSeq(), DateTimeOffset.UtcNow);
+
+    /// <summary>推送一条群消息事件，消息段使用 Milky 格式。</summary>
+    public Task PushGroupMessageAsync(
+        long           groupId,
+        long           senderId,
+        string         role,
+        JsonArray      segments,
+        long           messageSeq,
+        DateTimeOffset time) =>
         PushAsync(
             "message_receive",
             new JsonObject
             {
                 ["message_scene"] = "group",
                 ["peer_id"]       = groupId,
-                ["message_seq"]   = Interlocked.Increment(ref _messageSeq),
+                ["message_seq"]   = messageSeq,
                 ["sender_id"]     = senderId,
-                ["time"]          = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                ["segments"]      = TextSegments(text),
+                ["time"]          = time.ToUnixTimeSeconds(),
+                ["segments"]      = segments,
                 ["group"] = new JsonObject
                 {
                     ["group_id"]         = groupId,
@@ -146,9 +172,9 @@ public sealed class FakeMilkyServer : IAsyncDisposable
             {
                 await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
             }
-            catch (WebSocketException)
+            catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
             {
-                // Bot 停止时会先断开连接，状态可能在检查之后才变为 Aborted；此时无需再关闭。
+                // Bot 停止时会先断开连接，接收循环随即释放 socket；此时无需再关闭。
             }
         }
 
@@ -201,6 +227,9 @@ public sealed class FakeMilkyServer : IAsyncDisposable
     private async Task<IResult> HandleApiAsync(string action, HttpContext context)
     {
         JsonNode? input = await JsonNode.ParseAsync(context.Request.Body);
+        if (action == "get_forwarded_messages")
+            return ForwardedMessages(input?["forward_id"]?.GetValue<string>() ?? string.Empty);
+
         JsonNode data = action switch
         {
             "get_login_info" => new JsonObject
@@ -220,6 +249,29 @@ public sealed class FakeMilkyServer : IAsyncDisposable
             }.ToJsonString(),
             "application/json");
     }
+
+    private IResult ForwardedMessages(string forwardId)
+    {
+        JsonObject response = _forwards.TryGetValue(forwardId, out JsonArray? messages)
+            ? new JsonObject
+            {
+                ["status"]  = "ok",
+                ["retcode"] = 0,
+                ["data"]    = new JsonObject { ["messages"] = messages.DeepClone() }
+            }
+            : new JsonObject
+            {
+                ["status"]  = "failed",
+                ["retcode"] = -1,
+                ["message"] = "forward not found"
+            };
+        return Results.Text(response.ToJsonString(), "application/json");
+    }
+
+    private IResult ServeMedia(string name) =>
+        _media.TryGetValue(name, out byte[]? content)
+            ? Results.Bytes(content, "application/octet-stream")
+            : Results.NotFound();
 
     private JsonObject RecordSent(string action, JsonNode? input)
     {

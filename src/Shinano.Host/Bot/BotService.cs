@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Shinano.Host.Archive;
 using Shinano.Host.Plugins;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.Configuration;
@@ -12,7 +13,8 @@ using Sora.Core.Types;
 namespace Shinano.Host.Bot;
 
 /// <summary>
-/// Bot 的生命周期：基础设施就绪后加载插件、创建并启动 Sora 服务；首次连接得到机器人账号后初始化账号数据并按持久化状态启用插件。
+/// Bot 的生命周期：基础设施就绪后加载插件、创建并启动 Sora 服务并登记宿主唯一的消息记录器；
+/// 首次连接得到机器人账号后初始化账号数据并按持久化状态启用插件。
 /// 基础设施进入故障模式时不连接 LLBot。
 /// </summary>
 public sealed class BotService : BackgroundService
@@ -21,6 +23,7 @@ public sealed class BotService : BackgroundService
 
     private readonly HostInfrastructure  _infrastructure;
     private readonly PluginRuntime       _plugins;
+    private readonly ChatArchiveService  _archive;
     private readonly RuntimeHealth       _health;
     private readonly BotAccessor         _bot;
     private readonly LlBotOptions        _options;
@@ -35,6 +38,7 @@ public sealed class BotService : BackgroundService
     public BotService(
         HostInfrastructure infrastructure,
         PluginRuntime      plugins,
+        ChatArchiveService archive,
         RuntimeHealth      health,
         BotAccessor        bot,
         LlBotOptions       options,
@@ -45,6 +49,7 @@ public sealed class BotService : BackgroundService
     {
         _infrastructure = infrastructure;
         _plugins        = plugins;
+        _archive        = archive;
         _health         = health;
         _bot            = bot;
         _options        = options;
@@ -86,6 +91,7 @@ public sealed class BotService : BackgroundService
             new HostCommands(_infrastructure, _health, _plugins, _logLayout, _loggingOptions.MaxTotalSizeMiB));
         hostCommands.ScanCommandGroups();
         _plugins.Attach(_service);
+        _service.UseMessageRecorder(_archive);
         _service.UseEventPreFilter(
             new HostEventFilter(
                 _infrastructure,

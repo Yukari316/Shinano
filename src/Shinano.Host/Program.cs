@@ -1,4 +1,6 @@
 using Serilog;
+using Shinano.Host;
+using Shinano.Host.Archive;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Plugins;
@@ -60,29 +62,35 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<RuntimeHealth>();
 builder.Services.AddSingleton<HostScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HostScheduler>());
-DeploymentOptions deployment = Bind<DeploymentOptions>(DeploymentOptions.SECTION_NAME);
+DeploymentOptions deployment = builder.Bind<DeploymentOptions>(DeploymentOptions.SECTION_NAME);
 builder.Services.AddSingleton(deployment);
 builder.Services.AddSingleton(new HostInfrastructureSettings
 {
     Deployment  = deployment,
-    Database    = Bind<DatabaseOptions>(DatabaseOptions.SECTION_NAME),
-    RustFs      = Bind<RustFsOptions>(RustFsOptions.SECTION_NAME),
-    Media       = Bind<MediaOptions>(MediaOptions.SECTION_NAME),
-    ChatArchive = Bind<ChatArchiveOptions>(ChatArchiveOptions.SECTION_NAME)
+    Database    = builder.Bind<DatabaseOptions>(DatabaseOptions.SECTION_NAME),
+    RustFs      = builder.Bind<RustFsOptions>(RustFsOptions.SECTION_NAME),
+    Media       = builder.Bind<MediaOptions>(MediaOptions.SECTION_NAME),
+    ChatArchive = builder.Bind<ChatArchiveOptions>(ChatArchiveOptions.SECTION_NAME)
 });
+builder.Services.AddSingleton(sp => sp.GetRequiredService<HostInfrastructureSettings>().ChatArchive);
 builder.Services.AddSingleton<HostInfrastructure>();
 builder.Services.AddHostedService<HostInfrastructureStartupService>();
 
-builder.Services.AddSingleton(Bind<LlBotOptions>(LlBotOptions.SECTION_NAME));
+builder.Services.AddSingleton(builder.Bind<LlBotOptions>(LlBotOptions.SECTION_NAME));
 builder.Services.AddSingleton<BotAccessor>();
 builder.Services.AddSingleton(new PluginRuntimeSettings
 {
     DataDirectory   = paths.DataDirectory,
-    PluginDirectory = Bind<PluginOptions>(PluginOptions.SECTION_NAME).Directory,
+    PluginDirectory = builder.Bind<PluginOptions>(PluginOptions.SECTION_NAME).Directory,
     BucketPrefix    = deployment.BucketPrefix
 });
 builder.Services.AddSingleton<PluginRuntime>();
+builder.Services.AddSingleton<SuperUserNotifier>();
+builder.Services.AddSingleton<ArchiveGapTracker>();
 builder.Services.AddHostedService<HealthReactions>();
+// 归档服务在 BotService 之前登记：托管服务按相反顺序停止，Sora 排空记录队列后归档服务才停止。
+builder.Services.AddSingleton<ChatArchiveService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ChatArchiveService>());
 builder.Services.AddHostedService<BotService>();
 
 WebApplication app = builder.Build();
@@ -106,5 +114,3 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 await app.RunAsync();
-
-T Bind<T>(string section) where T : new() => builder.Configuration.GetSection(section).Get<T>() ?? new T();

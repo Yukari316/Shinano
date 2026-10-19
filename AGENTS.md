@@ -102,7 +102,7 @@
 
 ## PostgreSQL
 
-- 使用 PostgreSQL 与 SqlSugar，重新设计表结构。
+- 使用 PostgreSQL 与 SqlSugar，重新设计表结构。数据读写优先使用 SqlSugar 的实体 API（Queryable、Insertable、Updateable、Deleteable、CodeFirst）；只有 SqlSugar 无法表达或无法保证正确性时才手写 SQL（如分区与目录 DDL、`on conflict`、`for update skip locked`、`returning`），并在该语句前添加以 `SQL_NEED:` 开头的注释说明原因。手写 SQL 中的值一律参数化，只有经校验的标识符与 DDL 中不能参数化的强类型值可以拼入语句。
 - 使用 `global` 存放全局数据，使用 `user_<self_id>` 存放机器人账号数据；插件按数据是否属于账号选择 schema。机器人账号与群成员身份不得混淆。
 - 插件表名以插件标识为前缀，避免撞名。启动时由 SqlSugar CodeFirst 创建缺失的表并补齐新增可空列；删列、改类型、改名等破坏性变更由插件提供带版本号的显式迁移，宿主在版本表中记录各插件结构版本并按序执行，失败时该插件不启用。
 - 切换账号后保留宿主及插件通用配置、启用状态与可复用媒体；有人问、B站订阅、聊天记录和统计按账号隔离。旧账号记录继续按当前部署保留配置清理，切回时恢复仍有效的数据。

@@ -37,21 +37,20 @@ public sealed class ChatMediaStore
     /// <returns>聊天媒体 ID。</returns>
     public async Task<long> StoreAsync(BufferedMedia media, string mediaType, CancellationToken cancellationToken)
     {
+        // 刷新引用时间的更新同时锁定该行，过期清理跳过被锁定的行，因此不会删除正被复用的媒体。
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         long? existing = await Db.InTransactionAsync(async () =>
         {
-            List<long> ids = await Db.Ado.SqlQueryAsync<long>(
-                "select id from chat_media_object where sha256 = @sha256 for update",
-                new { sha256 = media.Sha256 });
-            if (ids.Count == 0) return (long?)null;
+            int refreshed = await Db.Updateable<ChatMediaObjectRecord>()
+                                    .SetColumns(item => new ChatMediaObjectRecord { LastReferencedAt = now })
+                                    .Where(item => item.Sha256 == media.Sha256)
+                                    .ExecuteCommandAsync(cancellationToken);
+            if (refreshed == 0) return (long?)null;
 
-            await Db.Ado.ExecuteCommandAsync(
-                "update chat_media_object set last_referenced_at = @now where id = @id",
-                new
-                {
-                    id  = ids[0],
-                    now = DateTimeOffset.UtcNow
-                });
-            return ids[0];
+            return await Db.Queryable<ChatMediaObjectRecord>()
+                           .Where(item => item.Sha256 == media.Sha256)
+                           .Select(item => item.Id)
+                           .FirstAsync(cancellationToken);
         });
         if (existing is not null) return existing.Value;
 
@@ -60,6 +59,7 @@ public sealed class ChatMediaStore
         StoredKey stored;
         try
         {
+            // SQL_NEED: 并发保存同一内容时需要单条语句完成"插入或返回已有行"，SqlSugar 不支持 on conflict ... returning。
             stored = await Db.Ado.SqlQuerySingleAsync<StoredKey>(
                 """
                 insert into chat_media_object (sha256, size, media_type, object_key, last_referenced_at, created_at)
@@ -109,6 +109,7 @@ public sealed class ChatMediaStore
         int total = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
+            // SQL_NEED: 需要 for update skip locked 跳过正被复用而锁定的行，并以 returning 取回待删除对象；SqlSugar 不支持。
             List<string> keys = await Db.Ado.SqlQueryAsync<string>(
                 """
                 delete from chat_media_object

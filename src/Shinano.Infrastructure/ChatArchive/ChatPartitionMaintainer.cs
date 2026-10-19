@@ -61,6 +61,7 @@ public sealed partial class ChatPartitionMaintainer
             DateTimeOffset from = latest is { } upper && upper > dayStart - TimeSpan.FromDays(1) ? upper : dayStart;
             string name = UniqueName(partitions, PARTITION_PREFIX + day.ToString(DATE_FORMAT, CultureInfo.InvariantCulture));
 
+            // SQL_NEED: 创建分区（partition of ... for values）是 DDL，SqlSugar 没有对应接口。
             await using NpgsqlCommand command = new(
                 $"create table {schema}.{name} partition of {schema}.{ChatMessageTable.TABLE_NAME} " +
                 $"for values from ('{FormatBound(from)}') to ('{FormatBound(dayEnd)}')",
@@ -94,6 +95,7 @@ public sealed partial class ChatPartitionMaintainer
         {
             if (partition.To > cutoff) continue;
 
+            // SQL_NEED: 删除分区表是 DDL，SqlSugar 没有对应接口。
             await using NpgsqlCommand command = new(
                 $"drop table {schema}.{SchemaNames.RequireIdentifier(partition.Name)}",
                 connection);
@@ -134,6 +136,7 @@ public sealed partial class ChatPartitionMaintainer
         string            schema,
         CancellationToken cancellationToken)
     {
+        // SQL_NEED: 分区与边界只能从系统目录 pg_inherits、pg_get_expr 读取，SqlSugar 没有对应接口。
         await using NpgsqlCommand command = new(
             """
             select c.relname, pg_get_expr(c.relpartbound, c.oid)
