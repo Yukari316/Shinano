@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Shinano.Infrastructure.Database;
 
 namespace Shinano.Host.Plugins;
@@ -8,8 +10,16 @@ namespace Shinano.Host.Plugins;
 /// </summary>
 public sealed class PluginConfigStore
 {
-    /// <summary>配置 JSON 的序列化规则：属性名使用驼峰。</summary>
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// 配置 JSON 的序列化规则：属性名使用驼峰，枚举以名称表示；数字只接受 JSON 数字，
+    /// 使导出的 JSON Schema 中数字字段的类型保持为数字。
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling   = JsonNumberHandling.Strict,
+        Converters       = { new JsonStringEnumConverter() },
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+    };
 
     private readonly ShinanoDatabase _database;
 
@@ -19,14 +29,27 @@ public sealed class PluginConfigStore
         _database = database;
     }
 
-    /// <summary>读取插件配置；记录无法解析为 <typeparamref name="T" /> 时抛出异常。</summary>
+    /// <summary>读取插件配置；没有记录时返回 <paramref name="configType" /> 的无参构造结果。</summary>
     /// <exception cref="JsonException">已保存的配置与当前配置类型不兼容。</exception>
-    public T Load<T>(string pluginId) where T : class, new()
+    public object Load(string pluginId, Type configType)
     {
         string? json = _database.Global.Queryable<PluginConfigRecord>()
                                 .Where(record => record.PluginId == pluginId)
                                 .Select(record => record.Config)
                                 .First();
-        return json is null ? new T() : JsonSerializer.Deserialize<T>(json, JsonOptions) ?? new T();
+        return (json is null ? null : JsonSerializer.Deserialize(json, configType, JsonOptions))
+               ?? Activator.CreateInstance(configType)
+               ?? throw new InvalidOperationException($"无法创建配置类型 {configType}");
     }
+
+    /// <summary>保存插件配置，覆盖已有记录。</summary>
+    public async Task SaveAsync(string pluginId, Type configType, object config, CancellationToken cancellationToken) =>
+        await _database.Global.Storageable(
+                           new PluginConfigRecord
+                           {
+                               PluginId  = pluginId,
+                               Config    = JsonSerializer.Serialize(config, configType, JsonOptions),
+                               UpdatedAt = DateTimeOffset.UtcNow
+                           })
+                       .ExecuteCommandAsync(cancellationToken);
 }

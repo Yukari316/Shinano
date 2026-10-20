@@ -17,6 +17,9 @@ public sealed class SamplePlugin : IShinanoPlugin
     public void ConfigureServices(ContainerBuilder builder) => builder.RegisterType<Greeter>().SingleInstance();
 
     /// <inheritdoc />
+    public void ConfigurePanel(IPanelRegistration panel) => panel.UseConfig<SampleConfig>();
+
+    /// <inheritdoc />
     public ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref _initializeCount);

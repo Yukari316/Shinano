@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@plugin "daisyui" {
+  themes: emerald --default, dim --prefersdark;
+}
+
+/*
+ * 外观：没有背景图时页面与面板都是纯色；设置背景图后（.has-bg），侧边面板、内容区卡片与内容区遮罩按各自的不透明度半透明，
+ * 开启模糊（.frosted）时面板对其后的背景做磨砂处理。颜色全部取自 daisyUI 主题变量。
+ */
+@theme {
+  --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+:root {
+  --panel-alpha: 80;
+  --card-alpha: 80;
+  --veil-alpha: 40;
+  /* 浅色主题的主色与状态色较亮，图表、链接与状态文字向正文色混合加深，深色主题下几乎不变。 */
+  --chart: color-mix(in oklab, var(--color-primary) 62%, var(--color-base-content));
+  --link: color-mix(in oklab, var(--color-primary) 55%, var(--color-base-content));
+  --success-text: color-mix(in oklab, var(--color-success) 62%, var(--color-base-content));
+  --warning-text: color-mix(in oklab, var(--color-warning) 55%, var(--color-base-content));
+  --error-text: color-mix(in oklab, var(--color-error) 62%, var(--color-base-content));
+  --line: color-mix(in oklab, var(--color-base-content) 14%, transparent);
+  /*
+   * 卡片内次级层（块、选中行、悬停）：叠一层很淡的正文色，而不是更深的底色。
+   * 这样暗色主题下次级块比卡片略亮、亮色主题下略灰，背景图下也不会与半透明卡片叠加得越来越深。
+   */
+  --raise: color-mix(in oklab, var(--color-base-content) 5%, transparent);
+  --raise-strong: color-mix(in oklab, var(--color-base-content) 9%, transparent);
+}
+
+.app-shell {
+  background: var(--color-base-300);
+}
+
+.app-shell.has-bg {
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.surface {
+  background: var(--color-base-100);
+  border: 1px solid var(--line);
+}
+
+.has-bg .surface {
+  background: color-mix(in oklab, var(--color-base-100) calc(var(--panel-alpha) * 1%), transparent);
+}
+
+/* 内容区里的卡片、工具栏与操作栏单独使用卡片不透明度。 */
+.has-bg .veil .surface {
+  background: color-mix(in oklab, var(--color-base-100) calc(var(--card-alpha) * 1%), transparent);
+}
+
+.has-bg.frosted .surface,
+.has-bg.frosted .veil {
+  backdrop-filter: blur(14px);
+}
+
+.veil {
+  background: var(--color-base-200);
+}
+
+.has-bg .veil {
+  background: color-mix(in oklab, var(--color-base-200) calc(var(--veil-alpha) * 1%), transparent);
+}
+
+.tile {
+  background: var(--raise);
+  border-radius: var(--radius-box);
+}
+
+/* 侧边栏当前页使用主题主色。 */
+.menu .menu-active,
+.menu .menu-active:hover {
+  background-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
+.link {
+  color: var(--link);
+}
+
+.text-success-strong {
+  color: var(--success-text);
+}
+
+.text-warning-strong {
+  color: var(--warning-text);
+}
+
+.text-error-strong {
+  color: var(--error-text);
+}
+
+/* 日志参数按值类型着色，与日志面板图例一致。 */
+.log-String {
+  color: var(--success-text);
+}
+
+.log-Number {
+  color: color-mix(in oklab, var(--color-accent) 62%, var(--color-base-content));
+}
+
+.log-Boolean {
+  color: color-mix(in oklab, var(--color-secondary) 62%, var(--color-base-content));
+}
+
+.log-Null,
+.log-Other {
+  color: color-mix(in oklab, var(--color-info) 62%, var(--color-base-content));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

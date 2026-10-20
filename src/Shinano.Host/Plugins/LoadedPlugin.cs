@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Reflection;
 using Autofac;
 using Shinano.Framework.Plugins;
@@ -25,6 +26,9 @@ internal sealed class LoadedPlugin
 
     /// <summary>能力集合。</summary>
     public PluginContext? Context { get; set; }
+
+    /// <summary>配置表单的 JSON Schema；未声明配置类型时为 null。</summary>
+    public JsonNode? ConfigSchema { get; set; }
 
     /// <summary>入口程序集中需要实例的指令组类型。</summary>
     public IReadOnlyList<Type> CommandTypes { get; set; } = [];

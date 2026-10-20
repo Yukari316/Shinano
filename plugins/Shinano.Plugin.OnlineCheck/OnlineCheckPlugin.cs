@@ -21,6 +21,9 @@ public sealed class OnlineCheckPlugin : IShinanoPlugin
     public void ConfigureServices(ContainerBuilder builder) => builder.RegisterInstance(_assets);
 
     /// <inheritdoc />
+    public void ConfigurePanel(IPanelRegistration panel) => panel.UseConfig<OnlineCheckConfig>();
+
+    /// <inheritdoc />
     public async ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
     {
         _config = context.Config<OnlineCheckConfig>();

@@ -3,6 +3,7 @@ using Shinano.Host;
 using Shinano.Host.Archive;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
+using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
 using Shinano.Host.Web;
 using Shinano.Infrastructure;
@@ -48,7 +49,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
         });
 });
 
-builder.Services.AddSingleton(paths);
+builder.Services.AddPanel(paths);
 builder.Services.AddSingleton(loggingOptions);
 builder.Services.AddSingleton(logging.Layout);
 builder.Services.AddSingleton(logging.MemorySink);
@@ -110,7 +111,12 @@ startupLogger.LogInformation(
     endpoint.Address,
     endpoint.Port);
 
+// 首次启动时生成面板 Token，避免等到第一次登录请求。
+app.Services.GetRequiredService<PanelTokenStore>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapPanel();
 
 await app.RunAsync();

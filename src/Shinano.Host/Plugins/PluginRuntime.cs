@@ -3,7 +3,10 @@ using System.Runtime.ExceptionServices;
 using Autofac;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shinano.Host.Bot;
+using Shinano.Host.Panel;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Scheduling;
@@ -29,6 +32,7 @@ public sealed class PluginRuntime : IDisposable
     private readonly BotAccessor            _bot;
     private readonly RuntimeHealth          _health;
     private readonly PluginRuntimeSettings  _settings;
+    private readonly PluginEndpointDataSource _endpoints;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -43,14 +47,16 @@ public sealed class PluginRuntime : IDisposable
         HostScheduler         scheduler,
         BotAccessor           bot,
         RuntimeHealth         health,
-        PluginRuntimeSettings settings,
-        ILoggerFactory        loggerFactory)
+        PluginRuntimeSettings    settings,
+        PluginEndpointDataSource endpoints,
+        ILoggerFactory           loggerFactory)
     {
         _infrastructure = infrastructure;
         _scheduler      = scheduler;
         _bot            = bot;
         _health         = health;
         _settings       = settings;
+        _endpoints      = endpoints;
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }
@@ -230,15 +236,30 @@ public sealed class PluginRuntime : IDisposable
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            IReadOnlyList<CommandAssemblyState> assemblyStates = _service?.Commands.GetAssemblyStates() ?? [];
             return
             [
                 .. _plugins.Select(plugin => new PluginSnapshot
                 {
-                    Id        = plugin.Manifest.Id,
-                    Name      = plugin.Manifest.Name,
-                    Enabled   = plugin.Enabled && plugin.Initialized,
-                    SortOrder = plugin.SortOrder,
-                    Error     = plugin.Error
+                    Id          = plugin.Manifest.Id,
+                    Name        = plugin.Manifest.Name,
+                    Version     = plugin.Manifest.Version,
+                    Description = plugin.Manifest.Description,
+                    Enabled     = IsActive(plugin),
+                    SortOrder   = plugin.SortOrder,
+                    Error       = plugin.Error,
+                    HasConfig   = plugin.ConfigSchema is not null,
+                    PageTitle   = IsActive(plugin) ? plugin.Context?.PanelHost.Title : null,
+                    PageEntry   = IsActive(plugin) ? plugin.Context?.PanelHost.Entry : null,
+                    CommandTypes =
+                    [
+                        .. CommandTypesOf(plugin, assemblyStates).Select(state => new PluginCommandTypeSnapshot
+                        {
+                            Name         = state.Type.Name,
+                            Enabled      = state.IsEffectivelyEnabled,
+                            CommandCount = state.CommandCount
+                        })
+                    ]
                 })
             ];
         }
@@ -247,6 +268,52 @@ public sealed class PluginRuntime : IDisposable
             _gate.Release();
         }
     }
+
+    /// <summary>返回插件的配置表单；插件不存在或未声明配置类型时返回 null。</summary>
+    public async Task<PluginConfigView?> GetConfigAsync(string pluginId, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Find(pluginId) is not { Context: { ConfigType: { } type } context, ConfigSchema: { } schema }) return null;
+
+            return new PluginConfigView
+            {
+                Schema = schema.DeepClone(),
+                Value  = JsonSerializer.SerializeToNode(context.LoadConfig(type), type, PluginConfigStore.JsonOptions)
+            };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>校验并保存插件配置，插件下次读取配置时得到新值。</summary>
+    /// <returns>校验错误；成功时为空列表；插件不存在或未声明配置类型时返回 null。</returns>
+    public async Task<IReadOnlyList<string>?> SaveConfigAsync(string pluginId, JsonNode? json, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Find(pluginId) is not { Context: { ConfigType: { } type } context }) return null;
+
+            object? config = PluginConfigSchema.Parse(type, json, out IReadOnlyList<string> errors);
+            if (config is null) return errors;
+
+            await context.SaveConfigAsync(type, config, cancellationToken);
+            _logger.LogInformation("插件 {PluginId} 的配置已更新", pluginId);
+            return [];
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>返回启用中插件的专有面板；插件未启用或没有登记页面时返回 null。</summary>
+    internal PluginPanel? FindActivePage(string pluginId) =>
+        Find(pluginId) is { Context.PanelHost: { Title: not null } panel } plugin && IsActive(plugin) ? panel : null;
 
     /// <inheritdoc />
     public void Dispose()
@@ -335,12 +402,16 @@ public sealed class PluginRuntime : IDisposable
             foreach (Type commandType in commandTypes)
                 builder.RegisterType(commandType).AsSelf().SingleInstance();
             instance.ConfigureServices(builder);
+            PluginPanelRegistration panel = new();
+            instance.ConfigurePanel(panel);
+            pluginContext.ConfigType = panel.ConfigType;
 
             plugin.Assembly     = assembly;
             plugin.Instance     = instance;
             plugin.Context      = pluginContext;
             plugin.CommandTypes = commandTypes;
             plugin.Container    = builder.Build();
+            plugin.ConfigSchema = panel.ConfigType is null ? null : PluginConfigSchema.Create(panel.ConfigType);
             _logger.LogInformation("已加载插件 {PluginId} {Version}", plugin.Manifest.Id, plugin.Manifest.Version);
         }
         catch (Exception exception)
@@ -367,6 +438,7 @@ public sealed class PluginRuntime : IDisposable
             _bot,
             new PluginAssets(plugin.Directory),
             new PluginConfigStore(_infrastructure.Database),
+            new PluginPanel(id, plugin.Directory, _endpoints, () => IsActive(plugin)),
             _settings.DataDirectory);
     }
 
@@ -467,6 +539,14 @@ public sealed class PluginRuntime : IDisposable
     }
 
     private LoadedPlugin? Find(string pluginId) => _plugins.Find(plugin => plugin.Manifest.Id == pluginId);
+
+    private static IEnumerable<CommandTypeState> CommandTypesOf(
+        LoadedPlugin                        plugin,
+        IReadOnlyList<CommandAssemblyState> assemblyStates) =>
+        assemblyStates.FirstOrDefault(state => state.Assembly == plugin.Assembly)?.Types ?? [];
+
+    // 专有面板与插件 API 只在插件处于启用状态时可用。
+    private static bool IsActive(LoadedPlugin plugin) => plugin is { Enabled: true, Initialized: true, Error: null };
 
     // 顺序靠前的插件优先级更高；宿主自身的运维指令使用更高的固定优先级。
     private int PriorityOf(int index) => _plugins.Count - index;

@@ -46,10 +46,10 @@ public sealed class HostCommands
         await _infrastructure.StorageAvailability.CheckAsync(force: true, CancellationToken.None);
 
         StringBuilder reply = new();
-        reply.AppendLine($"健康检查：{Describe(_health.Overall)}");
+        reply.AppendLine($"健康检查：{HealthText.Describe(_health.Overall)}");
         foreach (HealthStatus status in _health.Snapshot())
         {
-            reply.Append($"{ComponentName(status.Component)}：{Describe(status.Level)}");
+            reply.Append($"{HealthText.ComponentName(status.Component)}：{HealthText.Describe(status.Level)}");
             if (status.Detail.Length > 0) reply.Append($"（{status.Detail}）");
             reply.AppendLine();
         }
@@ -60,25 +60,4 @@ public sealed class HostCommands
         reply.Append($"日志目录：{logBytes / BYTES_PER_MIB} MiB / {_maxLogSizeMiB} MiB");
         await e.ReplyAsync(reply.ToString());
     }
-
-    private static string Describe(HealthLevel level) =>
-        level switch
-        {
-            HealthLevel.Normal   => "正常",
-            HealthLevel.Degraded => "降级",
-            HealthLevel.Stopped  => "停止",
-            _                    => level.ToString()
-        };
-
-    private static string ComponentName(HealthComponent component) =>
-        component switch
-        {
-            HealthComponent.Startup       => "启动检查",
-            HealthComponent.Database      => "数据库",
-            HealthComponent.ObjectStorage => "RustFS",
-            HealthComponent.Bot           => "LLBot",
-            HealthComponent.Nb2           => "NB2 服务",
-            HealthComponent.Plugins       => "插件",
-            _                             => component.ToString()
-        };
 }

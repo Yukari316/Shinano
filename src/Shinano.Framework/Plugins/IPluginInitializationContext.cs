@@ -30,9 +30,12 @@ public interface IPluginInitializationContext
     /// <summary>插件包 <c>assets/</c> 目录的只读访问。</summary>
     IPluginAssets Assets { get; }
 
+    /// <summary>专有面板登记：插件启用时出现在管理面板，停用时移除。</summary>
+    IPluginPanel Panel { get; }
+
     /// <summary>
     /// 返回插件配置。<typeparamref name="T" /> 的无参构造结果即默认配置；配置存于数据库，切换账号保留。
-    /// 同一插件只能使用一个配置类型。
+    /// 同一插件只能使用一个配置类型，且须与 <see cref="IPanelRegistration.UseConfig{TConfig}" /> 声明的类型相同。
     /// </summary>
     IPluginConfig<T> Config<T>() where T : class, new();
 

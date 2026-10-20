@@ -15,6 +15,13 @@ public interface IShinanoPlugin
     void ConfigureServices(ContainerBuilder builder);
 
     /// <summary>
+    /// 声明管理面板的配置表单，只在加载时调用一次，与启停无关：插件加入后即可在面板显示和修改配置。
+    /// 专有面板（前端页面与管理 API）另在 <see cref="InitializeAsync" /> 中经
+    /// <see cref="IPluginInitializationContext.Panel" /> 登记。
+    /// </summary>
+    void ConfigurePanel(IPanelRegistration panel);
+
+    /// <summary>
     /// 首次启用时调用一次：执行结构迁移、登记事件订阅与后台任务。抛出异常时插件保持停用并记录原因，
     /// 直到进程重启后才会再次尝试；之后的停用与重新启用不再调用本方法。
     /// </summary>

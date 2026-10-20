@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Serilog.Core;
+using Serilog.Parsing;
 using Serilog.Events;
 
 namespace Shinano.Infrastructure.Logging;
@@ -38,6 +39,7 @@ public sealed class MemoryLogSink : ILogEventSink
                 Level     = logEvent.Level.ToString(),
                 Category  = category,
                 Message   = logEvent.RenderMessage(),
+                Segments  = Split(logEvent),
                 Exception = logEvent.Exception?.ToString()
             };
             if (_buffer.Count == BUFFER_CAPACITY) _buffer.Dequeue();
@@ -110,4 +112,38 @@ public sealed class MemoryLogSink : ILogEventSink
             return false;
         }
     }
+
+    // 与 RenderMessage 相同的渲染方式逐个渲染模板记号，参数按值类型标注种类。
+    private static List<LogSegment> Split(LogEvent logEvent)
+    {
+        List<LogSegment> segments = [];
+        foreach (MessageTemplateToken token in logEvent.MessageTemplate.Tokens)
+        {
+            using StringWriter writer = new();
+            token.Render(logEvent.Properties, writer);
+            LogSegmentKind kind = token is PropertyToken property
+                                  && logEvent.Properties.TryGetValue(property.PropertyName, out LogEventPropertyValue? value)
+                ? KindOf(value)
+                : LogSegmentKind.Text;
+            segments.Add(
+                new LogSegment
+                {
+                    Text = writer.ToString(),
+                    Kind = kind
+                });
+        }
+
+        return segments;
+    }
+
+    private static LogSegmentKind KindOf(LogEventPropertyValue value) =>
+        value switch
+        {
+            ScalarValue { Value: null }   => LogSegmentKind.Null,
+            ScalarValue { Value: string } => LogSegmentKind.String,
+            ScalarValue { Value: bool }   => LogSegmentKind.Boolean,
+            ScalarValue { Value: byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal }
+                => LogSegmentKind.Number,
+            _ => LogSegmentKind.Other
+        };
 }

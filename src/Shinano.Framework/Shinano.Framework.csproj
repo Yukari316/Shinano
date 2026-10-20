@@ -5,6 +5,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 插件专有面板以 ASP.NET Core 标准路由登记管理 API。 -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Autofac"/>
     <PackageReference Include="HoshikawaKaguya.Sora"/>
     <PackageReference Include="HoshikawaKaguya.Sora.Command"/>

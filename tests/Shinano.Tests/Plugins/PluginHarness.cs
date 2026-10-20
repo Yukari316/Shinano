@@ -1,6 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
+using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.Health;
@@ -37,11 +39,12 @@ public sealed class PluginHarness : IAsyncDisposable
 
     private readonly string _dataDirectory;
 
-    private PluginHarness(FakeMilkyServer server, SoraService service, PluginRuntime runtime, string dataDirectory)
+    private PluginHarness(FakeMilkyServer server, SoraService service, PluginRuntime runtime, BotAccessor bot, string dataDirectory)
     {
         Server         = server;
         Service        = service;
         Runtime        = runtime;
+        Bot            = bot;
         _dataDirectory = dataDirectory;
     }
 
@@ -54,6 +57,9 @@ public sealed class PluginHarness : IAsyncDisposable
     /// <summary>插件运行时。</summary>
     public PluginRuntime Runtime { get; }
 
+    /// <summary>当前连接。</summary>
+    public BotAccessor Bot { get; }
+
     /// <summary>
     /// 创建并连接。<paramref name="pluginDirectory" /> 为相对仓库根目录的插件目录；本次涉及插件的持久化状态先被清除。
     /// </summary>
@@ -61,7 +67,18 @@ public sealed class PluginHarness : IAsyncDisposable
         HostInfrastructure infrastructure,
         string             bucketPrefix,
         string             pluginDirectory,
-        params string[]    pluginIds)
+        params string[]    pluginIds) =>
+        await StartAsync(infrastructure, bucketPrefix, pluginDirectory, null, pluginIds);
+
+    /// <summary>
+    /// 创建并连接，插件管理 API 登记到 <paramref name="endpoints" />；为 null 时使用不对外提供的独立端点来源。
+    /// </summary>
+    public static async Task<PluginHarness> StartAsync(
+        HostInfrastructure        infrastructure,
+        string                    bucketPrefix,
+        string                    pluginDirectory,
+        PluginEndpointDataSource? endpoints,
+        params string[]           pluginIds)
     {
         infrastructure.Database.Global.CodeFirst.InitTables<PluginStateRecord, PluginConfigRecord>();
         await infrastructure.Database.Global.Deleteable<PluginStateRecord>()
@@ -82,6 +99,7 @@ public sealed class PluginHarness : IAsyncDisposable
                 PluginDirectory = Path.Combine(RepositoryRoot(), pluginDirectory),
                 BucketPrefix    = bucketPrefix
             },
+            endpoints ?? new PluginEndpointDataSource(new ServiceCollection().BuildServiceProvider()),
             NullLoggerFactory.Instance);
         await runtime.LoadAsync(CancellationToken.None);
 
@@ -105,7 +123,7 @@ public sealed class PluginHarness : IAsyncDisposable
         };
         await service.StartAsync();
         await connected.Task.WaitAsync(ReplyTimeout);
-        return new PluginHarness(server, service, runtime, dataDirectory);
+        return new PluginHarness(server, service, runtime, bot, dataDirectory);
     }
 
     /// <summary>断言下一条回复的文本。</summary>

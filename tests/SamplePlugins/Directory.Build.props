@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest"/>
+    <None Include="web/**" CopyToOutputDirectory="PreserveNewest"/>
     <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/Shinano.Framework/Shinano.Framework.csproj" Private="false" ExcludeAssets="runtime"/>
   </ItemGroup>
 </Project>

@@ -18,6 +18,9 @@ public sealed class LogEntry
     /// <summary>渲染后的消息文本。</summary>
     public required string Message { get; init; }
 
+    /// <summary>按消息模板拆分的片段，依次拼接即为 <see cref="Message" />。</summary>
+    public required IReadOnlyList<LogSegment> Segments { get; init; }
+
     /// <summary>异常文本，没有异常时为 null。</summary>
     public string? Exception { get; init; }
 }

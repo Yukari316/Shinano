@@ -11,5 +11,6 @@
   <ItemGroup>
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest"/>
     <None Include="assets/**" CopyToOutputDirectory="PreserveNewest"/>
+    <None Include="web/**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 </Project>

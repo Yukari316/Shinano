@@ -1,0 +1,25 @@
+{
+  "name": "@shinano/plugin-sdk",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/plugin-sdk.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vue": "3.5.44",
+    "vue-tsc": "3.3.13"
+  }
+}
