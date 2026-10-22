@@ -7,9 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
+using Shinano.Host.Packages;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
+using Shinano.Host.Restart;
 using Shinano.Infrastructure;
+using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Logging;
 using Shinano.Tests.Plugins;
@@ -70,6 +73,22 @@ public sealed class PanelHarness : IAsyncDisposable
         builder.Services.AddSingleton(new LoggingOptions());
         builder.Services.AddSingleton(new MemoryLogSink());
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton(new RestartOptions());
+        // 插件包暂存与重启只作用于临时数据目录内的插件目录，不触及仓库中的测试插件输出。
+        builder.Services.AddSingleton(new PluginRuntimeSettings
+        {
+            DataDirectory   = dataDirectory,
+            PluginDirectory = "plugins",
+            BucketPrefix    = bucketPrefix
+        });
+        builder.Services.AddSingleton<PluginPackageStaging>();
+        builder.Services.AddSingleton(sp => new SuperUserNotifier(
+                                          sp.GetRequiredService<BotAccessor>(),
+                                          new DeploymentOptions(),
+                                          null,
+                                          TimeProvider.System,
+                                          sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
+        builder.Services.AddSingleton<RestartCoordinator>();
         WebApplication app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();

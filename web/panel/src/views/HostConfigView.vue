@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, describeError } from '../api'
 import PageFooter from '../components/PageFooter.vue'
+import { openRestartDialog } from '../restart'
 import type { HostConfigEntry } from '../types'
 
 const SECTION_TITLES: Record<string, string> = {
@@ -20,7 +21,7 @@ const SECTION_TITLES: Record<string, string> = {
 const router = useRouter()
 const entries = ref<HostConfigEntry[]>([])
 // 编辑中的值：整数列表以换行分隔的文本编辑，保存时再转换。
-const drafts = ref<Record<string, string | number | null>>({})
+const drafts = ref<Record<string, string | number | boolean | null>>({})
 const error = ref('')
 const saved = ref(false)
 const newToken = ref<string | null>(null)
@@ -40,9 +41,8 @@ function keyOf(entry: HostConfigEntry): string {
   return `${entry.field.section}:${entry.field.key}`
 }
 
-function draftOf(entry: HostConfigEntry): string | number | null {
-  if (Array.isArray(entry.value)) return entry.value.join('\n')
-  return typeof entry.value === 'boolean' ? null : entry.value
+function draftOf(entry: HostConfigEntry): string | number | boolean | null {
+  return Array.isArray(entry.value) ? entry.value.join('\n') : entry.value
 }
 
 onMounted(load)
@@ -135,11 +135,13 @@ async function finishTokenChange(): Promise<void> {
               />
               <textarea
                 v-else-if="entry.field.kind === 'IntegerList'"
-                v-model="drafts[keyOf(entry)]"
+                :value="String(drafts[keyOf(entry)] ?? '')"
+                @input="drafts[keyOf(entry)] = ($event.target as HTMLTextAreaElement).value"
                 class="textarea w-full max-w-md font-mono"
                 rows="3"
                 placeholder="每行一个"
               />
+              <input v-else-if="entry.field.kind === 'Boolean'" v-model="drafts[keyOf(entry)]" type="checkbox" class="toggle toggle-primary" />
               <input v-else v-model="drafts[keyOf(entry)]" type="text" class="input w-full max-w-md" />
               <p v-if="entry.field.hint" class="label whitespace-normal">{{ entry.field.hint }}</p>
             </fieldset>
@@ -155,6 +157,7 @@ async function finishTokenChange(): Promise<void> {
         <span v-else-if="saved" role="status" class="text-success-strong">已保存到本地配置文件，重启后生效</span>
         <span v-else class="opacity-70">宿主配置只在启动时读取，保存后需要重启生效；敏感配置只能在本地配置文件中修改。</span>
       </p>
+      <button v-if="saved && pendingCount === 0" type="button" class="btn btn-warning" @click="openRestartDialog">立即重启</button>
       <button type="submit" form="host-config-form" class="btn btn-primary" :disabled="pendingCount === 0">保存</button>
     </PageFooter>
 

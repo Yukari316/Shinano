@@ -7,17 +7,25 @@
   <ItemGroup>
     <ProjectReference Include="..\Shinano.Framework\Shinano.Framework.csproj"/>
     <ProjectReference Include="..\Shinano.Infrastructure\Shinano.Infrastructure.csproj"/>
+    <!-- 引用重启辅助程序使其随宿主输出到同一目录，宿主复用其请求契约。 -->
+    <ProjectReference Include="..\Shinano.Restarter\Shinano.Restarter.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Autofac"/>
     <PackageReference Include="HoshikawaKaguya.Sora.Adapter.Milky"/>
     <PackageReference Include="HoshikawaKaguya.Sora.Command"/>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd"/>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices"/>
+    <PackageReference Include="SkiaSharp"/>
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies"/>
   </ItemGroup>
 
   <ItemGroup>
     <!-- 内容根目录为程序启动目录，面板静态文件需要随构建输出。 -->
     <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest"/>
+    <!-- 通知卡片的字体与图标。 -->
+    <None Update="Resource\**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>

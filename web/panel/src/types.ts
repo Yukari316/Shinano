@@ -123,7 +123,7 @@ export interface LogFile {
   modified: string
 }
 
-export type HostConfigFieldKind = 'Text' | 'Integer' | 'IntegerList' | 'Choice' | 'Secret'
+export type HostConfigFieldKind = 'Text' | 'Integer' | 'IntegerList' | 'Choice' | 'Boolean' | 'Secret'
 
 export interface HostConfigField {
   section: string
@@ -148,4 +148,41 @@ export interface Appearance {
   veilOpacity: number
   blur: boolean
   backgroundFile: string | null
+}
+
+export type PluginChangeKind = 'Install' | 'Upgrade' | 'Remove'
+
+export interface PluginChange {
+  kind: PluginChangeKind
+  pluginId: string
+  name: string
+  fromVersion: string | null
+  toVersion: string | null
+}
+
+export interface PendingPluginChange {
+  change: PluginChange
+  stagedAt: string
+  sizeBytes: number
+}
+
+export type RestartMode = 'Helper' | 'ServiceManager'
+export type StartupPhase = 'Starting' | 'Ready' | 'FaultMode'
+export type RestartOutcome = 'Succeeded' | 'RolledBack' | 'Unverified'
+
+export interface RestartResult {
+  outcome: RestartOutcome
+  mode: RestartMode
+  reason: string | null
+  finishedAt: string
+  changes: PluginChange[]
+}
+
+export interface RestartStatus {
+  instanceId: string
+  phase: StartupPhase
+  mode: RestartMode
+  restarting: boolean
+  pending: PendingPluginChange[]
+  lastResult: RestartResult | null
 }

@@ -2,6 +2,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Shinano.Host.Bot;
+using Shinano.Host.Notifications;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Scheduling;
@@ -78,13 +79,25 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
             if (_gaps.Close(ArchiveGapCause.Backlog, now))
             {
                 _logger.LogInformation("归档缓冲已恢复写入");
-                _notifier.Notify("[Shinano] 聊天归档缓冲已恢复，期间丢弃的消息已登记为归档缺口");
+                _notifier.Notify(
+                    new NotificationCard
+                    {
+                        Level = NotificationLevel.Normal,
+                        Title = "聊天归档缓冲已恢复",
+                        Items = [new NotificationItem { Label = "影响", Value = "期间丢弃的消息已登记为归档缺口" }]
+                    });
             }
         }
         else if (_gaps.Open(ArchiveGapCause.Backlog, now))
         {
             _logger.LogWarning("归档缓冲已满，开始丢弃消息记录");
-            _notifier.Notify("[Shinano] 聊天归档缓冲已满，新消息记录将被丢弃");
+            _notifier.Notify(
+                new NotificationCard
+                {
+                    Level = NotificationLevel.Warning,
+                    Title = "聊天归档缓冲已满",
+                    Items = [new NotificationItem { Label = "影响", Value = "新消息记录将被丢弃，恢复后登记为归档缺口" }]
+                });
         }
 
         return ValueTask.CompletedTask;

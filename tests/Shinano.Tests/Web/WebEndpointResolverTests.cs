@@ -38,11 +38,28 @@ public sealed class WebEndpointResolverTests : IDisposable
     }
 
     [Fact]
-    public void NonLoopback_WithoutCertificate_FallsBackToLoopback()
+    public void NonLoopback_WithoutCertificate_UsesHttp()
     {
         WebEndpoint endpoint = WebEndpointResolver.Resolve(new WebOptions { ListenAddress = "10.7.21.5" }, _directory);
 
+        Assert.Equal(IPAddress.Parse("10.7.21.5"), endpoint.Address);
+        Assert.Null(endpoint.Certificate);
+        Assert.Empty(endpoint.Problems);
+    }
+
+    [Fact]
+    public void NonLoopback_WithUnloadableCertificate_FallsBackToLoopback()
+    {
+        WebEndpoint endpoint = WebEndpointResolver.Resolve(
+            new WebOptions
+            {
+                ListenAddress   = "10.7.21.5",
+                CertificatePath = "missing.pfx"
+            },
+            _directory);
+
         Assert.Equal(IPAddress.Loopback, endpoint.Address);
+        Assert.Null(endpoint.Certificate);
         Assert.NotEmpty(endpoint.Problems);
     }
 

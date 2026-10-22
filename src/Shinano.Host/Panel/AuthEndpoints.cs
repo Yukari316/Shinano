@@ -27,7 +27,8 @@ internal static class AuthEndpoints
         IPAddress address = context.Connection.RemoteIpAddress ?? IPAddress.None;
         if (throttle.IsBlocked(address))
             return PanelResults.Error(StatusCodes.Status429TooManyRequests, "登录失败次数过多，请稍后再试");
-        if (!tokens.Verify(request.Token))
+        // JSON 中的 null 会绕过属性默认值，空 Token 与错误 Token 同样计入失败。
+        if (string.IsNullOrEmpty(request.Token) || !tokens.Verify(request.Token))
         {
             throttle.RecordFailure(address);
             return PanelResults.Error(StatusCodes.Status401Unauthorized, "Token 不正确");

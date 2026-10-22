@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 重启辅助程序：由宿主引用以随宿主输出到同一目录，宿主同时复用其中的请求契约。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Shinano.Restarter</RootNamespace>
+  </PropertyGroup>
+
+</Project>

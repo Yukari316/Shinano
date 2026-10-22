@@ -12,7 +12,7 @@ public sealed class WebEndpoint
     /// <summary>监听端口。</summary>
     public required int Port { get; init; }
 
-    /// <summary>HTTPS 证书；为 null 时使用 HTTP，只会出现在回环地址上。</summary>
+    /// <summary>HTTPS 证书；为 null 时使用 HTTP。</summary>
     public X509Certificate2? Certificate { get; init; }
 
     /// <summary>

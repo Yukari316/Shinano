@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Archive;
 using Shinano.Host.Plugins;
+using Shinano.Host.Restart;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
@@ -31,6 +32,7 @@ public sealed class BotService : BackgroundService
     private readonly LogFileLayout       _logLayout;
     private readonly LoggingOptions      _loggingOptions;
     private readonly ILoggerFactory      _loggerFactory;
+    private readonly RestartCoordinator  _restart;
     private readonly ILogger<BotService> _logger;
     private          SoraService?        _service;
 
@@ -45,8 +47,10 @@ public sealed class BotService : BackgroundService
         DeploymentOptions  deployment,
         LogFileLayout      logLayout,
         LoggingOptions     loggingOptions,
+        RestartCoordinator restart,
         ILoggerFactory     loggerFactory)
     {
+        _restart        = restart;
         _infrastructure = infrastructure;
         _plugins        = plugins;
         _archive        = archive;
@@ -67,10 +71,12 @@ public sealed class BotService : BackgroundService
         if (!await _infrastructure.Ready.WaitAsync(stoppingToken))
         {
             _logger.LogError("基础设施处于故障模式，Bot 不连接 LLBot");
+            _restart.OnFaultMode();
             return;
         }
 
-        await _plugins.LoadAsync(stoppingToken);
+        IReadOnlyDictionary<string, string?> loadErrors = await _plugins.LoadAsync(stoppingToken);
+        if (!_restart.OnPluginsLoaded(loadErrors)) return;
         _service = SoraServiceFactory.Instance.CreateMilkyService(
             new MilkyConfig
             {

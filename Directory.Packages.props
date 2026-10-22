@@ -8,6 +8,12 @@
         <PackageVersion Include="HoshikawaKaguya.Sora.Command" Version="3.2.0"/>
         <PackageVersion Include="HoshikawaKaguya.Sora.Adapter.Milky" Version="3.2.0"/>
         <PackageVersion Include="Autofac" Version="9.3.4"/>
+        <!-- Hosting -->
+        <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.13"/>
+        <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.13"/>
+        <!-- Rendering -->
+        <PackageVersion Include="SkiaSharp" Version="4.153.1"/>
+        <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1"/>
         <!-- Storage -->
         <PackageVersion Include="SqlSugarCore" Version="5.1.4.221"/>
         <PackageVersion Include="Npgsql" Version="10.0.3"/>

@@ -14,6 +14,7 @@ public static class PanelApi
         LogEndpoints.Map(api);
         ConfigEndpoints.Map(api);
         AppearanceEndpoints.Map(api);
+        RestartEndpoints.Map(api);
         ((IEndpointRouteBuilder)app).DataSources.Add(app.Services.GetRequiredService<PluginEndpointDataSource>());
         // 未匹配的 API 路径返回 404，而不是单页应用。
         app.Map("/api/{**rest}", () => Results.NotFound());

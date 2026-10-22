@@ -5,8 +5,9 @@ using System.Security.Cryptography.X509Certificates;
 namespace Shinano.Host.Web;
 
 /// <summary>
-/// 把监听配置解析为安全的监听端点：拒绝全部网卡地址，非回环地址必须使用 HTTPS。
-/// 配置不满足要求时回退到 <c>127.0.0.1</c> 的 HTTP，使面板仍可在本机打开，并给出原因。
+/// 把监听配置解析为监听端点：拒绝全部网卡地址；HTTPS 可选，配置了证书时使用证书。
+/// 配置无效，或配置了证书却无法加载时，回退到 <c>127.0.0.1</c> 的 HTTP 并给出原因：
+/// 管理员要求 HTTPS 时不能因证书问题改为以明文对外监听，回环地址上面板仍可在本机打开。
 /// </summary>
 public static class WebEndpointResolver
 {
@@ -38,11 +39,8 @@ public static class WebEndpointResolver
         {
             string path = Path.GetFullPath(options.CertificatePath, dataDirectory);
             certificate = LoadCertificate(path, options.CertificatePassword, out string? certificateProblem);
-            if (certificateProblem is not null) problems.Add(certificateProblem);
+            if (certificateProblem is not null) return Fallback(port, [.. problems, certificateProblem]);
         }
-
-        if (!IPAddress.IsLoopback(address) && certificate is null)
-            return Fallback(port, [.. problems, $"监听非回环地址 {address} 必须配置可用的 HTTPS 证书"]);
 
         return new WebEndpoint
         {

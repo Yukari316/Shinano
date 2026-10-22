@@ -1,3 +1,4 @@
+using Shinano.Host.Notifications;
 using Shinano.Host.Plugins;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Health;
@@ -61,17 +62,31 @@ public sealed class HealthReactions : IHostedService
                 if (failing) _plugins.Suspend();
                 else _plugins.Resume();
                 TrackGap(ArchiveGapCause.DatabaseOffline, failing, current.Since);
-                _notifier.Notify(failing ? $"[Shinano] 数据库不可用：{current.Detail}" : "[Shinano] 数据库已恢复");
+                _notifier.Notify(failing
+                    ? Card(NotificationLevel.Error, "数据库不可用", "影响", "已停止响应全部功能，恢复后自动继续", current.Detail)
+                    : Card(NotificationLevel.Normal, "数据库已恢复", "影响", "已恢复响应，离线期间的消息登记为归档缺口", null));
                 break;
             case HealthComponent.ObjectStorage:
                 _notifier.Notify(failing
-                    ? $"[Shinano] RustFS 不可用，媒体功能受影响：{current.Detail}"
-                    : "[Shinano] RustFS 已恢复");
+                    ? Card(NotificationLevel.Warning, "RustFS 不可用", "影响", "聊天媒体标记为缺失，需要媒体存储的功能报错", current.Detail)
+                    : Card(NotificationLevel.Normal, "RustFS 已恢复", "影响", "媒体功能已恢复", null));
                 break;
             case HealthComponent.Bot:
                 TrackGap(ArchiveGapCause.BotDisconnected, failing, current.Since);
                 break;
         }
+    }
+
+    private static NotificationCard Card(NotificationLevel level, string title, string label, string value, string? reason)
+    {
+        List<NotificationItem> items = [new NotificationItem { Label = label, Value = value }];
+        if (!string.IsNullOrWhiteSpace(reason)) items.Add(new NotificationItem { Label = "原因", Value = reason });
+        return new NotificationCard
+        {
+            Level = level,
+            Title = title,
+            Items = items
+        };
     }
 
     // 首次连接前没有机器人账号，也就没有可归档的会话，不登记缺口。

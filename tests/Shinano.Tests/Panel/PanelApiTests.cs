@@ -213,6 +213,31 @@ public sealed class PanelApiTests
                 },
                 Token));
 
+    [Fact]
+    public async Task PluginPackage_IsUploadedListedAndUndone()
+    {
+        await using PanelHarness panel = await StartAsync();
+        using HttpClient client = await LoggedInClientAsync(panel);
+
+        using MultipartFormDataContent invalid = new() { { new ByteArrayContent([1, 2, 3]), "file", "broken.zip" } };
+        HttpResponseMessage rejected = await client.PostAsync("/api/packages", invalid, Token);
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+        await using Stream zip = Restart.PackageFixture.Zip(Restart.PackageFixture.Package("sample-c", "1.2.0"));
+        using MultipartFormDataContent upload = new() { { new StreamContent(zip), "file", "sample-c.zip" } };
+        HttpResponseMessage staged = await client.PostAsync("/api/packages", upload, Token);
+        Assert.Equal(HttpStatusCode.OK, staged.StatusCode);
+
+        JsonObject? status = await client.GetFromJsonAsync<JsonObject>("/api/restart", Token);
+        JsonNode? change = Assert.Single(status?["pending"]?.AsArray() ?? [])?["change"];
+        Assert.Equal("Install", change?["kind"]?.GetValue<string>());
+        Assert.Equal("1.2.0", change?["toVersion"]?.GetValue<string>());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/packages/sample-c", Token)).StatusCode);
+        status = await client.GetFromJsonAsync<JsonObject>("/api/restart", Token);
+        Assert.Empty(status?["pending"]?.AsArray() ?? []);
+    }
+
     private Task<PanelHarness> StartAsync() =>
         PanelHarness.StartAsync(_fixture.Ready, _fixture.BucketPrefix, TEST_PLUGINS, PLUGIN_A, PLUGIN_B);
 

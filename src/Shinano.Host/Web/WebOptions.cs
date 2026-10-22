@@ -18,7 +18,7 @@ public sealed class WebOptions
     /// <summary>监听端口，默认 <see cref="DEFAULT_PORT" />。</summary>
     public int Port { get; set; } = DEFAULT_PORT;
 
-    /// <summary>PFX 证书路径，相对路径基于部署数据目录。监听非回环地址时必填。</summary>
+    /// <summary>PFX 证书路径，相对路径基于部署数据目录；留空时使用 HTTP。</summary>
     public string? CertificatePath { get; set; }
 
     /// <summary>PFX 证书密码，没有密码时留空。</summary>

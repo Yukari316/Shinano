@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Shinano.Host.Configuration;
+using Shinano.Host.Restart;
 
 namespace Shinano.Host.Panel;
 
@@ -14,7 +15,8 @@ public sealed class HostConfigEditor
     private const int    MAX_PORT       = 65535;
     private const int    MAX_DAYS       = 3650;
 
-    private static readonly string[] LogLevels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+    private static readonly string[] LogLevels    = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+    private static readonly string[] RestartModes = [nameof(RestartMode.Helper), nameof(RestartMode.ServiceManager)];
 
     /// <summary>面板显示的全部宿主配置项，按显示顺序排列。</summary>
     public static readonly IReadOnlyList<HostConfigField> Fields =
@@ -40,12 +42,15 @@ public sealed class HostConfigEditor
         Integer("ChatArchive", "StatRetentionDays", "发言统计保留天数", 0, MAX_DAYS, "0 表示永久保存"),
         Choice("Logging", "MinimumLevel", "日志等级", LogLevels),
         Integer("Logging", "MaxTotalSizeMiB", "日志目录上限（MiB）", 64, 1_048_576),
-        Text("Web", "ListenAddress", "面板监听地址", "具体 IP 或 localhost，不接受全部网卡地址；非回环地址需要证书"),
+        Text("Web", "ListenAddress", "面板监听地址", "具体 IP 或 localhost，不接受全部网卡地址"),
         Integer("Web", "Port", "面板端口", 1, MAX_PORT),
-        Text("Web", "CertificatePath", "HTTPS 证书路径", "PFX 文件，相对路径基于部署数据目录", optional: true),
+        Text("Web", "CertificatePath", "HTTPS 证书路径", "PFX 文件，相对路径基于部署数据目录；留空使用 HTTP", optional: true),
         Secret("Web", "CertificatePassword", "HTTPS 证书密码"),
         Secret("Web", "Token", "面板 Token"),
-        Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录")
+        Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录"),
+        Choice("Restart", "Mode", "重启方式", RestartModes, "Helper：直接运行，由重启辅助程序拉起；ServiceManager：由 Windows 服务或 systemd 托管"),
+        Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
+        Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次")
     ];
 
     private readonly DeploymentPaths _paths;
@@ -77,6 +82,7 @@ public sealed class HostConfigEditor
                                                                .Select(child => long.TryParse(child.Value, out long id) ? id : 0)
                                                                .ToArray(),
                     HostConfigFieldKind.Integer     => long.TryParse(section.Value, out long number) ? number : null,
+                    HostConfigFieldKind.Boolean     => bool.TryParse(section.Value, out bool flag) && flag,
                     _                               => section.Value ?? string.Empty
                 };
                 return (object)new
@@ -145,6 +151,8 @@ public sealed class HostConfigEditor
                 return items.All(item => item is JsonValue element && element.TryGetValue(out long _)) ? null : "必须是整数列表";
             case HostConfigFieldKind.Choice when value is JsonValue choice && choice.TryGetValue(out string? option):
                 return field.Options.Contains(option) ? null : $"必须是 {string.Join("、", field.Options)} 之一";
+            case HostConfigFieldKind.Boolean when value is JsonValue flag && flag.TryGetValue(out bool _):
+                return null;
             default:
                 return "值的类型不正确";
         }
@@ -183,14 +191,25 @@ public sealed class HostConfigEditor
             Kind    = HostConfigFieldKind.IntegerList
         };
 
-    private static HostConfigField Choice(string section, string key, string label, IReadOnlyList<string> options) =>
+    private static HostConfigField Choice(string section, string key, string label, IReadOnlyList<string> options, string hint = "") =>
         new()
         {
             Section = section,
             Key     = key,
             Label   = label,
+            Hint    = hint,
             Kind    = HostConfigFieldKind.Choice,
             Options = options
+        };
+
+    private static HostConfigField Boolean(string section, string key, string label, string hint) =>
+        new()
+        {
+            Section = section,
+            Key     = key,
+            Label   = label,
+            Hint    = hint,
+            Kind    = HostConfigFieldKind.Boolean
         };
 
     private static HostConfigField Secret(string section, string key, string label) =>

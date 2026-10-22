@@ -50,7 +50,7 @@ public sealed class ArchiveHarness : IAsyncDisposable
             new HostScheduler(NullLogger<HostScheduler>.Instance, new FakeTimeProvider()),
             bot,
             new ArchiveGapTracker(),
-            new SuperUserNotifier(bot, new DeploymentOptions(), NullLogger<SuperUserNotifier>.Instance),
+            new SuperUserNotifier(bot, new DeploymentOptions(), null, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             TimeProvider.System,
             NullLogger<ChatArchiveService>.Instance);
         await archive.StartAsync(CancellationToken.None);

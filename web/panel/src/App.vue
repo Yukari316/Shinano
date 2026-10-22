@@ -4,9 +4,12 @@ import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { appearance, backgroundUrl, refreshAppearance } from './appearance'
 import LogPanel from './components/LogPanel.vue'
+import RestartDialog from './components/RestartDialog.vue'
+import RestartOverlay from './components/RestartOverlay.vue'
 import SideNav from './components/SideNav.vue'
 import { refreshPlugins } from './plugins'
 import { pageTitle } from './pageTitle'
+import { refreshRestart } from './restart'
 import { startOverviewPolling, stopOverviewPolling } from './status'
 import { DARK_THEME, theme, toggleTheme } from './theme'
 
@@ -43,6 +46,7 @@ watch(
     }
     refreshPlugins().catch(() => undefined)
     refreshAppearance().catch(() => undefined)
+    refreshRestart().catch(() => undefined)
     startOverviewPolling()
   },
   { immediate: true }
@@ -76,5 +80,7 @@ watch(
       <div id="page-footer" class="px-6"></div>
     </main>
     <LogPanel v-if="showLogPanel" />
+    <RestartDialog />
+    <RestartOverlay />
   </div>
 </template>

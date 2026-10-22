@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { PhCheck, PhCube, PhWarning, PhX } from '@phosphor-icons/vue'
 import { computed, onMounted, ref } from 'vue'
+import { restartStatus } from '../restart'
 import { api, describeError } from '../api'
 import BarChart from '../components/BarChart.vue'
 import { formatBytes, formatNumber, HEALTH_BADGE, HEALTH_TEXT, recentDates, shortDate } from '../format'
@@ -59,6 +60,10 @@ const chartSummary = computed(() => {
 <template>
   <p class="-mt-4 text-sm opacity-70">数据更新于 {{ updatedAt }} · 每 30 秒刷新</p>
   <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
+  <div v-if="restartStatus?.lastResult?.outcome === 'RolledBack'" role="alert" class="alert alert-warning">
+    <span>最近一次插件包变更未能就绪，已还原上一套插件包<template v-if="restartStatus.lastResult.reason">：{{ restartStatus.lastResult.reason }}</template></span>
+    <RouterLink to="/plugins" class="btn btn-sm shrink-0">查看</RouterLink>
+  </div>
 
   <section v-if="overview" class="surface card">
     <div class="card-body gap-4">

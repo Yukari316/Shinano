@@ -15,6 +15,9 @@ public enum HostConfigFieldKind
     /// <summary>从固定选项中选择的字符串。</summary>
     Choice,
 
+    /// <summary>开关。</summary>
+    Boolean,
+
     /// <summary>敏感项：只显示是否已配置，面板不读取、不修改其值。</summary>
     Secret
 }

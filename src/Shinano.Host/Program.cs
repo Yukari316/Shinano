@@ -4,7 +4,10 @@ using Shinano.Host.Archive;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
+using Shinano.Host.Notifications;
+using Shinano.Host.Packages;
 using Shinano.Host.Plugins;
+using Shinano.Host.Restart;
 using Shinano.Host.Web;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.ChatArchive;
@@ -49,6 +52,12 @@ builder.WebHost.ConfigureKestrel(kestrel =>
         });
 });
 
+RestartOptions restartOptions = builder.Configuration.GetSection(RestartOptions.SECTION_NAME).Get<RestartOptions>() ?? new RestartOptions();
+// 只在由 Windows 服务或 systemd 启动时生效，直接运行时不改变行为。
+builder.Services.AddWindowsService(options => options.ServiceName = restartOptions.EffectiveServiceName);
+builder.Services.AddSystemd();
+builder.Services.AddSingleton(restartOptions);
+
 builder.Services.AddPanel(paths);
 builder.Services.AddSingleton(loggingOptions);
 builder.Services.AddSingleton(logging.Layout);
@@ -86,7 +95,15 @@ builder.Services.AddSingleton(new PluginRuntimeSettings
     BucketPrefix    = deployment.BucketPrefix
 });
 builder.Services.AddSingleton<PluginRuntime>();
-builder.Services.AddSingleton<SuperUserNotifier>();
+builder.Services.AddSingleton<PluginPackageStaging>();
+builder.Services.AddSingleton<RestartCoordinator>();
+NotificationCardRenderer? cardRenderer = CreateCardRenderer(out Exception? cardRendererError);
+builder.Services.AddSingleton(sp => new SuperUserNotifier(
+                                  sp.GetRequiredService<BotAccessor>(),
+                                  deployment,
+                                  cardRenderer,
+                                  TimeProvider.System,
+                                  sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
 builder.Services.AddSingleton<ArchiveGapTracker>();
 builder.Services.AddHostedService<HealthReactions>();
 // 归档服务在 BotService 之前登记：托管服务按相反顺序停止，Sora 排空记录队列后归档服务才停止。
@@ -105,6 +122,8 @@ if (configuredMaxLogSize <= 0)
         loggingOptions.MaxTotalSizeMiB);
 foreach (string problem in endpoint.Problems)
     startupLogger.LogError("管理面板监听配置无效：{Problem}", problem);
+if (cardRendererError is not null)
+    startupLogger.LogError(cardRendererError, "无法加载通知卡片资源，Super User 通知改为文字");
 startupLogger.LogInformation(
     "管理面板监听 {Scheme}://{Address}:{Port}",
     endpoint.Certificate is null ? "http" : "https",
@@ -117,6 +136,24 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapReadiness();
 app.MapPanel();
 
+// 托管服务启动前应用或还原插件包变更：插件程序集加载后其目录会被锁定。
+app.Services.GetRequiredService<RestartCoordinator>().PrepareStartup();
 await app.RunAsync();
+cardRenderer?.Dispose();
+
+static NotificationCardRenderer? CreateCardRenderer(out Exception? error)
+{
+    error = null;
+    try
+    {
+        return new NotificationCardRenderer(Path.Combine(AppContext.BaseDirectory, "Resource"));
+    }
+    catch (Exception exception) when (exception is IOException or ArgumentException)
+    {
+        error = exception;
+        return null;
+    }
+}

@@ -17,6 +17,7 @@ import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { plugins } from '../plugins'
+import { pendingCount } from '../restart'
 import { overview } from '../status'
 
 interface NavItem {
@@ -77,6 +78,7 @@ async function logout(): Promise<void> {
       <li v-for="item in main" :key="item.to">
         <RouterLink :to="item.to" :exact-active-class="item.exact ? 'menu-active' : undefined" :active-class="item.exact ? undefined : 'menu-active'">
           <component :is="item.icon" class="size-[18px]" aria-hidden="true" />{{ item.label }}
+          <span v-if="item.to === '/plugins' && pendingCount > 0" class="badge badge-warning badge-sm ml-auto" :title="`${pendingCount} 项插件包变更待重启生效`">{{ pendingCount }}</span>
         </RouterLink>
       </li>
       <li class="menu-title pt-3">数据</li>

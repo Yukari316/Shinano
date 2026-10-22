@@ -68,7 +68,8 @@ public sealed class PluginRuntime : IDisposable
     /// 发现插件目录下的插件包，加载程序集并构建插件容器，读取持久化的启用状态与顺序。
     /// 单个插件失败只记录原因，不影响其他插件。只在基础设施就绪后调用一次。
     /// </summary>
-    public async Task LoadAsync(CancellationToken cancellationToken)
+    /// <returns>已发现插件的加载结果：插件 ID 到失败原因，成功为 null；清单无效或 ID 重复而跳过的目录不在其中。</returns>
+    public async Task<IReadOnlyDictionary<string, string?>> LoadAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -103,6 +104,7 @@ public sealed class PluginRuntime : IDisposable
             _plugins.Sort((left, right) => left.SortOrder.CompareTo(right.SortOrder));
             UpdatePluginHealth();
             _logger.LogInformation("已发现 {Count} 个插件", _plugins.Count);
+            return _plugins.ToDictionary(plugin => plugin.Manifest.Id, plugin => plugin.Error);
         }
         finally
         {
@@ -324,7 +326,7 @@ public sealed class PluginRuntime : IDisposable
 
     private IEnumerable<LoadedPlugin> Discover()
     {
-        string root = Path.GetFullPath(_settings.PluginDirectory, _settings.DataDirectory);
+        string root = _settings.PluginRoot;
         if (!Directory.Exists(root))
         {
             _logger.LogInformation("插件目录 {Directory} 不存在，没有可加载的插件", root);
@@ -333,22 +335,15 @@ public sealed class PluginRuntime : IDisposable
 
         HashSet<string>            ids      = [];
         Dictionary<string, string> purposes = new();
-        foreach (string directory in Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal))
+        foreach (PluginPackageDirectory package in PluginPackageScanner.Scan(root))
         {
-            string manifestPath = Path.Combine(directory, PluginManifest.FILE_NAME);
-            if (!File.Exists(manifestPath)) continue;
-
-            PluginManifest manifest;
-            try
+            if (package.Manifest is not { } manifest)
             {
-                manifest = PluginManifest.Read(manifestPath);
-            }
-            catch (InvalidDataException exception)
-            {
-                _logger.LogError("插件清单无效：{Reason}", exception.Message);
+                _logger.LogError("插件清单无效：{Reason}", package.Error);
                 continue;
             }
 
+            string directory = package.Directory;
             LoadedPlugin plugin = new()
             {
                 Manifest  = manifest,
