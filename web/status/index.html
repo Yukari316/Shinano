@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shinano</title>
-
+    <title>Shinano 服务状态</title>
+    <link rel="icon" href="data:," />
     <script>
       // 在样式加载前确定主题，避免闪烁；读取失败时跟随系统。
       try {
@@ -12,13 +12,9 @@
         if (saved === 'emerald' || saved === 'dim') document.documentElement.dataset.theme = saved
       } catch {}
     </script>
-    <script type="importmap">
-      { "imports": { "vue": "/vendor/vue.js", "@shinano/plugin-sdk": "/sdk/plugin-sdk.js" } }
-    </script>
-    <script type="module" crossorigin src="/assets/index-Dxo85v7V.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BLhmhP_W.css">
   </head>
   <body>
     <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

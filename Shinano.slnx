@@ -6,6 +6,7 @@
     <Project Path="src/Shinano.Framework/Shinano.Framework.csproj" />
     <Project Path="src/Shinano.Host/Shinano.Host.csproj" />
     <Project Path="src/Shinano.Infrastructure/Shinano.Infrastructure.csproj" />
+    <Project Path="src/Shinano.Monitor/Shinano.Monitor.csproj" />
     <Project Path="src/Shinano.Restarter/Shinano.Restarter.csproj" />
   </Folder>
   <Folder Name="/tests/">

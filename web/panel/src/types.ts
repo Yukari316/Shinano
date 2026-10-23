@@ -15,6 +15,7 @@ export interface Overview {
   bot: { connected: boolean; selfId: number }
   plugins: { total: number; enabled: number; failed: number }
   logs: { usedBytes: number; limitMiB: number }
+  statusPage: { url: string; loopbackOnly: boolean }
 }
 
 export interface BotStatus {

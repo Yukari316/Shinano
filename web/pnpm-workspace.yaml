@@ -1,3 +1,5 @@
 packages:
   - panel
   - plugin-sdk
+  - status
+  - theme

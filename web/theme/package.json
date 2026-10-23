@@ -1,0 +1,22 @@
+{
+  "name": "@shinano/theme",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "exports": {
+    ".": {
+      "types": "./src/theme.ts",
+      "default": "./src/theme.ts"
+    },
+    "./theme.css": "./theme.css"
+  },
+  "peerDependencies": {
+    "vue": "3.5.44"
+  },
+  "dependencies": {
+    "daisyui": "5.7.50"
+  },
+  "devDependencies": {
+    "vue": "3.5.44"
+  }
+}

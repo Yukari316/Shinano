@@ -1,0 +1,88 @@
+using System.Text.Json.Serialization;
+using Serilog;
+using Serilog.Events;
+using Shinano.Monitor;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
+
+const string LOG_DIRECTORY   = "Logs";
+const string DATA_DIRECTORY  = "data";
+const string LOG_NAME_FORMAT = "yyyy-MM-dd-HHmmss";
+const string OUTPUT_TEMPLATE = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}";
+
+string baseDirectory = AppContext.BaseDirectory;
+WebApplicationBuilder builder = WebApplication.CreateBuilder(
+    new WebApplicationOptions
+    {
+        Args            = args,
+        ContentRootPath = baseDirectory
+    });
+MonitorSettings settings = MonitorSettings.Load(builder.Configuration["Monitor:DeploymentConfigPath"], baseDirectory);
+
+// 日志写入监控自身目录下的 Logs，文件名规则与主进程相同；同一秒内多次启动时追加序号。
+string logDirectory = Path.Combine(baseDirectory, LOG_DIRECTORY);
+Directory.CreateDirectory(logDirectory);
+string runPrefix = DateTime.Now.ToString(LOG_NAME_FORMAT);
+for (int sequence = 2; Directory.EnumerateFiles(logDirectory, runPrefix + "*.log").Any(); sequence++)
+    runPrefix = $"{DateTime.Now.ToString(LOG_NAME_FORMAT)}-{sequence}";
+using Serilog.Core.Logger serilog = new LoggerConfiguration()
+                                    .MinimumLevel.Information()
+                                    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+                                    .WriteTo.Console(outputTemplate: OUTPUT_TEMPLATE)
+                                    .WriteTo.File(Path.Combine(logDirectory, runPrefix + ".log"), outputTemplate: OUTPUT_TEMPLATE)
+                                    .CreateLogger();
+builder.Logging.ClearProviders();
+builder.Logging.AddSerilog(serilog);
+
+ListenEndpoint endpoint = ListenEndpoint.Resolve(settings.Listen, MonitorSettings.DEFAULT_PORT, settings.DataDirectory);
+builder.WebHost.ConfigureKestrel(kestrel =>
+    kestrel.Listen(
+        endpoint.Address,
+        endpoint.Port,
+        listen =>
+        {
+            if (endpoint.Certificate is not null) listen.UseHttps(endpoint.Certificate);
+        }));
+
+// 只在由 Windows 服务或 systemd 启动时生效。
+builder.Services.AddWindowsService(options => options.ServiceName = settings.ServiceName);
+builder.Services.AddSystemd();
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSingleton(settings);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(sp => new ProbeStore(
+                                  Path.Combine(baseDirectory, DATA_DIRECTORY),
+                                  settings.TimeZone,
+                                  sp.GetRequiredService<ILogger<ProbeStore>>()));
+builder.Services.AddSingleton<ServiceProber>();
+builder.Services.AddSingleton(sp => new LogRetention(
+                                  logDirectory,
+                                  runPrefix,
+                                  settings.MaxLogSizeMiB,
+                                  sp.GetRequiredService<ILogger<LogRetention>>()));
+builder.Services.AddHostedService<ProbeService>();
+
+WebApplication app = builder.Build();
+
+ILogger startup = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Shinano.Monitor.Startup");
+if (settings.ConfigPath is null)
+    startup.LogError(
+        "找不到部署配置文件：请设置环境变量 {Variable} 或 appsettings.json 中的 Monitor:DeploymentConfigPath，各项探测将显示为未配置",
+        MonitorSettings.DATA_DIRECTORY_VARIABLE);
+else
+    startup.LogInformation("部署配置文件：{ConfigPath}", settings.ConfigPath);
+foreach (string problem in endpoint.Problems)
+    startup.LogError("状态页监听配置无效：{Problem}", problem);
+startup.LogInformation("状态页监听 {BaseUrl}，探测间隔 {Interval} 秒", endpoint.BaseUrl, settings.Interval.TotalSeconds);
+
+ProbeStore store = app.Services.GetRequiredService<ProbeStore>();
+store.Load(DateTimeOffset.UtcNow);
+app.Services.GetRequiredService<LogRetention>().Clean();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapGet("/api/status", (ProbeStore probes, TimeProvider time) =>
+    Results.Ok(StatusReport.Create(probes.Snapshot(), time.GetUtcNow(), settings)));
+app.Map("/api/{**rest}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
+
+await app.RunAsync();

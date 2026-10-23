@@ -177,6 +177,9 @@ importers:
       '@shinano/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
+      '@shinano/theme':
+        specifier: workspace:*
+        version: link:../theme
       vue:
         specifier: 3.5.44
         version: 3.5.44(typescript@6.0.3)
@@ -193,9 +196,6 @@ importers:
       '@vitejs/plugin-vue':
         specifier: 6.0.10
         version: 6.0.10(vite@8.3.4(@types/node@26.6.5)(jiti@2.7.0))(vue@3.5.44(typescript@6.0.3))
-      daisyui:
-        specifier: 5.7.50
-        version: 5.7.50
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -223,6 +223,50 @@ importers:
       vue-tsc:
         specifier: 3.3.13
         version: 3.3.13(typescript@6.0.3)
+
+  status:
+    dependencies:
+      '@phosphor-icons/vue':
+        specifier: 2.2.1
+        version: 2.2.1(vue@3.5.44(typescript@6.0.3))
+      '@shinano/theme':
+        specifier: workspace:*
+        version: link:../theme
+      vue:
+        specifier: 3.5.44
+        version: 3.5.44(typescript@6.0.3)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.3.4(@types/node@26.6.5)(jiti@2.7.0))
+      '@types/node':
+        specifier: 26.6.5
+        version: 26.6.5
+      '@vitejs/plugin-vue':
+        specifier: 6.0.10
+        version: 6.0.10(vite@8.3.4(@types/node@26.6.5)(jiti@2.7.0))(vue@3.5.44(typescript@6.0.3))
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.3.4
+        version: 8.3.4(@types/node@26.6.5)(jiti@2.7.0)
+      vue-tsc:
+        specifier: 3.3.13
+        version: 3.3.13(typescript@6.0.3)
+
+  theme:
+    dependencies:
+      daisyui:
+        specifier: 5.7.50
+        version: 5.7.50
+    devDependencies:
+      vue:
+        specifier: 3.5.44
+        version: 3.5.44(typescript@6.0.3)
 
 packages:
 

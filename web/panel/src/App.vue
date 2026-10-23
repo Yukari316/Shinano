@@ -11,7 +11,7 @@ import { refreshPlugins } from './plugins'
 import { pageTitle } from './pageTitle'
 import { refreshRestart } from './restart'
 import { startOverviewPolling, stopOverviewPolling } from './status'
-import { DARK_THEME, theme, toggleTheme } from './theme'
+import { DARK_THEME, theme, toggleTheme } from '@shinano/theme'
 
 const route = useRoute()
 const isPublic = computed(() => route.meta.public === true)

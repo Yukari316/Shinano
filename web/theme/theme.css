@@ -1,0 +1,61 @@
+/*
+ * 管理面板与服务状态页共用的主题：亮色 emerald、暗色 dim，颜色全部取自 daisyUI 主题变量。
+ * 使用方先 @import "tailwindcss"，再导入本文件。
+ */
+@plugin "daisyui" {
+  themes: emerald --default, dim --prefersdark;
+}
+
+@theme {
+  --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+:root {
+  /* 浅色主题的主色与状态色较亮，图表、链接与状态文字向正文色混合加深，深色主题下几乎不变。 */
+  --chart: color-mix(in oklab, var(--color-primary) 62%, var(--color-base-content));
+  --link: color-mix(in oklab, var(--color-primary) 55%, var(--color-base-content));
+  --success-text: color-mix(in oklab, var(--color-success) 62%, var(--color-base-content));
+  --warning-text: color-mix(in oklab, var(--color-warning) 55%, var(--color-base-content));
+  --error-text: color-mix(in oklab, var(--color-error) 62%, var(--color-base-content));
+  --line: color-mix(in oklab, var(--color-base-content) 14%, transparent);
+  /*
+   * 卡片内次级层（块、选中行、悬停）：叠一层很淡的正文色，而不是更深的底色。
+   * 这样暗色主题下次级块比卡片略亮、亮色主题下略灰，背景图下也不会与半透明卡片叠加得越来越深。
+   */
+  --raise: color-mix(in oklab, var(--color-base-content) 5%, transparent);
+  --raise-strong: color-mix(in oklab, var(--color-base-content) 9%, transparent);
+}
+
+.surface {
+  background: var(--color-base-100);
+  border: 1px solid var(--line);
+}
+
+.tile {
+  background: var(--raise);
+  border-radius: var(--radius-box);
+}
+
+.link {
+  color: var(--link);
+}
+
+.text-success-strong {
+  color: var(--success-text);
+}
+
+.text-warning-strong {
+  color: var(--warning-text);
+}
+
+.text-error-strong {
+  color: var(--error-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

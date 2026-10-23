@@ -24,6 +24,7 @@ internal static class StatusEndpoints
         PluginRuntime     plugins,
         LogFileLayout     logLayout,
         LoggingOptions    logging,
+        IConfiguration    configuration,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<PluginSnapshot> snapshot = await plugins.SnapshotAsync(cancellationToken);
@@ -54,7 +55,8 @@ internal static class StatusEndpoints
                 {
                     usedBytes = new DirectoryInfo(logLayout.Directory).EnumerateFiles().Sum(file => file.Length),
                     limitMiB  = logging.MaxTotalSizeMiB
-                }
+                },
+                statusPage = StatusPageLink.From(configuration)
             });
     }
 

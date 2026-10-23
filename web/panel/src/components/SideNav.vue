@@ -3,6 +3,7 @@ import {
   PhChartBar,
   PhChatsCircle,
   PhCube,
+  PhHeartbeat,
   PhHouse,
   PhPalette,
   PhPuzzlePiece,
@@ -55,6 +56,12 @@ const pluginTabs = computed(() =>
 
 const botOnline = computed(() => overview.value?.bot.connected ?? false)
 
+const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
+// 状态页只监听回环地址而面板经其他地址访问时，链接在当前浏览器中打不开。
+const statusPageLocalOnly = computed(
+  () => overview.value?.statusPage.loopbackOnly === true && !LOOPBACK_HOSTS.includes(window.location.hostname)
+)
+
 async function logout(): Promise<void> {
   await api.post('/api/auth/logout').catch(() => undefined)
   await router.replace({ name: 'login' })
@@ -98,6 +105,16 @@ async function logout(): Promise<void> {
     </ul>
 
     <div class="grow"></div>
+    <a
+      v-if="overview"
+      :href="overview.statusPage.url"
+      target="_blank"
+      rel="noopener"
+      class="btn btn-ghost h-auto flex-col items-start gap-0 py-2 text-left"
+    >
+      <span class="flex items-center gap-2"><PhHeartbeat class="size-[18px]" aria-hidden="true" />服务状态页</span>
+      <span v-if="statusPageLocalOnly" class="text-xs font-normal opacity-70">状态页只在本机可访问</span>
+    </a>
     <button class="btn btn-ghost justify-start border-[var(--line)]" @click="logout">
       <PhSignOut class="size-[18px]" aria-hidden="true" />退出登录
     </button>

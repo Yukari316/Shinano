@@ -50,7 +50,14 @@ public sealed class HostConfigEditor
         Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录"),
         Choice("Restart", "Mode", "重启方式", RestartModes, "Helper：直接运行，由重启辅助程序拉起；ServiceManager：由 Windows 服务或 systemd 托管"),
         Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
-        Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次")
+        Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次"),
+        Text("Monitor", "ListenAddress", "状态页监听地址", "具体 IP 或 localhost，不接受全部网卡地址；修改后需重启监控进程"),
+        Integer("Monitor", "Port", "状态页端口", 1, MAX_PORT, "修改后需重启监控进程"),
+        Text("Monitor", "CertificatePath", "状态页 HTTPS 证书路径", "PFX 文件，相对路径基于部署数据目录；留空使用 HTTP", optional: true),
+        Secret("Monitor", "CertificatePassword", "状态页 HTTPS 证书密码"),
+        Integer("Monitor", "IntervalSeconds", "探测间隔（秒）", 5, 3600, "修改后需重启监控进程"),
+        Integer("Monitor", "MaxLogSizeMiB", "监控日志目录上限（MiB）", 16, 1_048_576, "修改后需重启监控进程"),
+        Text("Monitor", "ServiceName", "监控服务名", "留空时 Debug 构建为 ShinanoMonitorDebug，其余为 ShinanoMonitor", optional: true)
     ];
 
     private readonly DeploymentPaths _paths;
