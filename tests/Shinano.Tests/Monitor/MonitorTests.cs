@@ -8,7 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Monitor;
+using Shinano.Monitor.Configuration;
+using Shinano.Monitor.Probing;
+using Shinano.Monitor.Probing.Models;
+using Shinano.Monitor.Status;
+using Shinano.Monitor.Status.Models;
+using Shinano.Monitor.Web;
+using Shinano.Monitor.Web.Options;
 
 namespace Shinano.Tests.Monitor;
 

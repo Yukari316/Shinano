@@ -1,3 +1,5 @@
+using Shinano.Framework.Plugins.Capabilities;
+
 namespace Shinano.Framework.Plugins;
 
 /// <summary>

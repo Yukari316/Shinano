@@ -1,13 +1,12 @@
 using System.Text.Json.Serialization;
 using Serilog;
-using Serilog.Events;
-using Shinano.Monitor;
+using Shinano.Monitor.Configuration;
+using Shinano.Monitor.Logging;
+using Shinano.Monitor.Probing;
+using Shinano.Monitor.Web;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
-const string LOG_DIRECTORY   = "Logs";
-const string DATA_DIRECTORY  = "data";
-const string LOG_NAME_FORMAT = "yyyy-MM-dd-HHmmss";
-const string OUTPUT_TEMPLATE = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}";
+const string DATA_DIRECTORY = "data";
 
 string baseDirectory = AppContext.BaseDirectory;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(
@@ -18,20 +17,9 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(
     });
 MonitorSettings settings = MonitorSettings.Load(builder.Configuration["Monitor:DeploymentConfigPath"], baseDirectory);
 
-// 日志写入监控自身目录下的 Logs，文件名规则与主进程相同；同一秒内多次启动时追加序号。
-string logDirectory = Path.Combine(baseDirectory, LOG_DIRECTORY);
-Directory.CreateDirectory(logDirectory);
-string runPrefix = DateTime.Now.ToString(LOG_NAME_FORMAT);
-for (int sequence = 2; Directory.EnumerateFiles(logDirectory, runPrefix + "*.log").Any(); sequence++)
-    runPrefix = $"{DateTime.Now.ToString(LOG_NAME_FORMAT)}-{sequence}";
-using Serilog.Core.Logger serilog = new LoggerConfiguration()
-                                    .MinimumLevel.Information()
-                                    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
-                                    .WriteTo.Console(outputTemplate: OUTPUT_TEMPLATE)
-                                    .WriteTo.File(Path.Combine(logDirectory, runPrefix + ".log"), outputTemplate: OUTPUT_TEMPLATE)
-                                    .CreateLogger();
+using MonitorLogging logging = MonitorLogging.Create(baseDirectory);
 builder.Logging.ClearProviders();
-builder.Logging.AddSerilog(serilog);
+builder.Logging.AddSerilog(logging.Logger);
 
 ListenEndpoint endpoint = ListenEndpoint.Resolve(settings.Listen, MonitorSettings.DEFAULT_PORT, settings.DataDirectory);
 builder.WebHost.ConfigureKestrel(kestrel =>
@@ -55,8 +43,8 @@ builder.Services.AddSingleton(sp => new ProbeStore(
                                   sp.GetRequiredService<ILogger<ProbeStore>>()));
 builder.Services.AddSingleton<ServiceProber>();
 builder.Services.AddSingleton(sp => new LogRetention(
-                                  logDirectory,
-                                  runPrefix,
+                                  logging.Directory,
+                                  logging.RunPrefix,
                                   settings.MaxLogSizeMiB,
                                   sp.GetRequiredService<ILogger<LogRetention>>()));
 builder.Services.AddHostedService<ProbeService>();
@@ -80,9 +68,6 @@ app.Services.GetRequiredService<LogRetention>().Clean();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/status", (ProbeStore probes, TimeProvider time) =>
-    Results.Ok(StatusReport.Create(probes.Snapshot(), time.GetUtcNow(), settings)));
-app.Map("/api/{**rest}", () => Results.NotFound());
-app.MapFallbackToFile("index.html");
+app.MapMonitorRoutes();
 
 await app.RunAsync();

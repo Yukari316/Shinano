@@ -1,3 +1,6 @@
+using Shinano.Infrastructure.Media.Models;
+using Shinano.Infrastructure.Media.Options;
+
 namespace Shinano.Infrastructure.Media;
 
 /// <summary>按大小上限下载媒体：声明大小超限时不发起下载，下载中按实际字节计数，超限立即中止。</summary>

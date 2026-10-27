@@ -1,6 +1,7 @@
 using Serilog.Events;
 using Serilog.Parsing;
 using Shinano.Infrastructure.Logging;
+using Shinano.Infrastructure.Logging.Models;
 
 namespace Shinano.Tests.Logging;
 

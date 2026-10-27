@@ -1,6 +1,7 @@
 using Autofac;
 using Shinano.Framework.Messaging;
 using Shinano.Framework.Plugins;
+using Shinano.Framework.Plugins.Capabilities;
 using Sora.Entities.Events;
 
 namespace Shinano.Tests.SamplePluginA;

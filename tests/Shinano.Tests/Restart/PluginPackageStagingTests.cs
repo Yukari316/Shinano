@@ -1,4 +1,5 @@
 using Shinano.Host.Packages;
+using Shinano.Host.Packages.Models;
 
 namespace Shinano.Tests.Restart;
 

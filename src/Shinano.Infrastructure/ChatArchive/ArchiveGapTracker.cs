@@ -1,3 +1,5 @@
+using Shinano.Infrastructure.ChatArchive.Models;
+
 namespace Shinano.Infrastructure.ChatArchive;
 
 /// <summary>

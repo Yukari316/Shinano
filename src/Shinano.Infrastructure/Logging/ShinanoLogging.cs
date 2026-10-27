@@ -2,6 +2,7 @@ using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
+using Shinano.Infrastructure.Logging.Options;
 using Sora.Entities;
 using MsLogLevel = Microsoft.Extensions.Logging.LogLevel;
 

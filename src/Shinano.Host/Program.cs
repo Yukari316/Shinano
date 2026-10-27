@@ -1,23 +1,31 @@
 using Serilog;
-using Shinano.Host;
 using Shinano.Host.Archive;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Options;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
 using Shinano.Host.Notifications;
 using Shinano.Host.Packages;
+using Shinano.Host.Panel.Auth;
 using Shinano.Host.Plugins;
+using Shinano.Host.Plugins.Options;
 using Shinano.Host.Restart;
+using Shinano.Host.Restart.Options;
 using Shinano.Host.Web;
-using Shinano.Infrastructure;
+using Shinano.Host.Web.Models;
+using Shinano.Host.Web.Options;
 using Shinano.Infrastructure.ChatArchive;
+using Shinano.Infrastructure.ChatArchive.Options;
 using Shinano.Infrastructure.Configuration;
-using Shinano.Infrastructure.Database;
+using Shinano.Infrastructure.Database.Options;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Hosting.Options;
 using Shinano.Infrastructure.Logging;
-using Shinano.Infrastructure.Media;
+using Shinano.Infrastructure.Logging.Options;
+using Shinano.Infrastructure.Media.Options;
 using Shinano.Infrastructure.Scheduling;
-using Shinano.Infrastructure.Storage;
+using Shinano.Infrastructure.Storage.Options;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 DateTime        startTime = DateTime.Now;
@@ -97,7 +105,9 @@ builder.Services.AddSingleton(new PluginRuntimeSettings
 builder.Services.AddSingleton<PluginRuntime>();
 builder.Services.AddSingleton<PluginPackageStaging>();
 builder.Services.AddSingleton<RestartCoordinator>();
-NotificationCardRenderer? cardRenderer = CreateCardRenderer(out Exception? cardRendererError);
+NotificationCardRenderer? cardRenderer = NotificationCardRenderer.TryCreate(
+    Path.Combine(AppContext.BaseDirectory, NotificationCardRenderer.RESOURCE_DIRECTORY),
+    out Exception? cardRendererError);
 builder.Services.AddSingleton(sp => new SuperUserNotifier(
                                   sp.GetRequiredService<BotAccessor>(),
                                   deployment,
@@ -136,24 +146,9 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapReadiness();
-app.MapPanel();
+app.MapApiRoutes();
 
 // 托管服务启动前应用或还原插件包变更：插件程序集加载后其目录会被锁定。
 app.Services.GetRequiredService<RestartCoordinator>().PrepareStartup();
 await app.RunAsync();
 cardRenderer?.Dispose();
-
-static NotificationCardRenderer? CreateCardRenderer(out Exception? error)
-{
-    error = null;
-    try
-    {
-        return new NotificationCardRenderer(Path.Combine(AppContext.BaseDirectory, "Resource"));
-    }
-    catch (Exception exception) when (exception is IOException or ArgumentException)
-    {
-        error = exception;
-        return null;
-    }
-}

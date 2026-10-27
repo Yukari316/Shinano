@@ -1,4 +1,5 @@
 using Npgsql;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Database;
 
 namespace Shinano.Infrastructure.ChatArchive;

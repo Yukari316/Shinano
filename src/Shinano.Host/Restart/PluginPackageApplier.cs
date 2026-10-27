@@ -1,4 +1,5 @@
-using Shinano.Host.Packages;
+using Shinano.Host.Packages.Models;
+using Shinano.Host.Restart.Models;
 
 namespace Shinano.Host.Restart;
 

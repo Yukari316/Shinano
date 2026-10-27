@@ -9,12 +9,18 @@ using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Packages;
 using Shinano.Host.Panel;
+using Shinano.Host.Panel.Auth;
+using Shinano.Host.Panel.Plugins;
 using Shinano.Host.Plugins;
+using Shinano.Host.Plugins.Options;
 using Shinano.Host.Restart;
-using Shinano.Infrastructure;
+using Shinano.Host.Restart.Options;
+using Shinano.Host.Web;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
+using Shinano.Infrastructure.Logging.Options;
 using Shinano.Tests.Plugins;
 
 namespace Shinano.Tests.Panel;
@@ -92,7 +98,7 @@ public sealed class PanelHarness : IAsyncDisposable
         WebApplication app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapPanel();
+        app.MapApiRoutes();
 
         PluginHarness plugins = await PluginHarness.StartAsync(
             infrastructure,

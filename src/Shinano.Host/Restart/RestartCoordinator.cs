@@ -5,13 +5,20 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
-using Shinano.Host.Notifications;
+using Shinano.Host.Notifications.Models;
 using Shinano.Host.Packages;
-using Shinano.Host.Plugins;
+using Shinano.Host.Packages.Models;
+using Shinano.Host.Plugins.Models;
+using Shinano.Host.Plugins.Options;
+using Shinano.Host.Restart.Models;
+using Shinano.Host.Restart.Options;
 using Shinano.Host.Web;
+using Shinano.Host.Web.Models;
+using Shinano.Host.Web.Options;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Health.Models;
 using Shinano.Infrastructure.Logging;
-using Shinano.Restarter;
+using Shinano.Restarter.Models;
 
 namespace Shinano.Host.Restart;
 
@@ -433,7 +440,7 @@ public sealed class RestartCoordinator : IDisposable
                 Command               = command,
                 Arguments             = arguments,
                 WorkingDirectory      = Environment.CurrentDirectory,
-                ReadyUrl              = $"{(thumbprint is null ? "http" : "https")}://{host}:{endpoint.Port}{ReadinessEndpoint.PATH}",
+                ReadyUrl              = $"{(thumbprint is null ? "http" : "https")}://{host}:{endpoint.Port}{ApiRoutes.READINESS_PATH}",
                 CertificateThumbprint = thumbprint,
                 RollbackOnFailure     = rollbackOnFailure,
                 LogDirectory          = _logLayout.Directory

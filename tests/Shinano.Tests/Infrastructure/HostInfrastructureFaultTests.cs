@@ -1,13 +1,16 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Infrastructure;
-using Shinano.Infrastructure.ChatArchive;
+using Shinano.Infrastructure.ChatArchive.Options;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Database;
+using Shinano.Infrastructure.Database.Options;
 using Shinano.Infrastructure.Health;
-using Shinano.Infrastructure.Media;
+using Shinano.Infrastructure.Health.Models;
+using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Hosting.Options;
+using Shinano.Infrastructure.Media.Options;
 using Shinano.Infrastructure.Scheduling;
-using Shinano.Infrastructure.Storage;
+using Shinano.Infrastructure.Storage.Options;
 
 namespace Shinano.Tests.Infrastructure;
 

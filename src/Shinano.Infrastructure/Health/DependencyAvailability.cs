@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Shinano.Infrastructure.Health.Models;
 
 namespace Shinano.Infrastructure.Health;
 

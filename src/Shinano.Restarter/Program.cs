@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Shinano.Restarter;
+using Shinano.Restarter.Models;
 
 int requestIndex = Array.IndexOf(args, RestarterRequest.REQUEST_ARGUMENT);
 if (requestIndex < 0 || requestIndex + 1 >= args.Length)

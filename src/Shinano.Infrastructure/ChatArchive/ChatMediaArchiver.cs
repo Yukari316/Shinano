@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Media;
+using Shinano.Infrastructure.Media.Models;
 using Sora.Core.Types;
 using Sora.Entities.Interfaces;
 using Sora.Entities.Message;

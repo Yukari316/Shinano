@@ -2,6 +2,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shinano.Infrastructure.ChatArchive;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Sora.Core.Enums;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Notifications;
+using Shinano.Host.Notifications.Models;
 using Shinano.Infrastructure.Configuration;
 using Sora.Core.Types;
 using Sora.Entities.Interfaces;

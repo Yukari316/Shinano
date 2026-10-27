@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Host.Packages;
-using Shinano.Host.Plugins;
+using Shinano.Host.Plugins.Options;
 
 namespace Shinano.Tests.Restart;
 

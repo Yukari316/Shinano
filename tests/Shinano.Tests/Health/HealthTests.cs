@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Health.Models;
 
 namespace Shinano.Tests.Health;
 

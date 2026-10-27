@@ -1,4 +1,5 @@
 using Shinano.Host.Notifications;
+using Shinano.Host.Notifications.Models;
 
 namespace Shinano.Tests.Notifications;
 
@@ -10,7 +11,7 @@ public sealed class NotificationCardRendererTests
     [Fact]
     public void Card_RendersAsPng_WithBundledResources()
     {
-        using NotificationCardRenderer renderer = new(Path.Combine(AppContext.BaseDirectory, "Resource"));
+        using NotificationCardRenderer renderer = new(Path.Combine(AppContext.BaseDirectory, NotificationCardRenderer.RESOURCE_DIRECTORY));
 
         byte[] png = renderer.Render(
             new NotificationCard

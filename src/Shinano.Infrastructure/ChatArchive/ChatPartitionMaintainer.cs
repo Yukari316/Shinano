@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Database;
 
 namespace Shinano.Infrastructure.ChatArchive;

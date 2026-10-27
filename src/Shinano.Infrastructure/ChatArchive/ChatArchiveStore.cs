@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using Shinano.Infrastructure.ChatArchive.Entities;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Database;
 using SqlSugar;
 

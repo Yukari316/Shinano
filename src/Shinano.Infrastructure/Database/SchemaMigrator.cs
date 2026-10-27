@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using Shinano.Infrastructure.Database.Entities;
+using Shinano.Infrastructure.Database.Models;
 using SqlSugar;
 
 namespace Shinano.Infrastructure.Database;

@@ -3,6 +3,8 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Util;
+using Shinano.Infrastructure.Storage.Models;
+using Shinano.Infrastructure.Storage.Options;
 
 namespace Shinano.Infrastructure.Storage;
 

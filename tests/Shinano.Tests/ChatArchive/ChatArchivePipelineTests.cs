@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Npgsql;
-using Shinano.Infrastructure;
-using Shinano.Infrastructure.ChatArchive;
+using Shinano.Infrastructure.ChatArchive.Models;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Tests.Infrastructure;
 using Shinano.Tests.Plugins;
 using Sora.Entities.Message;

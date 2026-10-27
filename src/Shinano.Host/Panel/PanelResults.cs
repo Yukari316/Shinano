@@ -1,4 +1,4 @@
-using Shinano.Infrastructure;
+using Shinano.Infrastructure.Hosting;
 
 namespace Shinano.Host.Panel;
 

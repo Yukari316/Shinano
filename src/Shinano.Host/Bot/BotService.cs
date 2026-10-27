@@ -1,11 +1,14 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Archive;
+using Shinano.Host.Bot.Options;
 using Shinano.Host.Plugins;
 using Shinano.Host.Restart;
-using Shinano.Infrastructure;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Health.Models;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
+using Shinano.Infrastructure.Logging.Options;
 using Sora;
 using Sora.Adapter.Milky;
 using Sora.Command;

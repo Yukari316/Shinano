@@ -1,3 +1,4 @@
+using Shinano.Host.Notifications.Models;
 using SkiaSharp;
 
 namespace Shinano.Host.Notifications;
@@ -46,6 +47,9 @@ public sealed class NotificationCardRenderer : IDisposable
     private readonly SKTypeface _bold;
     private readonly SKImage?   _icon;
 
+    /// <summary>资源目录名，位于程序目录下，随宿主输出。</summary>
+    public const string RESOURCE_DIRECTORY = "Resource";
+
     /// <summary>从 <paramref name="resourceDirectory" /> 读取字体与图标。</summary>
     /// <exception cref="FileNotFoundException">字体文件缺失。</exception>
     public NotificationCardRenderer(string resourceDirectory)
@@ -54,6 +58,23 @@ public sealed class NotificationCardRenderer : IDisposable
         _bold    = LoadTypeface(Path.Combine(resourceDirectory, "Fonts", "NotoSansSC-Bold.otf"));
         string iconPath = Path.Combine(resourceDirectory, "icon.png");
         _icon = File.Exists(iconPath) ? SKImage.FromEncodedData(iconPath) : null;
+    }
+
+    /// <summary>创建绘制器；字体或图标无法读取时返回 null，由调用方记录原因并改发文字通知。</summary>
+    /// <param name="resourceDirectory">资源目录。</param>
+    /// <param name="error">失败原因；成功时为 null。</param>
+    public static NotificationCardRenderer? TryCreate(string resourceDirectory, out Exception? error)
+    {
+        error = null;
+        try
+        {
+            return new NotificationCardRenderer(resourceDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or ArgumentException)
+        {
+            error = exception;
+            return null;
+        }
     }
 
     /// <summary>绘制卡片。</summary>

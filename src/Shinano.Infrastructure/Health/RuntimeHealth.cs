@@ -1,3 +1,5 @@
+using Shinano.Infrastructure.Health.Models;
+
 namespace Shinano.Infrastructure.Health;
 
 /// <summary>

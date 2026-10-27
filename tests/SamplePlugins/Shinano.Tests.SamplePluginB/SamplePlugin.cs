@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Shinano.Framework.Messaging;
 using Shinano.Framework.Plugins;
+using Shinano.Framework.Plugins.Capabilities;
 using Sora.Entities.Events;
 
 namespace Shinano.Tests.SamplePluginB;
