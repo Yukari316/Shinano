@@ -184,8 +184,7 @@ function dismissResult(): Promise<void> {
             </td>
             <td>
               <div class="font-semibold">
-                <RouterLink v-if="plugin.hasConfig || plugin.pageTitle" :to="`/plugins/${plugin.id}`" class="link">{{ plugin.name || plugin.id }}</RouterLink>
-                <span v-else>{{ plugin.name || plugin.id }}</span>
+                <RouterLink :to="`/plugins/${plugin.id}`" class="link">{{ plugin.name || plugin.id }}</RouterLink>
                 <span class="ml-2 text-sm opacity-60">{{ plugin.id }} {{ plugin.version }}</span>
                 <span v-if="pendingLabel(plugin.id)" class="badge badge-warning badge-sm ml-2">{{ pendingLabel(plugin.id) }}</span>
               </div>

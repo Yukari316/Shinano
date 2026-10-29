@@ -1,0 +1,7 @@
+{
+  "id": "entertainment",
+  "name": "娱乐",
+  "version": "1.0.0",
+  "description": "骰子、随机选择与娱乐禁言",
+  "entryAssembly": "Shinano.Plugin.Entertainment.dll"
+}

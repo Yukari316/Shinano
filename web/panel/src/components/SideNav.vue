@@ -47,11 +47,9 @@ const settings: NavItem[] = [
   { to: '/appearance', label: '外观', icon: PhPalette }
 ]
 
-// 有配置表单或启用中专有页面的插件各占一个选项卡。
+// 每个插件各占一个选项卡，没有配置表单与专有页面的插件同样有自己的页面。
 const pluginTabs = computed(() =>
-  plugins.value
-    .filter((plugin) => plugin.hasConfig || plugin.pageTitle !== null)
-    .map((plugin) => ({ to: `/plugins/${plugin.id}`, label: plugin.name || plugin.id, icon: PhCube }))
+  plugins.value.map((plugin) => ({ to: `/plugins/${plugin.id}`, label: plugin.name || plugin.id, icon: PhCube }))
 )
 
 const botOnline = computed(() => overview.value?.bot.connected ?? false)

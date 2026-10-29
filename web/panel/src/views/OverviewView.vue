@@ -142,7 +142,7 @@ const chartSummary = computed(() => {
         <RouterLink
           v-for="plugin in plugins"
           :key="plugin.id"
-          :to="plugin.hasConfig || plugin.pageTitle ? `/plugins/${plugin.id}` : '/plugins'"
+          :to="`/plugins/${plugin.id}`"
           class="tile flex items-center gap-3 p-3 hover:bg-[var(--raise-strong)]"
         >
           <PhCube class="size-7 shrink-0" :class="plugin.enabled ? 'text-[var(--chart)]' : 'opacity-50'" aria-hidden="true" />

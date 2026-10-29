@@ -110,6 +110,12 @@ async function save(): Promise<void> {
         </div>
       </form>
     </section>
+    <section v-else class="surface card" :class="{ 'flex-1': !plugin.pageTitle }">
+      <div class="card-body">
+        <h2 class="card-title">配置</h2>
+        <p class="text-sm opacity-70">无可配置项</p>
+      </div>
+    </section>
     <section v-if="plugin.pageTitle" class="surface card flex-1">
       <div class="card-body">
         <h2 class="card-title">{{ plugin.pageTitle }}</h2>
@@ -117,6 +123,5 @@ async function save(): Promise<void> {
         <component :is="page" v-if="page" :context="context" />
       </div>
     </section>
-    <div v-if="!plugin.hasConfig && !plugin.pageTitle" class="alert">该插件没有配置表单；专有页面在插件启用后显示。</div>
   </template>
 </template>

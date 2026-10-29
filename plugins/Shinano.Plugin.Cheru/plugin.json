@@ -1,0 +1,7 @@
+{
+  "id": "cheru",
+  "name": "切噜",
+  "version": "1.0.0",
+  "description": "文本与切噜语互相转换",
+  "entryAssembly": "Shinano.Plugin.Cheru.dll"
+}
