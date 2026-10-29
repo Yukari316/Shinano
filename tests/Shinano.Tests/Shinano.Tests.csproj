@@ -22,6 +22,7 @@
     <ProjectReference Include="..\SamplePlugins\Shinano.Tests.SamplePluginB\Shinano.Tests.SamplePluginB.csproj" ReferenceOutputAssembly="false"/>
     <ProjectReference Include="..\..\src\Shinano.Infrastructure\Shinano.Infrastructure.csproj"/>
     <ProjectReference Include="..\..\src\Shinano.Monitor\Shinano.Monitor.csproj"/>
+    <ProjectReference Include="..\..\src\Shinano.Tool\Shinano.Tool.csproj"/>
   </ItemGroup>
 
 </Project>

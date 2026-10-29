@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { describeError } from '../api'
-import { beginRestart, CHANGE_KIND_LABEL, describeChange, modeLabel, restartDialogOpen, restartStatus } from '../restart'
+import { beginRestart, CHANGE_KIND_LABEL, describeChange, restartDialogOpen, restartStatus } from '../restart'
 
 const dialog = ref<HTMLDialogElement | null>(null)
 const error = ref('')
@@ -31,8 +31,11 @@ async function confirm(): Promise<void> {
     <div class="modal-box">
       <h3 class="text-lg font-bold">确认重启 Shinano？</h3>
       <p class="py-2 text-sm opacity-80">
-        重启期间 Bot 暂停响应，面板会在新进程就绪后自动恢复<template v-if="restartStatus">；重启方式：{{ modeLabel(restartStatus.mode) }}</template>。
+        重启期间 Bot 暂停响应，面板会在新进程就绪后自动恢复。
       </p>
+      <div v-if="restartStatus && !restartStatus.supervised" role="alert" class="alert alert-warning text-sm">
+        当前进程不是由 start 脚本或服务启动的，退出后不会被自动拉起，需要手动再启动。
+      </div>
       <template v-if="restartStatus && restartStatus.pending.length > 0">
         <p class="pt-2 text-sm font-semibold">将应用以下插件包变更：</p>
         <ul class="mt-1 flex flex-col gap-1 text-sm">

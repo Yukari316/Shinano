@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 部署工具：初始化、直接运行时的守护、升级与服务管理。独立于主工程，不引用 Host、Infrastructure 与 Framework。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Shinano.Tool</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql"/>
+    <PackageReference Include="System.ServiceProcess.ServiceController"/>
+  </ItemGroup>
+
+</Project>

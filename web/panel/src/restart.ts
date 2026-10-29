@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { api } from './api'
-import type { PluginChange, RestartMode, RestartStatus } from './types'
+import type { PluginChange, RestartStatus } from './types'
 
 const POLL_INTERVAL_MS = 2_000
 /** 超过该时长仍未连上新进程时提示查看日志，但继续等待。 */
@@ -43,10 +43,6 @@ export async function beginRestart(): Promise<void> {
     window.setTimeout(poll, POLL_INTERVAL_MS)
   }
   window.setTimeout(poll, POLL_INTERVAL_MS)
-}
-
-export function modeLabel(mode: RestartMode): string {
-  return mode === 'Helper' ? '辅助程序' : '服务管理器'
 }
 
 export function describeChange(change: PluginChange): string {

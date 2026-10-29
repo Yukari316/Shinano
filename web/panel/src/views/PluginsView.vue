@@ -5,7 +5,7 @@ import { api, describeError, request } from '../api'
 import PageToolbar from '../components/PageToolbar.vue'
 import { formatBytes, formatTime } from '../format'
 import { plugins, refreshPlugins } from '../plugins'
-import { CHANGE_KIND_LABEL, describeChange, describeRollback, modeLabel, openRestartDialog, refreshRestart, restartStatus } from '../restart'
+import { CHANGE_KIND_LABEL, describeChange, describeRollback, openRestartDialog, refreshRestart, restartStatus } from '../restart'
 import type { PendingPluginChange, PluginSnapshot, RestartOutcome } from '../types'
 
 const error = ref('')
@@ -132,7 +132,7 @@ function dismissResult(): Promise<void> {
   <div v-if="lastResult" role="status" class="alert" :class="OUTCOME[lastResult.outcome].cls">
     <div class="flex min-w-0 flex-col gap-1">
       <span class="font-semibold">{{ OUTCOME[lastResult.outcome].title }}</span>
-      <span class="text-sm">{{ formatTime(lastResult.finishedAt) }} · {{ modeLabel(lastResult.mode) }}</span>
+      <span class="text-sm">{{ formatTime(lastResult.finishedAt) }}</span>
       <span v-if="lastResult.reason" class="text-sm [overflow-wrap:anywhere]">原因：{{ lastResult.reason }}</span>
       <span v-for="change in lastResult.changes" :key="change.pluginId" class="text-sm">
         {{ CHANGE_KIND_LABEL[change.kind] }} {{ change.name }} {{ lastResult.outcome === 'RolledBack' ? describeRollback(change) : describeChange(change) }}

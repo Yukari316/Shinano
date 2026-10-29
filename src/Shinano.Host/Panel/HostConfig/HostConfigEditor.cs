@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel.HostConfig.Models;
-using Shinano.Host.Restart.Models;
 
 namespace Shinano.Host.Panel.HostConfig;
 
@@ -16,8 +15,7 @@ public sealed class HostConfigEditor
     private const int    MAX_PORT       = 65535;
     private const int    MAX_DAYS       = 3650;
 
-    private static readonly string[] LogLevels    = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
-    private static readonly string[] RestartModes = [nameof(RestartMode.Helper), nameof(RestartMode.ServiceManager)];
+    private static readonly string[] LogLevels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
 
     /// <summary>面板显示的全部宿主配置项，按显示顺序排列。</summary>
     public static readonly IReadOnlyList<HostConfigField> Fields =
@@ -49,7 +47,6 @@ public sealed class HostConfigEditor
         Secret("Web", "CertificatePassword", "HTTPS 证书密码"),
         Secret("Web", "Token", "面板 Token"),
         Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录"),
-        Choice("Restart", "Mode", "重启方式", RestartModes, "Helper：直接运行，由重启辅助程序拉起；ServiceManager：由 Windows 服务或 systemd 托管"),
         Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
         Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次"),
         Text("Monitor", "ListenAddress", "状态页监听地址", "具体 IP 或 localhost，不接受全部网卡地址；修改后需重启监控进程"),

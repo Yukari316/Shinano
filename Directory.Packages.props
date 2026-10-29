@@ -11,6 +11,7 @@
         <!-- Hosting -->
         <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.13"/>
         <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.13"/>
+        <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.13"/>
         <!-- Rendering -->
         <PackageVersion Include="SkiaSharp" Version="4.153.1"/>
         <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1"/>

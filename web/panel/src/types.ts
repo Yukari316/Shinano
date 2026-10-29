@@ -175,13 +175,11 @@ export interface PendingPluginChange {
   sizeBytes: number
 }
 
-export type RestartMode = 'Helper' | 'ServiceManager'
 export type StartupPhase = 'Starting' | 'Ready' | 'FaultMode'
 export type RestartOutcome = 'Succeeded' | 'RolledBack' | 'Unverified'
 
 export interface RestartResult {
   outcome: RestartOutcome
-  mode: RestartMode
   reason: string | null
   finishedAt: string
   changes: PluginChange[]
@@ -190,7 +188,8 @@ export interface RestartResult {
 export interface RestartStatus {
   instanceId: string
   phase: StartupPhase
-  mode: RestartMode
+  /** 是否有守护者；没有时重启只会退出，需要手动再启动。 */
+  supervised: boolean
   restarting: boolean
   pending: PendingPluginChange[]
   lastResult: RestartResult | null

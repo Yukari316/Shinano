@@ -20,14 +20,14 @@ internal static class RestartEndpoints
     internal static IResult StageRemoval(string id, PluginPackageStaging staging) =>
         Guard(() => Results.Ok(staging.StageRemoval(id)));
 
-    /// <summary>重启状态：实例 ID、启动阶段、重启方式、待处理变更与最近一次结果。</summary>
+    /// <summary>重启状态：实例 ID、启动阶段、是否有守护者、待处理变更与最近一次结果。</summary>
     internal static IResult Status(RestartCoordinator coordinator, PluginPackageStaging staging) =>
         Results.Ok(
             new
             {
                 instanceId = coordinator.InstanceId,
                 phase      = coordinator.Phase,
-                mode       = coordinator.Mode,
+                supervised = coordinator.Supervised,
                 restarting = coordinator.Restarting,
                 pending    = staging.Pending(),
                 lastResult = coordinator.LastResult

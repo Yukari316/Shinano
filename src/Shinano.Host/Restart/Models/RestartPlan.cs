@@ -6,9 +6,6 @@ namespace Shinano.Host.Restart.Models;
 /// </summary>
 public sealed class RestartPlan
 {
-    /// <summary>发起重启时的重启方式。</summary>
-    public required RestartMode Mode { get; init; }
-
     /// <summary>发起时间（UTC）。</summary>
     public required DateTimeOffset CreatedAt { get; init; }
 

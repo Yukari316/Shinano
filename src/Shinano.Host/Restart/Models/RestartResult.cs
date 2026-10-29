@@ -8,9 +8,6 @@ public sealed class RestartResult
     /// <summary>结果。</summary>
     public required RestartOutcome Outcome { get; init; }
 
-    /// <summary>重启方式。</summary>
-    public required RestartMode Mode { get; init; }
-
     /// <summary>回滚或未验证的原因；成功时为 null。</summary>
     public string? Reason { get; init; }
 

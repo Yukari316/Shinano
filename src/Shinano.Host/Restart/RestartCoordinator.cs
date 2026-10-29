@@ -1,7 +1,5 @@
-using System.Diagnostics;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Hosting.Systemd;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
@@ -12,34 +10,33 @@ using Shinano.Host.Plugins.Models;
 using Shinano.Host.Plugins.Options;
 using Shinano.Host.Restart.Models;
 using Shinano.Host.Restart.Options;
-using Shinano.Host.Web;
-using Shinano.Host.Web.Models;
-using Shinano.Host.Web.Options;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
-using Shinano.Infrastructure.Logging;
-using Shinano.Restarter.Models;
 
 namespace Shinano.Host.Restart;
 
 /// <summary>
 /// 面板发起的重启与插件包变更的应用、验证和回滚。
 /// <list type="bullet">
-/// <item>重启时把待处理变更写成计划，按重启方式启动辅助程序或以约定退出码退出。</item>
+/// <item>重启时把待处理变更写成计划，以约定退出码退出，由守护者（<c>Shinano.Tool run</c>、systemd 或 Windows 服务管理器）
+/// 拉起新进程。</item>
 /// <item>新进程在加载插件前应用计划（备份后替换目录），加载后验证变更的插件包；验证失败时以约定退出码退出，
-/// 下一次启动还原备份。验证前的任何一次启动都会还原，进程崩溃或被辅助程序结束同样如此。</item>
+/// 下一次启动还原备份。验证前的任何一次启动都会还原，进程崩溃或被守护者结束同样如此。</item>
 /// <item>基础设施处于故障模式时插件不加载，变更记为未验证，不回滚。</item>
 /// </list>
 /// </summary>
 public sealed class RestartCoordinator : IDisposable
 {
-    private const string DIRECTORY_NAME      = "restart";
-    private const string PLAN_FILE           = "plan.json";
-    private const string RESULT_FILE         = "result.json";
-    private const string HELPER_REQUEST_FILE = "helper.json";
-    private const string APPSETTINGS         = "appsettings.json";
-    private const string DOTNET_HOST         = "dotnet";
-    private const int    MAX_REASON_LENGTH   = 300;
+    /// <summary>
+    /// <c>Shinano.Tool run</c> 启动宿主时设置的环境变量；值为 <c>1</c> 表示本进程以约定退出码退出后会被重新拉起。
+    /// </summary>
+    public const string SUPERVISED_VARIABLE = "SHINANO_SUPERVISED";
+
+    private const string DIRECTORY_NAME    = "restart";
+    private const string PLAN_FILE         = "plan.json";
+    private const string RESULT_FILE       = "result.json";
+    private const string SUPERVISED_VALUE  = "1";
+    private const int    MAX_REASON_LENGTH = 300;
 
     private static readonly TimeSpan StopDelay = TimeSpan.FromMilliseconds(500);
 
@@ -49,8 +46,6 @@ public sealed class RestartCoordinator : IDisposable
     private readonly PluginPackageStaging         _staging;
     private readonly IHostApplicationLifetime     _lifetime;
     private readonly IHostLifetime?               _hostLifetime;
-    private readonly IHostEnvironment             _environment;
-    private readonly LogFileLayout                _logLayout;
     private readonly SuperUserNotifier            _notifier;
     private readonly RuntimeHealth                _health;
     private readonly TimeProvider                 _time;
@@ -70,8 +65,6 @@ public sealed class RestartCoordinator : IDisposable
         PluginPackageStaging        staging,
         IHostApplicationLifetime    lifetime,
         IHostLifetime?              hostLifetime,
-        IHostEnvironment            environment,
-        LogFileLayout               logLayout,
         SuperUserNotifier           notifier,
         RuntimeHealth               health,
         TimeProvider                time,
@@ -83,8 +76,6 @@ public sealed class RestartCoordinator : IDisposable
         _staging      = staging;
         _lifetime     = lifetime;
         _hostLifetime = hostLifetime;
-        _environment  = environment;
-        _logLayout    = logLayout;
         _notifier     = notifier;
         _health       = health;
         _time         = time;
@@ -99,8 +90,13 @@ public sealed class RestartCoordinator : IDisposable
     /// <summary>启动阶段。</summary>
     public StartupPhase Phase => _phase;
 
-    /// <summary>重启方式。</summary>
-    public RestartMode Mode => _options.Mode;
+    /// <summary>
+    /// 本进程是否有守护者：由 <c>Shinano.Tool run</c>、Windows 服务或 systemd 启动。没有守护者时重启只会退出，需要手动再启动。
+    /// </summary>
+    public bool Supervised { get; } =
+        Environment.GetEnvironmentVariable(SUPERVISED_VARIABLE) == SUPERVISED_VALUE
+        || WindowsServiceHelpers.IsWindowsService()
+        || SystemdHelpers.IsSystemdService();
 
     /// <summary>是否已发起重启。</summary>
     public bool Restarting
@@ -210,7 +206,7 @@ public sealed class RestartCoordinator : IDisposable
     }
 
     /// <summary>
-    /// 发起重启：应用全部待处理变更。辅助程序模式下启动辅助程序后退出；服务管理器模式下以约定退出码退出。
+    /// 发起重启：写入待处理变更的计划后以约定退出码退出，由守护者拉起新进程应用。
     /// </summary>
     /// <returns>无法发起时的原因；为 null 时进程将在响应发出后退出。</returns>
     public string? RequestRestart()
@@ -230,21 +226,15 @@ public sealed class RestartCoordinator : IDisposable
                     PlanPath,
                     new RestartPlan
                     {
-                        Mode       = _options.Mode,
                         CreatedAt  = _time.GetUtcNow(),
                         Operations = operations
                     });
 
-            if (_options.Mode == RestartMode.Helper) StartHelper(operations.Count > 0);
-            else SetRestartExitCode();
-
-            _logger.LogWarning(
-                "面板发起重启（{Mode}），应用 {Count} 项插件包变更",
-                _options.Mode,
-                operations.Count);
+            SetRestartExitCode();
+            if (Supervised) _logger.LogWarning("面板发起重启，应用 {Count} 项插件包变更", operations.Count);
+            else _logger.LogWarning("面板发起重启，应用 {Count} 项插件包变更；本进程没有守护者，退出后需要手动启动", operations.Count);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
-                                              or System.ComponentModel.Win32Exception)
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             StateFile.Delete(PlanPath);
             _staging.Unfreeze();
@@ -322,7 +312,6 @@ public sealed class RestartCoordinator : IDisposable
         RestartResult result = new()
         {
             Outcome    = outcome,
-            Mode       = plan.Mode,
             Reason     = reason,
             FinishedAt = _time.GetUtcNow(),
             Changes    = [.. plan.Operations.Select(operation => operation.Change)]
@@ -357,7 +346,6 @@ public sealed class RestartCoordinator : IDisposable
             Title = "插件更新已回滚",
             Items =
             [
-                new NotificationItem { Label = "重启方式", Value = result.Mode == RestartMode.Helper ? "辅助程序" : "服务管理器" },
                 new NotificationItem { Label = "原因", Value = result.Reason ?? "未知" },
                 new NotificationItem { Label = "已还原", Value = string.Join('\n', result.Changes.Select(Describe)) }
             ]
@@ -409,64 +397,6 @@ public sealed class RestartCoordinator : IDisposable
             StagedDirectory = staged,
             TargetDirectory = target
         };
-    }
-
-    private void StartHelper(bool rollbackOnFailure)
-    {
-        string restarter = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Shinano.Restarter.exe" : "Shinano.Restarter");
-        if (!File.Exists(restarter)) throw new InvalidOperationException($"缺少重启辅助程序 {restarter}");
-
-        // SAFE: 运行中的进程总有可执行文件路径。
-        string command = Environment.ProcessPath!;
-        string[] arguments = Environment.GetCommandLineArgs()[1..];
-        if (Path.GetFileNameWithoutExtension(command).Equals(DOTNET_HOST, StringComparison.OrdinalIgnoreCase)
-            && Assembly.GetEntryAssembly()?.Location is { Length: > 0 } entry)
-            arguments = [entry, .. arguments];
-
-        // 新进程按已保存的配置监听，端口或证书可能已在面板中修改，需要按当前配置文件重新解析。
-        WebEndpoint endpoint = WebEndpointResolver.Resolve(ReadWebOptions(), _paths.DataDirectory);
-        string host = endpoint.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
-            ? $"[{endpoint.Address}]"
-            : endpoint.Address.ToString();
-        string? thumbprint = endpoint.Certificate?.GetCertHashString(HashAlgorithmName.SHA256);
-        endpoint.Certificate?.Dispose();
-
-        string requestPath = Path.Combine(StateDirectory, HELPER_REQUEST_FILE);
-        StateFile.Write(
-            requestPath,
-            new RestarterRequest
-            {
-                HostProcessId         = Environment.ProcessId,
-                Command               = command,
-                Arguments             = arguments,
-                WorkingDirectory      = Environment.CurrentDirectory,
-                ReadyUrl              = $"{(thumbprint is null ? "http" : "https")}://{host}:{endpoint.Port}{ApiRoutes.READINESS_PATH}",
-                CertificateThumbprint = thumbprint,
-                RollbackOnFailure     = rollbackOnFailure,
-                LogDirectory          = _logLayout.Directory
-            });
-
-        ProcessStartInfo info = new(restarter)
-        {
-            WorkingDirectory = AppContext.BaseDirectory,
-            UseShellExecute  = false
-        };
-        info.ArgumentList.Add(RestarterRequest.REQUEST_ARGUMENT);
-        info.ArgumentList.Add(requestPath);
-        using Process process = Process.Start(info) ?? throw new InvalidOperationException("无法启动重启辅助程序");
-        _logger.LogInformation("已启动重启辅助程序，PID {ProcessId}", process.Id);
-    }
-
-    private WebOptions ReadWebOptions()
-    {
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-                                           .AddJsonFile(Path.Combine(_paths.BaseDirectory, APPSETTINGS), optional: true)
-                                           .AddJsonFile(Path.Combine(_paths.BaseDirectory, $"appsettings.{_environment.EnvironmentName}.json"), optional: true)
-                                           .AddEnvironmentVariables()
-                                           .AddCommandLine(Environment.GetCommandLineArgs()[1..])
-                                           .AddJsonFile(_paths.LocalConfigPath, optional: true)
-                                           .Build();
-        return configuration.GetSection(WebOptions.SECTION_NAME).Get<WebOptions>() ?? new WebOptions();
     }
 
     // Windows 服务停止时向服务管理器报告的是 ServiceBase.ExitCode 而不是进程退出码，两者都设置，

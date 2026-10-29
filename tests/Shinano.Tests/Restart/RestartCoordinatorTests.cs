@@ -1,4 +1,3 @@
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Host.Bot;
@@ -8,12 +7,11 @@ using Shinano.Host.Restart.Models;
 using Shinano.Host.Restart.Options;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
-using Shinano.Infrastructure.Logging;
 
 namespace Shinano.Tests.Restart;
 
 /// <summary>
-/// 服务管理器模式的完整周期：重启写入计划，"新进程"启动时应用，加载验证决定保留或在下一次启动还原。
+/// 重启的完整周期：重启写入计划，"新进程"启动时应用，加载验证决定保留或在下一次启动还原。
 /// 每个协调器实例代表一个进程。
 /// </summary>
 public sealed class RestartCoordinatorTests : IDisposable
@@ -151,17 +149,11 @@ public sealed class RestartCoordinatorTests : IDisposable
         RuntimeHealth health = new(TimeProvider.System);
         return new RestartCoordinator(
             paths,
-            new RestartOptions
-            {
-                Mode       = RestartMode.ServiceManager,
-                KeepBackup = keepBackup
-            },
+            new RestartOptions { KeepBackup = keepBackup },
             _fixture.Settings,
             _fixture.CreateStaging(),
             lifetime ?? new FakeLifetime(),
             null,
-            new FakeEnvironment(),
-            LogFileLayout.Create(_fixture.DataDirectory, DateTime.Now),
             new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), null, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             health,
             TimeProvider.System,
@@ -181,16 +173,5 @@ public sealed class RestartCoordinatorTests : IDisposable
         public CancellationToken ApplicationStopped => CancellationToken.None;
 
         public void StopApplication() => StopRequested = true;
-    }
-
-    private sealed class FakeEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Production;
-
-        public string ApplicationName { get; set; } = "Shinano.Tests";
-
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
