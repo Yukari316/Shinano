@@ -23,7 +23,7 @@ public sealed class AppearanceSettings
     /// <summary>页面内容区遮罩的不透明度，0–100。</summary>
     public int VeilOpacity { get; set; } = DEFAULT_VEIL_OPACITY;
 
-    /// <summary>是否对面板后面的背景做磨砂模糊，默认关闭以保持背景图清晰。</summary>
+    /// <summary>是否对整张背景图做磨砂模糊，默认关闭以保持背景图清晰。</summary>
     public bool Blur { get; set; }
 
     /// <summary>背景图文件名，位于外观目录；没有背景图时为 null。</summary>

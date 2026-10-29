@@ -25,6 +25,14 @@ export interface BotStatus {
   impl?: string | null
   groupCount?: number | null
   friendCount?: number | null
+  groups?: BotGroup[] | null
+}
+
+export interface BotGroup {
+  groupId: number
+  name: string
+  memberCount: number
+  maxMemberCount: number
 }
 
 export interface PluginCommandType {

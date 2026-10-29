@@ -5,7 +5,7 @@
 
 /*
  * 外观：没有背景图时页面与面板都是纯色；设置背景图后（.has-bg），侧边面板、内容区卡片与内容区遮罩按各自的不透明度半透明，
- * 开启模糊（.frosted）时面板对其后的背景做磨砂处理。颜色全部取自 daisyUI 主题变量。
+ * 开启模糊（.frosted）时整张背景图做磨砂处理。颜色全部取自 daisyUI 主题变量。
  */
 :root {
   --panel-alpha: 80;
@@ -17,10 +17,25 @@
   background: var(--color-base-300);
 }
 
+/* 背景图画在独立的底层上，模糊时只模糊这一层，面板和卡片透出的就是同一张模糊后的背景。 */
 .app-shell.has-bg {
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.app-shell.has-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-image) center / cover no-repeat;
+}
+
+/* 模糊会让图片边缘向透明过渡，底层向外扩出两倍模糊半径，露出的边缘由外壳裁掉。 */
+.app-shell.has-bg.frosted::before {
+  inset: -28px;
+  filter: blur(14px);
 }
 
 .has-bg .surface {
@@ -32,17 +47,52 @@
   background: color-mix(in oklab, var(--color-base-100) calc(var(--card-alpha) * 1%), transparent);
 }
 
-.has-bg.frosted .surface,
-.has-bg.frosted .veil {
-  backdrop-filter: blur(14px);
-}
-
 .veil {
   background: var(--color-base-200);
 }
 
 .has-bg .veil {
   background: color-mix(in oklab, var(--color-base-200) calc(var(--veil-alpha) * 1%), transparent);
+}
+
+/*
+ * 内容区滚动时，在还有内容的上下边缘用遮罩淡出（.fade-top / .fade-bottom 由脚本按滚动位置设置）。
+ * 用遮罩而不是叠一层底色渐变，背景图下也能正确透出；滚动条所在的竖条不加遮罩。
+ */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.scroll-fade {
+  mask-image:
+    linear-gradient(to bottom, transparent, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent),
+    linear-gradient(#000, #000);
+  mask-size:
+    calc(100% - var(--scrollbar-width, 0px)) 100%,
+    var(--scrollbar-width, 0px) 100%;
+  mask-position:
+    left top,
+    right top;
+  mask-repeat: no-repeat;
+  transition:
+    --fade-top 150ms ease-out,
+    --fade-bottom 150ms ease-out;
+}
+
+.scroll-fade.fade-top {
+  --fade-top: 1.5rem;
+}
+
+.scroll-fade.fade-bottom {
+  --fade-bottom: 1.5rem;
 }
 
 /* 侧边栏当前页使用主题主色。 */

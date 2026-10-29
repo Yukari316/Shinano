@@ -53,68 +53,66 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <PageToolbar>
-      <StatFilters v-model:days="days" v-model:include-bot="includeBot" />
-    </PageToolbar>
-    <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
-    <section class="surface card">
-      <div class="card-body">
-        <div class="stats stats-vertical lg:stats-horizontal">
-          <div class="stat">
-            <div class="stat-title">消息</div>
-            <div class="stat-value text-2xl">{{ formatNumber(totals.messages) }}</div>
-          </div>
-          <div class="stat">
-            <div class="stat-title">字数</div>
-            <div class="stat-value text-2xl">{{ formatNumber(totals.chars) }}</div>
-          </div>
-          <div class="stat">
-            <div class="stat-title">图片</div>
-            <div class="stat-value text-2xl">{{ formatNumber(totals.images) }}</div>
-          </div>
+  <PageToolbar>
+    <StatFilters v-model:days="days" v-model:include-bot="includeBot" />
+  </PageToolbar>
+  <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
+  <section class="surface card">
+    <div class="card-body">
+      <div class="stats stats-vertical lg:stats-horizontal">
+        <div class="stat">
+          <div class="stat-title">消息</div>
+          <div class="stat-value text-2xl">{{ formatNumber(totals.messages) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">字数</div>
+          <div class="stat-value text-2xl">{{ formatNumber(totals.chars) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">图片</div>
+          <div class="stat-value text-2xl">{{ formatNumber(totals.images) }}</div>
         </div>
       </div>
-    </section>
-    <section class="surface card">
-      <div class="card-body">
-        <h2 class="card-title">每日消息</h2>
-        <BarChart :points="points" unit="条" :summary="chartSummary" />
-        <details class="collapse-arrow collapse border border-[var(--line)]">
-          <summary class="collapse-title text-sm">按日明细</summary>
-          <div class="collapse-content overflow-x-auto">
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <th>日期</th>
-                  <th class="text-right">消息</th>
-                  <th class="text-right">字数</th>
-                  <th class="text-right">图片</th>
-                  <th class="text-right">文件</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="day in newestFirst" :key="day.date">
-                  <td>{{ day.date }}</td>
-                  <td class="text-right tabular-nums">{{ formatNumber(day.messages) }}</td>
-                  <td class="text-right tabular-nums">{{ formatNumber(day.chars) }}</td>
-                  <td class="text-right tabular-nums">{{ formatNumber(day.images) }}</td>
-                  <td class="text-right tabular-nums">{{ formatNumber(day.files) }}</td>
-                </tr>
-                <tr v-if="daily.length === 0">
-                  <td colspan="5" class="text-center opacity-60">暂无数据</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </details>
-      </div>
-    </section>
-    <section class="surface card">
-      <div class="card-body">
-        <h2 class="card-title">发言排行</h2>
-        <SenderTable :senders="senders" />
-      </div>
-    </section>
-  </div>
+    </div>
+  </section>
+  <section class="surface card">
+    <div class="card-body">
+      <h2 class="card-title">每日消息</h2>
+      <BarChart :points="points" unit="条" :summary="chartSummary" />
+      <details class="collapse-arrow collapse border border-[var(--line)]">
+        <summary class="collapse-title text-sm">按日明细</summary>
+        <div class="collapse-content overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th class="text-right">消息</th>
+                <th class="text-right">字数</th>
+                <th class="text-right">图片</th>
+                <th class="text-right">文件</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="day in newestFirst" :key="day.date">
+                <td>{{ day.date }}</td>
+                <td class="text-right tabular-nums">{{ formatNumber(day.messages) }}</td>
+                <td class="text-right tabular-nums">{{ formatNumber(day.chars) }}</td>
+                <td class="text-right tabular-nums">{{ formatNumber(day.images) }}</td>
+                <td class="text-right tabular-nums">{{ formatNumber(day.files) }}</td>
+              </tr>
+              <tr v-if="daily.length === 0">
+                <td colspan="5" class="text-center opacity-60">暂无数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </section>
+  <section class="surface card flex-1">
+    <div class="card-body">
+      <h2 class="card-title">发言排行</h2>
+      <SenderTable :senders="senders" />
+    </div>
+  </section>
 </template>

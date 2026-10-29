@@ -167,7 +167,7 @@ function dismissResult(): Promise<void> {
     </div>
   </section>
 
-  <section class="surface card">
+  <section class="surface card flex-1">
     <div class="card-body">
       <p class="text-sm opacity-70">顺序靠前的插件先处理指令与事件；启停与排序从下一条消息生效。</p>
       <table class="table">

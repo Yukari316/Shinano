@@ -32,6 +32,11 @@
   border: 1px solid var(--line);
 }
 
+/* daisyUI 让卡片内的段落占满剩余高度；卡片被拉伸到页面底部时这会把后续内容推到底部，因此取消。 */
+.card-body :where(p) {
+  flex-grow: 0;
+}
+
 .tile {
   background: var(--raise);
   border-radius: var(--radius-box);

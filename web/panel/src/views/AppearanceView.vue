@@ -74,10 +74,10 @@ function removeBackground(): Promise<void> {
     </div>
   </section>
 
-  <section class="surface card">
+  <section class="surface card flex-1">
     <div class="card-body gap-4">
       <h2 class="card-title text-lg">透明度与模糊</h2>
-      <p class="text-sm opacity-70">只在设置背景图后生效。背景图本身始终不透明；模糊会让面板后面的背景看不清细节，但文字更易读。</p>
+      <p class="text-sm opacity-70">只在设置背景图后生效。背景图本身始终不透明；模糊会让整张背景图看不清细节，但文字更易读。</p>
       <fieldset class="fieldset max-w-xl" :disabled="!hasBackground || busy">
         <label class="label cursor-pointer justify-start gap-3" for="appearance-blur">
           <input id="appearance-blur" v-model="appearance.blur" type="checkbox" class="toggle toggle-primary" @change="save" />

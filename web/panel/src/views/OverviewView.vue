@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { PhCheck, PhCube, PhWarning, PhX } from '@phosphor-icons/vue'
-import { computed, onMounted, ref } from 'vue'
-import { restartStatus } from '../restart'
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import { api, describeError } from '../api'
 import BarChart from '../components/BarChart.vue'
 import { formatBytes, formatNumber, HEALTH_BADGE, HEALTH_TEXT, recentDates, shortDate } from '../format'
+import { pageSubtitle } from '../pageTitle'
 import { plugins } from '../plugins'
+import { restartStatus } from '../restart'
 import { overview, overviewUpdatedAt, refreshOverview } from '../status'
 import type { ArchiveGap, ConversationStat, DailyStat } from '../types'
 
@@ -51,6 +52,9 @@ const activeGroups = computed(() => conversations.value.filter((item) => item.ty
 const activePrivate = computed(() => conversations.value.length - activeGroups.value)
 const recentGaps = computed(() => gaps.value.filter((gap) => Date.now() - new Date(gap.endedAt).getTime() < GAP_WINDOW_DAYS * MS_PER_DAY).length)
 const updatedAt = computed(() => overviewUpdatedAt.value?.toLocaleTimeString('zh-CN', { hour12: false }) ?? '—')
+watchEffect(() => {
+  pageSubtitle.value = `数据更新于 ${updatedAt.value} · 每 30 秒刷新`
+})
 const chartSummary = computed(() => {
   const total = points.value.reduce((sum, point) => sum + point.value, 0)
   return `近 ${CHART_DAYS} 天每日消息柱状图，共 ${total} 条`
@@ -58,7 +62,6 @@ const chartSummary = computed(() => {
 </script>
 
 <template>
-  <p class="-mt-4 text-sm opacity-70">数据更新于 {{ updatedAt }} · 每 30 秒刷新</p>
   <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
   <div v-if="restartStatus?.lastResult?.outcome === 'RolledBack'" role="alert" class="alert alert-warning">
     <span>最近一次插件包变更未能就绪，已还原上一套插件包<template v-if="restartStatus.lastResult.reason">：{{ restartStatus.lastResult.reason }}</template></span>
@@ -129,7 +132,7 @@ const chartSummary = computed(() => {
     </div>
   </section>
 
-  <section class="surface card">
+  <section class="surface card flex-1">
     <div class="card-body gap-4">
       <div class="flex items-center justify-between">
         <h2 class="card-title text-lg">插件与归档</h2>

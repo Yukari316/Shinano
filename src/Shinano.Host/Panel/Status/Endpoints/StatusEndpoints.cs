@@ -80,7 +80,17 @@ internal static class StatusEndpoints
                 nickname    = self is { IsSuccess: true, Data: { } identity } ? identity.Nickname : null,
                 impl        = impl is { IsSuccess: true, Data: { } info } ? $"{info.ImplName} {info.ImplVersion}" : null,
                 groupCount  = groups is { IsSuccess: true, Data: { } groupList } ? groupList.Count : (int?)null,
-                friendCount = friends is { IsSuccess: true, Data: { } friendList } ? friendList.Count : (int?)null
+                friendCount = friends is { IsSuccess: true, Data: { } friendList } ? friendList.Count : (int?)null,
+                groups      = groups is { IsSuccess: true, Data: { } groupItems }
+                    ? groupItems.OrderBy(group => group.GroupName, StringComparer.CurrentCulture)
+                                .Select(group => new
+                                {
+                                    groupId        = (long)group.GroupId,
+                                    name           = group.GroupName,
+                                    memberCount    = group.MemberCount,
+                                    maxMemberCount = group.MaxMemberCount
+                                })
+                    : null
             });
     }
 }
