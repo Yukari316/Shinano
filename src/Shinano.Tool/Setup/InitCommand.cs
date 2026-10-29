@@ -61,7 +61,6 @@ public static class InitCommand
     private const string DEFAULT_DATABASE            = "shinano";
     private const string DEFAULT_ROLE                = "shinano";
     private const string DEFAULT_ADMIN               = "postgres";
-    private const string DEFAULT_LLBOT_PREFIX        = "milky";
     private const int    DEFAULT_LLBOT_PORT          = 3000;
 
     /// <summary>该命令接受的选项。</summary>
@@ -237,7 +236,7 @@ public static class InitCommand
         config.Set(
             ConfigKeys.LLBOT_PORT,
             int.Parse(ask.Text("LLBot 端口", LLBOT_PORT_OPTION, (config.GetInt(ConfigKeys.LLBOT_PORT) ?? DEFAULT_LLBOT_PORT).ToString(), InputRules.Port)));
-        config.Set(ConfigKeys.LLBOT_PREFIX, ask.Text("Milky 路径前缀", LLBOT_PREFIX_OPTION, config.GetString(ConfigKeys.LLBOT_PREFIX) ?? DEFAULT_LLBOT_PREFIX));
+        config.Set(ConfigKeys.LLBOT_PREFIX, ask.Text("Milky 路径前缀（没有可留空）", LLBOT_PREFIX_OPTION, config.GetString(ConfigKeys.LLBOT_PREFIX) ?? string.Empty));
         SetSecret(ask, config, ConfigKeys.LLBOT_ACCESS_TOKEN, "LLBot AccessToken（没有可留空）", LLBOT_TOKEN_VARIABLE, required: false);
     }
 

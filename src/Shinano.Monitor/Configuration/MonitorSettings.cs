@@ -24,7 +24,6 @@ public sealed class MonitorSettings
     private const int    MIN_INTERVAL_SECONDS     = 5;
     private const int    DEFAULT_MAX_LOG_MIB      = 256;
     private const int    DEFAULT_LLBOT_PORT       = 3000;
-    private const string DEFAULT_LLBOT_PREFIX     = "milky";
     private const string DEFAULT_TIME_ZONE        = "Asia/Shanghai";
 
 #if DEBUG
@@ -114,7 +113,7 @@ public sealed class MonitorSettings
             ObjectStorageEndpoint = Value(root, "RustFs:Endpoint"),
             LlBotHost             = Value(llBot, "Host") ?? "127.0.0.1",
             LlBotPort             = llBot.GetValue("Port", DEFAULT_LLBOT_PORT),
-            LlBotPrefix           = llBot.GetValue<string?>("Prefix") ?? DEFAULT_LLBOT_PREFIX,
+            LlBotPrefix           = llBot.GetValue<string?>("Prefix") ?? string.Empty,
             LlBotAccessToken      = Value(llBot, "AccessToken")
         };
     }

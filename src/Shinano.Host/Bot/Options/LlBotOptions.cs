@@ -12,8 +12,8 @@ public sealed class LlBotOptions
     /// <summary>LLBot 端口。</summary>
     public int Port { get; set; } = 3000;
 
-    /// <summary>Milky 路径前缀，默认 <c>milky</c>。</summary>
-    public string Prefix { get; set; } = "milky";
+    /// <summary>Milky 路径前缀，如 <c>milky</c> 对应 <c>/milky/api/...</c>；默认为空，即协议端直接在根路径提供接口。</summary>
+    public string Prefix { get; set; } = string.Empty;
 
     /// <summary>访问令牌。</summary>
     public string AccessToken { get; set; } = string.Empty;
