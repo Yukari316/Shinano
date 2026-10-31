@@ -65,13 +65,13 @@ public sealed class HealthReactions : IHostedService
                 else _plugins.Resume();
                 TrackGap(ArchiveGapCause.DatabaseOffline, failing, current.Since);
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Error, "数据库不可用", "影响", "已停止响应全部功能，恢复后自动继续", current.Detail)
-                    : Card(NotificationLevel.Normal, "数据库已恢复", "影响", "已恢复响应，离线期间的消息登记为归档缺口", null));
+                    ? Card(NotificationLevel.Error, "数据库不可用", current.Detail, "Bot 暂停响应全部功能")
+                    : Card(NotificationLevel.Normal, "数据库已恢复", null, "已恢复响应"));
                 break;
             case HealthComponent.ObjectStorage:
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Warning, "RustFS 不可用", "影响", "聊天媒体标记为缺失，需要媒体存储的功能报错", current.Detail)
-                    : Card(NotificationLevel.Normal, "RustFS 已恢复", "影响", "媒体功能已恢复", null));
+                    ? Card(NotificationLevel.Warning, "RustFS 不可用", current.Detail, "媒体功能暂不可用")
+                    : Card(NotificationLevel.Normal, "RustFS 已恢复", null, "媒体功能已恢复"));
                 break;
             case HealthComponent.Bot:
                 TrackGap(ArchiveGapCause.BotDisconnected, failing, current.Since);
@@ -79,17 +79,14 @@ public sealed class HealthReactions : IHostedService
         }
     }
 
-    private static NotificationCard Card(NotificationLevel level, string title, string label, string value, string? reason)
-    {
-        List<NotificationItem> items = [new NotificationItem { Label = label, Value = value }];
-        if (!string.IsNullOrWhiteSpace(reason)) items.Add(new NotificationItem { Label = "原因", Value = reason });
-        return new NotificationCard
+    private static NotificationCard Card(NotificationLevel level, string title, string? cause, string impact) =>
+        new()
         {
-            Level = level,
-            Title = title,
-            Items = items
+            Level  = level,
+            Title  = title,
+            Cause  = string.IsNullOrWhiteSpace(cause) ? null : cause,
+            Impact = impact
         };
-    }
 
     // 首次连接前没有机器人账号，也就没有可归档的会话，不登记缺口。
     private void TrackGap(ArchiveGapCause cause, bool failing, DateTimeOffset at)

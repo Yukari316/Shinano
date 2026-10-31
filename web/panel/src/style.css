@@ -2,6 +2,8 @@
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 @import "@shinano/theme/theme.css";
+/* 自带插件的专有页面不单独输出 CSS，所用的 Tailwind 类由面板一并生成。 */
+@source "../../plugins";
 
 /*
  * 外观：没有背景图时页面与面板都是纯色；设置背景图后（.has-bg），侧边面板、内容区卡片与内容区遮罩按各自的不透明度半透明，

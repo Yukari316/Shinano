@@ -50,12 +50,23 @@ public sealed class EntertainmentCommands
         await e.ReplyAsync(reply);
     }
 
+    /// <summary>吃什么</summary>
+    [Command(
+        Expressions = [".*吃什么.*"],
+        MatchType = MatchType.Regex,
+        SourceScope = MessageSourceScope.Group | MessageSourceScope.Friend,
+        Description = "是啊，吃什么")]
+    public async ValueTask Eat(MessageReceivedEvent e)
+    {
+        await e.ReplyAsync("是啊，吃什么");
+    }
+
     /// <summary>
     /// 从"选择A还是B"的选项中随机选一项，选项可以含图片与 QQ 表情。指令只按文字粗略匹配，不是有效选择时不回复，
     /// 也不占用这条消息，后续指令照常处理。
     /// </summary>
     [Command(
-        Expressions = [$"^{ChoiceParser.PREFIX}[\\s\\S]*{ChoiceParser.SEPARATOR}"],
+        Expressions = [$@"^{ChoiceParser.PREFIX}[\s\S]*{ChoiceParser.SEPARATOR}"],
         MatchType = MatchType.Regex,
         SourceScope = MessageSourceScope.Group | MessageSourceScope.Friend,
         BlockAfterMatch = false,

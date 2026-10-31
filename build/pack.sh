@@ -13,9 +13,9 @@ echo "Shinano $version"
 rm -rf "$work"
 mkdir -p "$work/bundled-plugins"
 
-# 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，随后由 dotnet publish 带入发布目录。
+# 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，自带插件的专有页面构建到各插件包的 web/。
 pnpm -C "$repo/web" install --frozen-lockfile
-pnpm -C "$repo/web" --filter '@shinano/panel' --filter '@shinano/status' run build
+pnpm -C "$repo/web" --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
 
 # 原生插件：与平台无关，打成与面板上传相同的插件包。原生库与共享程序集由宿主提供，不放进插件包。
 for project in "$repo"/plugins/*/*.csproj; do

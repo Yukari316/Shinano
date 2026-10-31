@@ -22,6 +22,7 @@ using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
 using Shinano.Infrastructure.Logging.Options;
 using Shinano.Tests.Plugins;
+using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.Panel;
 
@@ -91,7 +92,7 @@ public sealed class PanelHarness : IAsyncDisposable
         builder.Services.AddSingleton(sp => new SuperUserNotifier(
                                           sp.GetRequiredService<BotAccessor>(),
                                           new DeploymentOptions(),
-                                          null,
+                                          TestRendering.Images,
                                           TimeProvider.System,
                                           sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
         builder.Services.AddSingleton<RestartCoordinator>();

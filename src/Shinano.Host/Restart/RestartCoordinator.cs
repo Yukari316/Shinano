@@ -342,21 +342,18 @@ public sealed class RestartCoordinator : IDisposable
     private static NotificationCard RollbackCard(RestartResult result) =>
         new()
         {
-            Level = NotificationLevel.Warning,
-            Title = "插件更新已回滚",
-            Items =
-            [
-                new NotificationItem { Label = "原因", Value = result.Reason ?? "未知" },
-                new NotificationItem { Label = "已还原", Value = string.Join('\n', result.Changes.Select(Describe)) }
-            ]
+            Level  = NotificationLevel.Warning,
+            Title  = "插件更新已回滚",
+            Cause  = result.Reason ?? "未知",
+            Impact = string.Join("；", result.Changes.Select(Describe))
         };
 
     private static string Describe(PluginChange change) =>
         change.Kind switch
         {
-            PluginChangeKind.Install => $"安装 {change.Name} {change.ToVersion} → 已移除",
-            PluginChangeKind.Upgrade => $"升级 {change.Name} {change.ToVersion} → 已还原为 {change.FromVersion}",
-            _                        => $"删除 {change.Name} {change.FromVersion} → 已恢复"
+            PluginChangeKind.Install => $"未安装 {change.Name}",
+            PluginChangeKind.Upgrade => $"{change.Name} 保持 {change.FromVersion}",
+            _                        => $"{change.Name} 未删除"
         };
 
     // 以插件目录现状确定目标：已安装则替换其目录（暂存后被外部安装的视为升级），未安装则安装到 <插件目录>/<id>。

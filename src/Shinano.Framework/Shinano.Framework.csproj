@@ -13,6 +13,9 @@
     <PackageReference Include="Autofac"/>
     <PackageReference Include="HoshikawaKaguya.Sora"/>
     <PackageReference Include="HoshikawaKaguya.Sora.Command"/>
+    <!-- 绘制能力与宿主共享：插件经契约取得宿主的字体与文字绘制辅助，SkiaSharp 由宿主提供。 -->
+    <PackageReference Include="SkiaSharp"/>
+    <PackageReference Include="SkiaSharp.HarfBuzz"/>
     <PackageReference Include="SqlSugarCore"/>
   </ItemGroup>
 

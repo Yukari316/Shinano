@@ -35,6 +35,12 @@ public interface IPluginInitializationContext
     /// <summary>专有面板登记：插件启用时出现在管理面板，停用时移除。</summary>
     IPluginPanel Panel { get; }
 
+    /// <summary>宿主提供的公共字体与文字绘制辅助。</summary>
+    IPluginFonts Fonts { get; }
+
+    /// <summary>宿主统一风格的图片绘制（文本长图）。</summary>
+    IPluginImages Images { get; }
+
     /// <summary>
     /// 返回插件配置。<typeparamref name="T" /> 的无参构造结果即默认配置；配置存于数据库，切换账号保留。
     /// 同一插件只能使用一个配置类型，且须与 <see cref="IPanelRegistration.UseConfig{TConfig}" /> 声明的类型相同。

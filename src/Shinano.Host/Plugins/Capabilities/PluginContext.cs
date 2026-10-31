@@ -28,6 +28,8 @@ internal sealed class PluginContext : IPluginInitializationContext
         IPluginAssets     assets,
         PluginConfigStore configStore,
         PluginPanel       panel,
+        IPluginFonts      fonts,
+        IPluginImages     images,
         string            dataDirectory)
     {
         PluginId      = pluginId;
@@ -40,6 +42,8 @@ internal sealed class PluginContext : IPluginInitializationContext
         Assets        = assets;
         _configStore  = configStore;
         PanelHost     = panel;
+        Fonts         = fonts;
+        Images        = images;
         _secretsPath  = Path.Combine(dataDirectory, SECRETS_DIRECTORY_NAME, pluginId + ".json");
     }
 
@@ -78,6 +82,12 @@ internal sealed class PluginContext : IPluginInitializationContext
 
     /// <inheritdoc />
     public IPluginPanel Panel => PanelHost;
+
+    /// <inheritdoc />
+    public IPluginFonts Fonts { get; }
+
+    /// <inheritdoc />
+    public IPluginImages Images { get; }
 
     /// <summary>插件在加载时声明的配置类型；未声明时为 null。</summary>
     public Type? ConfigType { get; set; }

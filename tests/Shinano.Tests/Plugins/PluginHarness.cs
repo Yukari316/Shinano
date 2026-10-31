@@ -14,6 +14,7 @@ using Shinano.Tests.Infrastructure;
 using Sora;
 using Sora.Adapter.Milky;
 using Sora.Core.Types;
+using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.Plugins;
 
@@ -103,6 +104,8 @@ public sealed class PluginHarness : IAsyncDisposable
                 BucketPrefix    = bucketPrefix
             },
             endpoints ?? new PluginEndpointDataSource(new ServiceCollection().BuildServiceProvider()),
+            TestRendering.Fonts,
+            TestRendering.Images,
             NullLoggerFactory.Instance);
         await runtime.LoadAsync(CancellationToken.None);
 

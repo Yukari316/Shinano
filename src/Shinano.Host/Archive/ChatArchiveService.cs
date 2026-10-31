@@ -84,9 +84,9 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
                 _notifier.Notify(
                     new NotificationCard
                     {
-                        Level = NotificationLevel.Normal,
-                        Title = "聊天归档缓冲已恢复",
-                        Items = [new NotificationItem { Label = "影响", Value = "期间丢弃的消息已登记为归档缺口" }]
+                        Level  = NotificationLevel.Normal,
+                        Title  = "聊天归档缓冲已恢复",
+                        Impact = "已恢复归档"
                     });
             }
         }
@@ -96,9 +96,10 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
             _notifier.Notify(
                 new NotificationCard
                 {
-                    Level = NotificationLevel.Warning,
-                    Title = "聊天归档缓冲已满",
-                    Items = [new NotificationItem { Label = "影响", Value = "新消息记录将被丢弃，恢复后登记为归档缺口" }]
+                    Level  = NotificationLevel.Warning,
+                    Title  = "聊天归档缓冲已满",
+                    Cause  = "归档处理跟不上消息量",
+                    Impact = "新消息暂不归档，登记为归档缺口"
                 });
         }
 

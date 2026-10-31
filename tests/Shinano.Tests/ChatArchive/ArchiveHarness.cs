@@ -12,6 +12,7 @@ using Shinano.Tests.Plugins;
 using Sora;
 using Sora.Adapter.Milky;
 using Sora.Entities.Interfaces;
+using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.ChatArchive;
 
@@ -51,7 +52,7 @@ public sealed class ArchiveHarness : IAsyncDisposable
             new HostScheduler(NullLogger<HostScheduler>.Instance, new FakeTimeProvider()),
             bot,
             new ArchiveGapTracker(),
-            new SuperUserNotifier(bot, new DeploymentOptions(), null, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
+            new SuperUserNotifier(bot, new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             TimeProvider.System,
             NullLogger<ChatArchiveService>.Instance);
         await archive.StartAsync(CancellationToken.None);

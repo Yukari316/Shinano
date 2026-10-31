@@ -15,6 +15,7 @@ using Shinano.Host.Plugins.Config.Models;
 using Shinano.Host.Plugins.Entities;
 using Shinano.Host.Plugins.Models;
 using Shinano.Host.Plugins.Options;
+using Shinano.Host.Rendering;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
 using Shinano.Infrastructure.Hosting;
@@ -42,6 +43,8 @@ public sealed class PluginRuntime : IDisposable
     private readonly RuntimeHealth          _health;
     private readonly PluginRuntimeSettings  _settings;
     private readonly PluginEndpointDataSource _endpoints;
+    private readonly HostFonts              _fonts;
+    private readonly TextImageRenderer      _images;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -58,6 +61,8 @@ public sealed class PluginRuntime : IDisposable
         RuntimeHealth         health,
         PluginRuntimeSettings    settings,
         PluginEndpointDataSource endpoints,
+        HostFonts                fonts,
+        TextImageRenderer        images,
         ILoggerFactory           loggerFactory)
     {
         _infrastructure = infrastructure;
@@ -66,6 +71,8 @@ public sealed class PluginRuntime : IDisposable
         _health         = health;
         _settings       = settings;
         _endpoints      = endpoints;
+        _fonts          = fonts;
+        _images         = images;
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }
@@ -443,6 +450,8 @@ public sealed class PluginRuntime : IDisposable
             new PluginAssets(plugin.Directory),
             new PluginConfigStore(_infrastructure.Database),
             new PluginPanel(id, plugin.Directory, _endpoints, () => IsActive(plugin)),
+            _fonts,
+            _images,
             _settings.DataDirectory);
     }
 

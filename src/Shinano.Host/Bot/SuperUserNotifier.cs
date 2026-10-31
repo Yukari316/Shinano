@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
-using Shinano.Host.Notifications;
+using Shinano.Framework.Plugins.Capabilities;
+using Shinano.Framework.Rendering.Models;
 using Shinano.Host.Notifications.Models;
 using Shinano.Infrastructure.Configuration;
 using Sora.Core.Types;
@@ -15,31 +16,34 @@ namespace Shinano.Host.Bot;
 public sealed class SuperUserNotifier
 {
     private const string BASE64_PREFIX = "base64://";
+    private const string TIME_FORMAT   = "yyyy-MM-dd HH:mm:ss";
+    private const string CAUSE_LABEL   = "原因";
+    private const string IMPACT_LABEL  = "影响";
 
     private readonly BotAccessor                _bot;
     private readonly long[]                     _superUsers;
     private readonly TimeZoneInfo               _timeZone;
-    private readonly NotificationCardRenderer?  _renderer;
+    private readonly IPluginImages              _images;
     private readonly TimeProvider               _time;
     private readonly ILogger<SuperUserNotifier> _logger;
 
     /// <summary>创建通知器。</summary>
     /// <param name="bot">机器人连接。</param>
     /// <param name="deployment">部署配置，提供 Super User 与显示时间所用的时区。</param>
-    /// <param name="renderer">卡片绘制器；为 null 时只发文字。</param>
+    /// <param name="images">宿主长图绘制；字体不可用而绘制失败时改发文字。</param>
     /// <param name="time">时间来源。</param>
     /// <param name="logger">日志。</param>
     public SuperUserNotifier(
         BotAccessor                bot,
         DeploymentOptions          deployment,
-        NotificationCardRenderer?  renderer,
+        IPluginImages              images,
         TimeProvider               time,
         ILogger<SuperUserNotifier> logger)
     {
         _bot        = bot;
         _superUsers = deployment.SuperUsers;
         _timeZone   = TimeZoneInfo.TryFindSystemTimeZoneById(deployment.TimeZone, out TimeZoneInfo? zone) ? zone : TimeZoneInfo.Local;
-        _renderer   = renderer;
+        _images     = images;
         _time       = time;
         _logger     = logger;
     }
@@ -81,13 +85,29 @@ public sealed class SuperUserNotifier
         }
     }
 
+    // 副标题只写时间，等级只由竖条颜色表示；正文只有原因与影响两行。
     private MessageBody Compose(NotificationCard card)
     {
-        if (_renderer is null) return card.ToText();
         try
         {
             DateTimeOffset now = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _timeZone);
-            byte[] png = _renderer.Render(card, now);
+            byte[] png = _images.RenderTextImage(
+                new TextImageDocument
+                {
+                    Title    = card.Title,
+                    Subtitle = now.ToString(TIME_FORMAT),
+                    Level = card.Level switch
+                    {
+                        NotificationLevel.Error   => TextImageLevel.Error,
+                        NotificationLevel.Warning => TextImageLevel.Warning,
+                        _                         => TextImageLevel.Normal
+                    },
+                    Rows =
+                    [
+                        .. card.Cause is { } cause ? (TextImageRow[]) [new TextImageRow { Label = CAUSE_LABEL, Text = cause }] : [],
+                        new TextImageRow { Label = IMPACT_LABEL, Text = card.Impact }
+                    ]
+                });
             return new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png));
         }
         catch (Exception exception)

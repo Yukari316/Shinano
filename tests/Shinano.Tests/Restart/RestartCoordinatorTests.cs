@@ -7,6 +7,7 @@ using Shinano.Host.Restart.Models;
 using Shinano.Host.Restart.Options;
 using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
+using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.Restart;
 
@@ -154,7 +155,7 @@ public sealed class RestartCoordinatorTests : IDisposable
             _fixture.CreateStaging(),
             lifetime ?? new FakeLifetime(),
             null,
-            new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), null, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
+            new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             health,
             TimeProvider.System,
             NullLogger<RestartCoordinator>.Instance);

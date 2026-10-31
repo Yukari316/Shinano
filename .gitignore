@@ -248,4 +248,6 @@ Logs/
 # 前端：管理面板与状态页的构建产物分别输出到宿主与监控的 wwwroot，由打包流程生成，不入库
 src/Shinano.Host/wwwroot/
 src/Shinano.Monitor/wwwroot/
+# 自带插件的专有页面由 web/plugins 下的源码构建到插件包的 web/ 目录
+plugins/Shinano.Plugin.Qa/web/
 web/**/dist/

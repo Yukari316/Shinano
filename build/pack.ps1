@@ -47,9 +47,9 @@ Write-Host "Shinano $version"
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force $work | Out-Null
 
-# 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，随后由 dotnet publish 带入发布目录。
+# 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，自带插件的专有页面构建到各插件包的 web/。
 Invoke-Native pnpm -C (Join-Path $repo 'web') install --frozen-lockfile
-Invoke-Native pnpm -C (Join-Path $repo 'web') --filter '@shinano/panel' --filter '@shinano/status' run build
+Invoke-Native pnpm -C (Join-Path $repo 'web') --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
 
 # 原生插件：与平台无关，打成与面板上传相同的插件包。原生库与共享程序集由宿主提供，不放进插件包。
 $plugins = Join-Path $work 'bundled-plugins'

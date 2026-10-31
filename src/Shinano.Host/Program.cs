@@ -1,10 +1,11 @@
 using Serilog;
+using Shinano.Framework.Plugins.Capabilities;
 using Shinano.Host.Archive;
 using Shinano.Host.Bot;
 using Shinano.Host.Bot.Options;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
-using Shinano.Host.Notifications;
+using Shinano.Host.Rendering;
 using Shinano.Host.Packages;
 using Shinano.Host.Panel.Auth;
 using Shinano.Host.Plugins;
@@ -105,13 +106,14 @@ builder.Services.AddSingleton(new PluginRuntimeSettings
 builder.Services.AddSingleton<PluginRuntime>();
 builder.Services.AddSingleton<PluginPackageStaging>();
 builder.Services.AddSingleton<RestartCoordinator>();
-NotificationCardRenderer? cardRenderer = NotificationCardRenderer.TryCreate(
-    Path.Combine(AppContext.BaseDirectory, NotificationCardRenderer.RESOURCE_DIRECTORY),
-    out Exception? cardRendererError);
+HostFonts fonts = new(AppContext.BaseDirectory);
+builder.Services.AddSingleton(fonts);
+builder.Services.AddSingleton<IPluginFonts>(fonts);
+builder.Services.AddSingleton<TextImageRenderer>();
 builder.Services.AddSingleton(sp => new SuperUserNotifier(
                                   sp.GetRequiredService<BotAccessor>(),
                                   deployment,
-                                  cardRenderer,
+                                  sp.GetRequiredService<TextImageRenderer>(),
                                   TimeProvider.System,
                                   sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
 builder.Services.AddSingleton<ArchiveGapTracker>();
@@ -132,8 +134,8 @@ if (configuredMaxLogSize <= 0)
         loggingOptions.MaxTotalSizeMiB);
 foreach (string problem in endpoint.Problems)
     startupLogger.LogError("管理面板监听配置无效：{Problem}", problem);
-if (cardRendererError is not null)
-    startupLogger.LogError(cardRendererError, "无法加载通知卡片资源，Super User 通知改为文字");
+if (fonts.LoadError is not null)
+    startupLogger.LogError("{Error}；Super User 通知改为文字，插件的长图与自绘不可用", fonts.LoadError);
 startupLogger.LogInformation(
     "管理面板监听 {Scheme}://{Address}:{Port}",
     endpoint.Certificate is null ? "http" : "https",
@@ -151,4 +153,4 @@ app.MapApiRoutes();
 // 托管服务启动前应用或还原插件包变更：插件程序集加载后其目录会被锁定。
 app.Services.GetRequiredService<RestartCoordinator>().PrepareStartup();
 await app.RunAsync();
-cardRenderer?.Dispose();
+fonts.Dispose();
