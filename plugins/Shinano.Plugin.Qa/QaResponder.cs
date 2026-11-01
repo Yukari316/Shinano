@@ -1,6 +1,5 @@
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.Qa.Models;
-using Shinano.Plugin.Qa.Options;
 using Sora.Core.Enums;
 using Sora.Entities.Events;
 using Sora.Entities.Message;

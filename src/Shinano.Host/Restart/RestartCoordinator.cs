@@ -2,14 +2,11 @@ using Microsoft.Extensions.Hosting.Systemd;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Models;
 using Shinano.Host.Configuration;
-using Shinano.Host.Notifications.Models;
-using Shinano.Host.Packages;
-using Shinano.Host.Packages.Models;
+using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Models;
-using Shinano.Host.Plugins.Options;
 using Shinano.Host.Restart.Models;
-using Shinano.Host.Restart.Options;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
 

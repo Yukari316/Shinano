@@ -4,9 +4,8 @@ using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Restart;
 using Shinano.Host.Restart.Models;
-using Shinano.Host.Restart.Options;
-using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting.Models;
 using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.Restart;

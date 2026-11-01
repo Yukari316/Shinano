@@ -1,6 +1,4 @@
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
-using Shinano.Host.Plugins.Config;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

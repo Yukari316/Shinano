@@ -1,8 +1,7 @@
+using Shinano.Host.Web.Models;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Shinano.Host.Web.Models;
-using Shinano.Host.Web.Options;
 
 namespace Shinano.Host.Web;
 

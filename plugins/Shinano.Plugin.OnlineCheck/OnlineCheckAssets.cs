@@ -1,4 +1,4 @@
-using Shinano.Framework.Plugins.Capabilities;
+using Shinano.Framework.Plugins;
 
 namespace Shinano.Plugin.OnlineCheck;
 

@@ -1,4 +1,4 @@
-using Shinano.Framework.Plugins.Capabilities;
+using Shinano.Framework.Plugins;
 using Shinano.Framework.Rendering;
 using Shinano.Framework.Rendering.Models;
 using SkiaSharp;

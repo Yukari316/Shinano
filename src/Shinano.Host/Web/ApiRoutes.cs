@@ -1,13 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Shinano.Host.Panel.Appearance.Endpoints;
-using Shinano.Host.Panel.Auth.Endpoints;
-using Shinano.Host.Panel.HostConfig.Endpoints;
-using Shinano.Host.Panel.Logs;
-using Shinano.Host.Panel.Plugins;
-using Shinano.Host.Panel.Plugins.Endpoints;
-using Shinano.Host.Panel.Restart;
-using Shinano.Host.Panel.Stats.Endpoints;
-using Shinano.Host.Panel.Status.Endpoints;
+using Shinano.Host.Panel;
+using Shinano.Host.Panel.Endpoints;
 using Shinano.Host.Web.Endpoints;
 
 namespace Shinano.Host.Web;

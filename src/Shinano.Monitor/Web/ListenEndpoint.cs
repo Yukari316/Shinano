@@ -1,8 +1,8 @@
+using Shinano.Monitor.Web.Models;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Shinano.Monitor.Web.Options;
 
 namespace Shinano.Monitor.Web;
 

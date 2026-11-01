@@ -1,6 +1,6 @@
-using Shinano.Monitor.Configuration;
 using Shinano.Monitor.Probing.Models;
 using Shinano.Monitor.Status.Models;
+using Shinano.Monitor.Web.Models;
 
 namespace Shinano.Monitor.Status;
 

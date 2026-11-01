@@ -1,6 +1,5 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
 
 namespace Shinano.Plugin.Cheru;
 

@@ -1,5 +1,4 @@
 using Shinano.Infrastructure.Media.Models;
-using Shinano.Infrastructure.Media.Options;
 
 namespace Shinano.Infrastructure.Media;
 

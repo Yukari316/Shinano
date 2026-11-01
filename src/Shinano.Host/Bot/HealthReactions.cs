@@ -1,10 +1,10 @@
-using Shinano.Host.Notifications.Models;
+using Shinano.Host.Bot.Models;
 using Shinano.Host.Plugins;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
-using Shinano.Infrastructure.Scheduling;
+using Shinano.Infrastructure.Hosting;
 
 namespace Shinano.Host.Bot;
 

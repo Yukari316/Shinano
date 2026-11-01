@@ -1,7 +1,6 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
-using Shinano.Plugin.Qa.Options;
+using Shinano.Plugin.Qa.Models;
 using Sora.Entities.Events;
 
 namespace Shinano.Plugin.Qa;

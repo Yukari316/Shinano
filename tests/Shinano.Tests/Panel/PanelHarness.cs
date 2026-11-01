@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -7,22 +6,20 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
-using Shinano.Host.Packages;
 using Shinano.Host.Panel;
-using Shinano.Host.Panel.Auth;
-using Shinano.Host.Panel.Plugins;
 using Shinano.Host.Plugins;
-using Shinano.Host.Plugins.Options;
+using Shinano.Host.Plugins.Models;
 using Shinano.Host.Restart;
-using Shinano.Host.Restart.Options;
+using Shinano.Host.Restart.Models;
 using Shinano.Host.Web;
-using Shinano.Infrastructure.Configuration;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Hosting.Models;
 using Shinano.Infrastructure.Logging;
-using Shinano.Infrastructure.Logging.Options;
+using Shinano.Infrastructure.Logging.Models;
 using Shinano.Tests.Plugins;
 using Shinano.Tests.Rendering;
+using System.Net;
 
 namespace Shinano.Tests.Panel;
 

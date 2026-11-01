@@ -1,4 +1,4 @@
-using Shinano.Framework.Plugins.Capabilities;
+using Shinano.Framework.Plugins;
 using Shinano.Infrastructure.Media.Models;
 using Shinano.Infrastructure.Storage;
 using Shinano.Infrastructure.Storage.Models;

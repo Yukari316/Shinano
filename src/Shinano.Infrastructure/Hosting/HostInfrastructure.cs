@@ -3,10 +3,9 @@ using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Database;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
-using Shinano.Infrastructure.Hosting.Options;
+using Shinano.Infrastructure.Hosting.Models;
 using Shinano.Infrastructure.Media;
 using Shinano.Infrastructure.Media.Entities;
-using Shinano.Infrastructure.Scheduling;
 using Shinano.Infrastructure.Storage;
 
 namespace Shinano.Infrastructure.Hosting;

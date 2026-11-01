@@ -2,19 +2,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
-using Shinano.Host.Panel.Plugins;
+using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
-using Shinano.Host.Plugins.Config.Entities;
 using Shinano.Host.Plugins.Entities;
-using Shinano.Host.Plugins.Options;
+using Shinano.Host.Plugins.Models;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
-using Shinano.Infrastructure.Scheduling;
 using Shinano.Tests.Infrastructure;
+using Shinano.Tests.Rendering;
 using Sora;
 using Sora.Adapter.Milky;
 using Sora.Core.Types;
-using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.Plugins;
 

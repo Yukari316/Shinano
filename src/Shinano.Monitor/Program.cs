@@ -1,9 +1,9 @@
-using System.Text.Json.Serialization;
 using Serilog;
-using Shinano.Monitor.Configuration;
 using Shinano.Monitor.Logging;
 using Shinano.Monitor.Probing;
 using Shinano.Monitor.Web;
+using Shinano.Monitor.Web.Models;
+using System.Text.Json.Serialization;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 const string DATA_DIRECTORY = "data";

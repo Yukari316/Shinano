@@ -1,5 +1,5 @@
-using Shinano.Monitor.Configuration;
 using Shinano.Monitor.Probing;
+using Shinano.Monitor.Web.Models;
 
 namespace Shinano.Monitor.Status.Endpoints;
 

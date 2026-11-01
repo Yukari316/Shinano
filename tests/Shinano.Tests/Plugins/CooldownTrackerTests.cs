@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Framework.Cooldowns;
+using Shinano.Framework.Commands;
 
 namespace Shinano.Tests.Plugins;
 

@@ -1,11 +1,11 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json.Nodes;
-using Shinano.Host.Panel.Auth;
+using Shinano.Host.Panel;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Tests.Infrastructure;
 using Shinano.Tests.Plugins;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 
 namespace Shinano.Tests.Panel;
 

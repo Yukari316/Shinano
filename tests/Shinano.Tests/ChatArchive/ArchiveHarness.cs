@@ -1,18 +1,16 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Host.Archive;
 using Shinano.Host.Bot;
 using Shinano.Infrastructure.ChatArchive;
-using Shinano.Infrastructure.ChatArchive.Options;
-using Shinano.Infrastructure.Configuration;
+using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Hosting;
-using Shinano.Infrastructure.Scheduling;
+using Shinano.Infrastructure.Hosting.Models;
 using Shinano.Tests.Infrastructure;
 using Shinano.Tests.Plugins;
+using Shinano.Tests.Rendering;
 using Sora;
 using Sora.Adapter.Milky;
 using Sora.Entities.Interfaces;
-using Shinano.Tests.Rendering;
 
 namespace Shinano.Tests.ChatArchive;
 

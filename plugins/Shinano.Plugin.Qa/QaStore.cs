@@ -1,11 +1,10 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
 using Shinano.Plugin.Qa.Entities;
 using Shinano.Plugin.Qa.Models;
 using SqlSugar;
+using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Shinano.Plugin.Qa;
 

@@ -1,5 +1,4 @@
-using System.Text;
-using Shinano.Framework.Messaging;
+using Shinano.Framework.Commands;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Models;
 using Shinano.Infrastructure.Health;
@@ -8,6 +7,7 @@ using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
 using Sora.Command.Attributes;
 using Sora.Entities.Events;
+using System.Text;
 
 namespace Shinano.Host.Bot;
 

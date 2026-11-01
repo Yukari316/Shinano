@@ -1,5 +1,5 @@
-using Shinano.Framework.Plugins.Capabilities;
-using Shinano.Infrastructure.Scheduling;
+using Shinano.Framework.Plugins;
+using Shinano.Infrastructure.Hosting;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

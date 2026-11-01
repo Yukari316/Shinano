@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Infrastructure.Scheduling;
+using Shinano.Infrastructure.Hosting;
 
 namespace Shinano.Tests.Scheduling;
 

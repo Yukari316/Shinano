@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -8,13 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using Shinano.Monitor.Configuration;
 using Shinano.Monitor.Probing;
 using Shinano.Monitor.Probing.Models;
 using Shinano.Monitor.Status;
 using Shinano.Monitor.Status.Models;
 using Shinano.Monitor.Web;
-using Shinano.Monitor.Web.Options;
+using Shinano.Monitor.Web.Models;
+using System.Net;
 
 namespace Shinano.Tests.Monitor;
 

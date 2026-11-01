@@ -1,4 +1,4 @@
-using Shinano.Framework.Messaging;
+using Shinano.Framework.Commands;
 using Sora.Command.Attributes;
 using Sora.Core.Enums;
 using Sora.Entities.Events;

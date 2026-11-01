@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
-using Shinano.Framework.Plugins.Capabilities.Models;
+using Shinano.Framework.Plugins.Models;
 using Shinano.Infrastructure.Database;
 using Shinano.Infrastructure.Database.Models;
 using SqlSugar;

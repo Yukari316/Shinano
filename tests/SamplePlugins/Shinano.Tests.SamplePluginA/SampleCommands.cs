@@ -1,6 +1,4 @@
-using Shinano.Framework.Cooldowns;
-using Shinano.Framework.Messaging;
-using Shinano.Framework.Permissions;
+using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
 using Sora.Command.Attributes;
 using Sora.Core.Enums;

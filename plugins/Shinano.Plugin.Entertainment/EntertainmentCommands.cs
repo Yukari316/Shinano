@@ -1,8 +1,7 @@
 using Microsoft.Extensions.Logging;
-using Shinano.Framework.Messaging;
+using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Capabilities;
-using Shinano.Plugin.Entertainment.Options;
+using Shinano.Plugin.Entertainment.Models;
 using Sora.Command.Attributes;
 using Sora.Core.Enums;
 using Sora.Core.Types;

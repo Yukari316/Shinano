@@ -1,4 +1,4 @@
-using Shinano.Framework.Permissions;
+using Shinano.Framework.Commands;
 using Sora.Core.Enums;
 
 namespace Shinano.Tests.Plugins;
