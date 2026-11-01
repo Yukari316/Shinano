@@ -110,6 +110,7 @@ public sealed class ChatMediaStore
     public async Task<int> ExpireAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
         int total = 0;
+        int deleted = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             // SQL_NEED: 需要 for update skip locked 跳过正被复用而锁定的行，并以 returning 取回待删除对象；SqlSugar 不支持。
@@ -130,12 +131,18 @@ public sealed class ChatMediaStore
                     limit = EXPIRE_BATCH_SIZE
                 });
             foreach (string key in keys)
-                await DeleteObjectQuietlyAsync(key);
+                if (await DeleteObjectQuietlyAsync(key)) deleted++;
             total += keys.Count;
             if (keys.Count < EXPIRE_BATCH_SIZE) break;
         }
 
-        if (total > 0) _logger.LogInformation("已清理 {Count} 个过期聊天媒体", total);
+        _logger.LogInformation(
+            "聊天媒体过期清理（最后引用早于 {Cutoff}）：数据库 chat_media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Deleted} 个对象，失败 {Failed} 个",
+            cutoff,
+            total,
+            _bucket,
+            deleted,
+            total - deleted);
         return total;
     }
 
@@ -145,15 +152,19 @@ public sealed class ChatMediaStore
                 .Select(item => item.ObjectKey)
                 .FirstAsync();
 
-    private async Task DeleteObjectQuietlyAsync(string key)
+    // 逐个对象的删除只记 Debug，批量清理由调用方汇总记录。
+    private async Task<bool> DeleteObjectQuietlyAsync(string key)
     {
         try
         {
             await _storage.DeleteAsync(_bucket, key, CancellationToken.None);
+            _logger.LogDebug("已从 bucket {Bucket} 删除聊天媒体对象 {ObjectKey}", _bucket, key);
+            return true;
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "删除聊天媒体对象 {ObjectKey} 失败", key);
+            _logger.LogWarning(exception, "从 bucket {Bucket} 删除聊天媒体对象 {ObjectKey} 失败", _bucket, key);
+            return false;
         }
     }
 

@@ -1,0 +1,433 @@
+{
+  "header": {
+    "account_type": "1",
+    "short_limit": "4",
+    "long_limit": "100",
+    "long_remaining": 99,
+    "short_remaining": 3,
+    "status": 0,
+    "results_requested": 8,
+    "index": {
+      "0": {
+        "status": 0,
+        "parent_id": 0,
+        "id": 0,
+        "results": 8
+      },
+      "2": {
+        "status": 0,
+        "parent_id": 2,
+        "id": 2,
+        "results": 8
+      },
+      "5": {
+        "status": 0,
+        "parent_id": 5,
+        "id": 5,
+        "results": 8
+      },
+      "51": {
+        "status": 0,
+        "parent_id": 5,
+        "id": 51,
+        "results": 8
+      },
+      "52": {
+        "status": 0,
+        "parent_id": 5,
+        "id": 52,
+        "results": 8
+      },
+      "53": {
+        "status": 0,
+        "parent_id": 5,
+        "id": 53,
+        "results": 8
+      },
+      "6": {
+        "status": 0,
+        "parent_id": 6,
+        "id": 6,
+        "results": 8
+      },
+      "8": {
+        "status": 0,
+        "parent_id": 8,
+        "id": 8,
+        "results": 8
+      },
+      "9": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 9,
+        "results": 16
+      },
+      "10": {
+        "status": 0,
+        "parent_id": 10,
+        "id": 10,
+        "results": 8
+      },
+      "11": {
+        "status": 0,
+        "parent_id": 11,
+        "id": 11,
+        "results": 8
+      },
+      "12": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 12,
+        "results": 16
+      },
+      "16": {
+        "status": 0,
+        "parent_id": 16,
+        "id": 16,
+        "results": 8
+      },
+      "18": {
+        "status": 0,
+        "parent_id": 18,
+        "id": 18,
+        "results": 8
+      },
+      "19": {
+        "status": 0,
+        "parent_id": 19,
+        "id": 19,
+        "results": 8
+      },
+      "20": {
+        "status": 0,
+        "parent_id": 20,
+        "id": 20,
+        "results": 8
+      },
+      "21": {
+        "status": 0,
+        "parent_id": 21,
+        "id": 21,
+        "results": 8
+      },
+      "211": {
+        "status": 0,
+        "parent_id": 21,
+        "id": 211,
+        "results": 8
+      },
+      "22": {
+        "status": 0,
+        "parent_id": 22,
+        "id": 22,
+        "results": 8
+      },
+      "23": {
+        "status": 0,
+        "parent_id": 23,
+        "id": 23,
+        "results": 8
+      },
+      "24": {
+        "status": 0,
+        "parent_id": 24,
+        "id": 24,
+        "results": 8
+      },
+      "25": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 25,
+        "results": 16
+      },
+      "26": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 26,
+        "results": 16
+      },
+      "27": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 27,
+        "results": 16
+      },
+      "28": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 28,
+        "results": 16
+      },
+      "29": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 29,
+        "results": 16
+      },
+      "30": {
+        "status": 0,
+        "parent_id": 9,
+        "id": 30,
+        "results": 16
+      },
+      "31": {
+        "status": 0,
+        "parent_id": 31,
+        "id": 31,
+        "results": 8
+      },
+      "32": {
+        "status": 0,
+        "parent_id": 32,
+        "id": 32,
+        "results": 8
+      },
+      "33": {
+        "status": 0,
+        "parent_id": 33,
+        "id": 33,
+        "results": 8
+      },
+      "34": {
+        "status": 0,
+        "parent_id": 34,
+        "id": 34,
+        "results": 8
+      },
+      "341": {
+        "status": 0,
+        "parent_id": 341,
+        "id": 341,
+        "results": 8
+      },
+      "35": {
+        "status": 0,
+        "parent_id": 35,
+        "id": 35,
+        "results": 8
+      },
+      "36": {
+        "status": 0,
+        "parent_id": 36,
+        "id": 36,
+        "results": 8
+      },
+      "37": {
+        "status": 0,
+        "parent_id": 37,
+        "id": 37,
+        "results": 8
+      },
+      "371": {
+        "status": 0,
+        "parent_id": 371,
+        "id": 371,
+        "results": 8
+      },
+      "38": {
+        "status": 0,
+        "parent_id": 38,
+        "id": 38,
+        "results": 8
+      },
+      "39": {
+        "status": 0,
+        "parent_id": 39,
+        "id": 39,
+        "results": 8
+      },
+      "40": {
+        "status": 0,
+        "parent_id": 40,
+        "id": 40,
+        "results": 8
+      },
+      "41": {
+        "status": 0,
+        "parent_id": 41,
+        "id": 41,
+        "results": 8
+      },
+      "42": {
+        "status": 0,
+        "parent_id": 42,
+        "id": 42,
+        "results": 8
+      },
+      "43": {
+        "status": 0,
+        "parent_id": 43,
+        "id": 43,
+        "results": 8
+      },
+      "44": {
+        "status": 0,
+        "parent_id": 44,
+        "id": 44,
+        "results": 8
+      }
+    },
+    "search_depth": "128",
+    "minimum_similarity": 47.86,
+    "query_image_display": "/userdata/SHvfaNgIC.jpg.png",
+    "query_image": "SHvfaNgIC.jpg",
+    "results_returned": 8
+  },
+  "results": [
+    {
+      "header": {
+        "similarity": "95.39",
+        "thumbnail": "https://img3.saucenao.com/booru/a/2/a2f243e7ff4114100ed88fb7f6732592_0.jpg?auth=PFVvFp7JaFbFnUi6N0jgXQ&exp=1793736000",
+        "index_id": 9,
+        "index_name": "Index #9: Danbooru - a2f243e7ff4114100ed88fb7f6732592_0.jpg",
+        "dupes": 1,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://danbooru.donmai.us/post/show/8861752",
+          "https://gelbooru.com/index.php?page=post&s=view&id=11463176"
+        ],
+        "danbooru_id": 8861752,
+        "gelbooru_id": 11463176,
+        "creator": "uriuritei",
+        "material": "punishing: gray raven",
+        "characters": "bianca: stigmata (pgr), bianca (pgr)",
+        "source": "https://twitter.com/uriuritei/status/1890725357273161985"
+      }
+    },
+    {
+      "header": {
+        "similarity": "50.09",
+        "thumbnail": "https://img3.saucenao.com/twitter/u/8/Z/DSjiik7UIAACu8Z.jpg?auth=vW-MwTI5A6Sj0dnWzxubQw&exp=1793736000",
+        "index_id": 41,
+        "index_name": "Index #41: Twitter - DSjiik7UIAACu8Z.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://twitter.com/i/web/status/948257076127588352"
+        ],
+        "created_at": "2018-01-02T18:17:59Z",
+        "tweet_id": "948257076127588352",
+        "twitter_user_id": "2766691267",
+        "twitter_user_handle": "Ryoushimabara"
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.86",
+        "thumbnail": "https://img1.saucenao.com/res/pixiv/3147/31470951_s.jpg?auth=x5xqWB_TYUYd9dnnjqBxBQ&exp=1793736000",
+        "index_id": 5,
+        "index_name": "Index #5: Pixiv Images - 31470951_s.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=31470951"
+        ],
+        "title": "死ね",
+        "pixiv_id": 31470951,
+        "member_name": "再音さく",
+        "member_id": 2932382
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.84",
+        "thumbnail": "https://img1.saucenao.com/res/nijie/52/manga/525963_p2.jpg?auth=AvzreXsIZFUzS6oDO3rx5Q&exp=1793736000",
+        "index_id": 11,
+        "index_name": "Index #11: Nijie Images - 525963_p2.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://nijie.info/view.php?id=525963"
+        ],
+        "title": "スク水電マ絶頂娘　（表情差分あり）",
+        "nijie_id": 525963,
+        "member_name": "カギカコ",
+        "member_id": 74394
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.82",
+        "thumbnail": "https://img1.saucenao.com/res/nijie/52/manga/525963_p1.jpg?auth=nDc0LH5ZpDQ6DBrV7hxidA&exp=1793736000",
+        "index_id": 11,
+        "index_name": "Index #11: Nijie Images - 525963_p1.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://nijie.info/view.php?id=525963"
+        ],
+        "title": "スク水電マ絶頂娘　（表情差分あり）",
+        "nijie_id": 525963,
+        "member_name": "カギカコ",
+        "member_id": 74394
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.55",
+        "thumbnail": "https://img1.saucenao.com/res/nijie/52/manga/525963_p5.jpg?auth=92-BDNN4YUKx4n0ZGhI_Ow&exp=1793736000",
+        "index_id": 11,
+        "index_name": "Index #11: Nijie Images - 525963_p5.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://nijie.info/view.php?id=525963"
+        ],
+        "title": "スク水電マ絶頂娘　（表情差分あり）",
+        "nijie_id": 525963,
+        "member_name": "カギカコ",
+        "member_id": 74394
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.53",
+        "thumbnail": "https://img1.saucenao.com/res/nijie/52/manga/525963_p4.jpg?auth=KvQLnuROiZBHJQYA5majhQ&exp=1793736000",
+        "index_id": 11,
+        "index_name": "Index #11: Nijie Images - 525963_p4.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://nijie.info/view.php?id=525963"
+        ],
+        "title": "スク水電マ絶頂娘　（表情差分あり）",
+        "nijie_id": 525963,
+        "member_name": "カギカコ",
+        "member_id": 74394
+      }
+    },
+    {
+      "header": {
+        "similarity": "46.52",
+        "thumbnail": "https://img1.saucenao.com/res/nijie/52/525963.jpg?auth=RfMRLuNZg8OaSmhh3QWC2Q&exp=1793736000",
+        "index_id": 11,
+        "index_name": "Index #11: Nijie Images - 525963.jpg",
+        "dupes": 0,
+        "hidden": 0
+      },
+      "data": {
+        "ext_urls": [
+          "https://nijie.info/view.php?id=525963"
+        ],
+        "title": "スク水電マ絶頂娘　（表情差分あり）",
+        "nijie_id": 525963,
+        "member_name": "カギカコ",
+        "member_id": 74394
+      }
+    }
+  ]
+}

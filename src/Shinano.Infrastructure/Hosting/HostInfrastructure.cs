@@ -228,6 +228,8 @@ public sealed class HostInfrastructure : IDisposable
         };
     }
 
+    // 启动时先执行一次再按间隔执行，与日志清理一致：调试或运行不满一个间隔的进程同样会清理过期媒体，
+    // 否则聊天分区已在账号初始化时删除，对应的聊天媒体记录与对象却一直残留。
     private void RegisterMaintenance(Components components)
     {
         _scheduler.Register(
@@ -235,7 +237,7 @@ public sealed class HostInfrastructure : IDisposable
             "persistent-media-gc",
             MaintenanceInterval,
             token => components.PersistentMedia.CollectOrphansAsync(_time.GetUtcNow(), token),
-            runImmediately: false);
+            runImmediately: true);
         _scheduler.Register(
             SCHEDULER_OWNER,
             "chat-media-expiry",
@@ -243,7 +245,7 @@ public sealed class HostInfrastructure : IDisposable
             token => components.ChatMedia.ExpireAsync(
                 _time.GetUtcNow() - TimeSpan.FromDays(_settings.ChatArchive.RetentionDays),
                 token),
-            runImmediately: false);
+            runImmediately: true);
     }
 
     private async Task MaintainAccountAsync(Components components, long selfId, CancellationToken cancellationToken)
@@ -255,18 +257,23 @@ public sealed class HostInfrastructure : IDisposable
             components.TimeZone,
             _settings.ChatArchive.PartitionDaysAhead,
             cancellationToken);
-        await components.Partitions.DropExpiredAsync(
+        int dropped = await components.Partitions.DropExpiredAsync(
             selfId,
             now,
             components.TimeZone,
             _settings.ChatArchive.RetentionDays,
             cancellationToken);
+        _logger.LogInformation(
+            "账号 {SelfId} 聊天记录过期清理（保留 {Days} 天）：数据库删除 {Count} 个聊天分区",
+            selfId,
+            _settings.ChatArchive.RetentionDays,
+            dropped);
         if (_settings.ChatArchive.StatRetentionDays > 0)
         {
             DateOnly cutoff = ChatPartitionMaintainer.LocalDate(now, components.TimeZone)
                                                      .AddDays(-_settings.ChatArchive.StatRetentionDays);
             int deleted = await components.ChatArchive.DeleteStatsBeforeAsync(selfId, cutoff, cancellationToken);
-            if (deleted > 0) _logger.LogInformation("已清理 {Count} 行早于 {Cutoff} 的发言统计", deleted, cutoff);
+            _logger.LogInformation("账号 {SelfId} 发言统计过期清理（早于 {Cutoff}）：数据库删除 {Count} 行", selfId, cutoff, deleted);
         }
     }
 

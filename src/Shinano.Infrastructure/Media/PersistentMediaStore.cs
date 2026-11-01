@@ -160,9 +160,16 @@ public sealed class PersistentMediaStore
                     limit = COLLECT_BATCH_SIZE
                 }));
 
+        int deleted = 0;
         foreach (string key in keys)
-            await DeleteObjectQuietlyAsync(key);
-        if (keys.Count > 0) _logger.LogInformation("已回收 {Count} 个无引用的持久媒体", keys.Count);
+            if (await DeleteObjectQuietlyAsync(key)) deleted++;
+        _logger.LogInformation(
+            "持久媒体回收（无引用且早于 {Cutoff}）：数据库 media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Deleted} 个对象，失败 {Failed} 个",
+            cutoff,
+            keys.Count,
+            _bucket,
+            deleted,
+            keys.Count - deleted);
         cancellationToken.ThrowIfCancellationRequested();
         return keys.Count;
     }
@@ -234,15 +241,19 @@ public sealed class PersistentMediaStore
                 .Select(item => item.ObjectKey)
                 .FirstAsync();
 
-    private async Task DeleteObjectQuietlyAsync(string key)
+    // 逐个对象的删除只记 Debug，批量清理由调用方汇总记录。
+    private async Task<bool> DeleteObjectQuietlyAsync(string key)
     {
         try
         {
             await _storage.DeleteAsync(_bucket, key, CancellationToken.None);
+            _logger.LogDebug("已从 bucket {Bucket} 删除持久媒体对象 {ObjectKey}", _bucket, key);
+            return true;
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "删除持久媒体对象 {ObjectKey} 失败", key);
+            _logger.LogWarning(exception, "从 bucket {Bucket} 删除持久媒体对象 {ObjectKey} 失败", _bucket, key);
+            return false;
         }
     }
 

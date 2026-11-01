@@ -1,0 +1,8 @@
+{
+  "id": "image-search",
+  "name": "搜图",
+  "version": "1.0.0",
+  "description": "以图搜图（SauceNAO，IQDB 兜底）与以图搜番（trace.moe），经图源服务转发并发送原图",
+  "entryAssembly": "Shinano.Plugin.ImageSearch.dll",
+  "bucketPurposes": ["search"]
+}

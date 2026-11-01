@@ -4,6 +4,7 @@ using Amazon.S3.Model;
 using Amazon.S3.Util;
 using Shinano.Infrastructure.Storage.Models;
 using System.Net;
+using System.Runtime.CompilerServices;
 
 namespace Shinano.Infrastructure.Storage;
 
@@ -150,6 +151,57 @@ public sealed class ObjectStorage : IDisposable
         }
     }
 
+    /// <summary>对象的元数据；对象不存在时返回 null。</summary>
+    public async Task<StoredObjectInfo?> GetInfoAsync(string bucket, string key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            GetObjectMetadataResponse response = await _client.GetObjectMetadataAsync(
+                new GetObjectMetadataRequest
+                {
+                    BucketName = bucket,
+                    Key        = key
+                },
+                cancellationToken);
+            return new StoredObjectInfo
+            {
+                Key          = key,
+                Size         = response.ContentLength,
+                LastModified = ToUtc(response.LastModified)
+            };
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>按 key 顺序分页列出对象；<paramref name="prefix" /> 为 null 时列出全部，bucket 不存在时为空。</summary>
+    public async IAsyncEnumerable<StoredObjectInfo> ListAsync(
+        string                                     bucket,
+        string?                                    prefix,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ListObjectsV2Request request = new()
+        {
+            BucketName = bucket,
+            Prefix     = prefix
+        };
+        while (await ListPageAsync(request, cancellationToken) is { } response)
+        {
+            foreach (S3Object item in response.S3Objects ?? [])
+                yield return new StoredObjectInfo
+                {
+                    Key          = item.Key,
+                    Size         = item.Size ?? 0,
+                    LastModified = ToUtc(item.LastModified)
+                };
+
+            if (response.IsTruncated != true) yield break;
+            request.ContinuationToken = response.NextContinuationToken;
+        }
+    }
+
     /// <summary>删除对象；对象不存在时视为成功。</summary>
     public async Task DeleteAsync(string bucket, string key, CancellationToken cancellationToken) =>
         await _client.DeleteObjectAsync(
@@ -159,6 +211,23 @@ public sealed class ObjectStorage : IDisposable
                 Key        = key
             },
             cancellationToken);
+
+    // bucket 不存在时返回 null（迭代器内不能在带 catch 的 try 中 yield）。
+    private async Task<ListObjectsV2Response?> ListPageAsync(ListObjectsV2Request request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _client.ListObjectsV2Async(request, cancellationToken);
+        }
+        catch (AmazonS3Exception exception) when (exception.ErrorCode == "NoSuchBucket")
+        {
+            return null;
+        }
+    }
+
+    // SDK 以本地时间表示修改时间；没有时取 Unix 纪元，调用方据此视为很旧的对象。
+    private static DateTimeOffset ToUtc(DateTime? time) =>
+        time is { } value ? new DateTimeOffset(value.ToUniversalTime(), TimeSpan.Zero) : DateTimeOffset.UnixEpoch;
 
     /// <summary>
     /// 生成 IM 实现端使用的预签名 GET 链接，有效期为配置值。不检查对象是否存在。

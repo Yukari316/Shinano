@@ -1,0 +1,99 @@
+using System.Globalization;
+using System.Net;
+using System.Text.RegularExpressions;
+using Shinano.Plugin.ImageSearch.Models;
+
+namespace Shinano.Plugin.ImageSearch.Parsing;
+
+/// <summary>
+/// 解析经图源服务转发的 IQDB 结果页（HTML）。每条结果是一个 <c>&lt;table&gt;</c>，含作品链接、站点名、
+/// 尺寸与分级标注（Safe/Ero/Explicit）和「NN% similarity」。高负载时页面只有排队提示与读取失败，没有结果表格。
+/// </summary>
+public static partial class IqdbParser
+{
+    private const string YOUR_IMAGE   = "Your image";
+    private const string NO_MATCHES   = "No relevant matches";
+    private const string EXPLICIT     = "Explicit";
+    private const string IQDB_NAME    = "IQDB";
+    private const int    DETAIL_CHARS = 200;
+
+    /// <summary>解析结果页，按相似度从高到低排列；没有结果表格且不是「无匹配」页时视为失败。</summary>
+    public static SearchResult Parse(GatewayResponse response)
+    {
+        switch (response.Outcome)
+        {
+            case GatewayOutcome.Unauthorized or GatewayOutcome.Unconfigured:
+                return SearchResult.Of(SearchStatus.Unconfigured, response.Body);
+            case GatewayOutcome.Failed:
+                return SearchResult.Of(SearchStatus.Failed, response.Body);
+        }
+
+        if (response.StatusCode != (int)HttpStatusCode.OK) return SearchResult.Of(SearchStatus.Failed, $"HTTP {response.StatusCode}");
+
+        List<SearchHit> hits = [];
+        foreach (Match table in Table().Matches(response.Body))
+        {
+            string content = table.Groups["content"].Value;
+            if (content.Contains(YOUR_IMAGE, StringComparison.Ordinal)) continue;
+            if (ToHit(content) is { } hit) hits.Add(hit);
+        }
+
+        if (hits.Count > 0)
+            return new SearchResult
+            {
+                Status = SearchStatus.Ok,
+                Hits   = [.. hits.OrderByDescending(hit => hit.Similarity)]
+            };
+
+        return response.Body.Contains(NO_MATCHES, StringComparison.Ordinal)
+            ? new SearchResult { Status = SearchStatus.Ok }
+            : SearchResult.Of(SearchStatus.Failed, Summary(response.Body));
+    }
+
+    private static SearchHit? ToHit(string table)
+    {
+        if (Link().Match(table) is not { Success: true } link
+         || Similarity().Match(table) is not { Success: true } similarity)
+            return null;
+
+        string url = WebUtility.HtmlDecode(link.Groups["url"].Value);
+        if (url.StartsWith("//", StringComparison.Ordinal)) url = "https:" + url;
+        SourceRef? source = SourceLinks.Parse(url);
+        string rating = Rating().Match(table).Groups["rating"].Value;
+        return new SearchHit
+        {
+            Engine     = SearchEngine.Iqdb,
+            Similarity = double.Parse(similarity.Groups["value"].Value, CultureInfo.InvariantCulture),
+            SourceName = Service().Match(table) is { Success: true } service ? service.Groups["name"].Value.Trim() : IQDB_NAME,
+            Kind       = HitKind.Illustration,
+            Adult      = rating == EXPLICIT,
+            WorkId     = source?.Id,
+            Sources    = source is null ? [] : [source]
+        };
+    }
+
+    // 失败页只保留可读文字的开头，用于日志。
+    private static string Summary(string html) =>
+        string.Concat(Whitespace().Replace(Tag().Replace(html, " "), " ").Trim().Take(DETAIL_CHARS));
+
+    [GeneratedRegex(@"<table>(?<content>.*?)</table>", RegexOptions.Singleline)]
+    private static partial Regex Table();
+
+    [GeneratedRegex(@"<td class='image'><a href=""(?<url>[^""]+)""")]
+    private static partial Regex Link();
+
+    [GeneratedRegex(@"(?<value>\d+(?:\.\d+)?)% similarity")]
+    private static partial Regex Similarity();
+
+    [GeneratedRegex(@"\[(?<rating>[A-Za-z]+)\]")]
+    private static partial Regex Rating();
+
+    [GeneratedRegex(@"class=""service-icon"">(?<name>[^<]+)")]
+    private static partial Regex Service();
+
+    [GeneratedRegex("<[^>]+>")]
+    private static partial Regex Tag();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
+}
