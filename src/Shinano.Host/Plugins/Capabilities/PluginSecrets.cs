@@ -7,7 +7,7 @@ namespace Shinano.Host.Plugins.Capabilities;
 /// 插件机密文件 <c>&lt;部署数据目录&gt;/secrets/&lt;plugin-id&gt;.json</c> 的读写。文件不存在时为默认值；
 /// 写入时先写临时文件再替换，避免中断留下半个文件。
 /// </summary>
-internal sealed class PluginSecrets<T> : IPluginSecrets<T> where T : class, new()
+internal sealed class PluginSecrets<T> : IPluginSecrets<T>, IPluginSecretsHolder where T : class, new()
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -28,6 +28,13 @@ internal sealed class PluginSecrets<T> : IPluginSecrets<T> where T : class, new(
 
     /// <inheritdoc />
     public T Value => _value;
+
+    /// <inheritdoc />
+    public object Current => _value;
+
+    /// <inheritdoc />
+    // SAFE: 面板只按声明的机密类型构造替换值。
+    public Task SaveAsync(object value, CancellationToken cancellationToken) => SaveAsync((T)value, cancellationToken);
 
     /// <inheritdoc />
     public async Task SaveAsync(T value, CancellationToken cancellationToken)

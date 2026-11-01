@@ -261,6 +261,7 @@ public sealed class PluginRuntime : IDisposable
                     SortOrder   = plugin.SortOrder,
                     Error       = plugin.Error,
                     HasConfig   = plugin.ConfigSchema is not null,
+                    HasSecrets  = plugin.Context?.SecretsType is not null,
                     PageTitle   = IsActive(plugin) ? plugin.Context?.PanelHost.Title : null,
                     PageEntry   = IsActive(plugin) ? plugin.Context?.PanelHost.Entry : null,
                     CommandTypes =
@@ -315,6 +316,47 @@ public sealed class PluginRuntime : IDisposable
 
             await context.SaveConfigAsync(type, config, cancellationToken);
             _logger.LogInformation("插件 {PluginId} 的配置已更新", pluginId);
+            return [];
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>返回插件机密各项的状态（不含值）；插件不存在或未声明机密类型时返回 null。</summary>
+    /// <exception cref="JsonException">机密文件内容与机密类型不兼容。</exception>
+    public async Task<IReadOnlyList<PluginSecretField>?> GetSecretsAsync(string pluginId, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Find(pluginId) is not { Context: { SecretsType: { } type } context }) return null;
+
+            return PluginSecretsSchema.Describe(type, context.SecretsHolder(type).Current);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>校验并写入插件机密，插件随即读到新值。日志只记录修改的项名。</summary>
+    /// <returns>校验错误；成功时为空列表；插件不存在或未声明机密类型时返回 null。</returns>
+    /// <exception cref="JsonException">机密文件内容与机密类型不兼容。</exception>
+    public async Task<IReadOnlyList<string>?> SaveSecretsAsync(string pluginId, JsonObject changes, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Find(pluginId) is not { Context: { SecretsType: { } type } context }) return null;
+
+            IPluginSecretsHolder holder = context.SecretsHolder(type);
+            object? secrets = PluginSecretsSchema.Apply(type, holder.Current, changes, out IReadOnlyList<string> errors);
+            if (secrets is null) return errors;
+
+            await holder.SaveAsync(secrets, cancellationToken);
+            _logger.LogInformation("插件 {PluginId} 的机密已更新：{Keys}", pluginId, string.Join("、", changes.Select(change => change.Key)));
             return [];
         }
         finally
@@ -409,7 +451,8 @@ public sealed class PluginRuntime : IDisposable
             instance.ConfigureServices(builder);
             PluginPanelRegistration panel = new();
             instance.ConfigurePanel(panel);
-            pluginContext.ConfigType = panel.ConfigType;
+            pluginContext.ConfigType  = panel.ConfigType;
+            pluginContext.SecretsType = panel.SecretsType;
 
             plugin.Assembly     = assembly;
             plugin.Instance     = instance;

@@ -50,6 +50,7 @@ export interface PluginSnapshot {
   sortOrder: number
   error: string | null
   hasConfig: boolean
+  hasSecrets: boolean
   pageTitle: string | null
   pageEntry: string | null
   commandTypes: PluginCommandType[]
@@ -144,6 +145,15 @@ export interface HostConfigField {
   maximum: number | null
   options: string[]
   optional: boolean
+}
+
+/** 插件机密表单中的一项；不含机密的值。 */
+export interface PluginSecretField {
+  key: string
+  label: string
+  description: string
+  editable: boolean
+  configured: boolean
 }
 
 export interface HostConfigEntry {

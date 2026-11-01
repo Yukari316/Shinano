@@ -48,6 +48,8 @@ public static class ApiRoutes
         plugins.MapPut("/order", PluginEndpoints.OrderAsync);
         plugins.MapGet("/{id}/config", PluginEndpoints.GetConfigAsync);
         plugins.MapPut("/{id}/config", PluginEndpoints.SaveConfigAsync);
+        plugins.MapGet("/{id}/secrets", PluginEndpoints.GetSecretsAsync);
+        plugins.MapPut("/{id}/secrets", PluginEndpoints.SaveSecretsAsync);
         app.MapGet($"{PLUGIN_WEB_PREFIX}/{{id}}/{{**path}}", PluginEndpoints.ServeWebFile).RequireAuthorization();
 
         RouteGroupBuilder stats = api.MapGroup("/stats");
@@ -62,7 +64,7 @@ public static class ApiRoutes
         logs.MapGet("/files/{name}", LogEndpoints.ReadFileAsync);
 
         api.MapGet("/config", ConfigEndpoints.Read);
-        api.MapPut("/config", ConfigEndpoints.Save);
+        api.MapPut("/config", ConfigEndpoints.SaveAsync);
 
         // 会话 Cookie 为 SameSite=Strict，跨站请求不会携带会话，上传接口因此不另设防伪令牌。
         RouteGroupBuilder appearance = api.MapGroup("/appearance");

@@ -27,6 +27,9 @@ public sealed class PluginSnapshot
     /// <summary>是否声明了配置表单。</summary>
     public required bool HasConfig { get; init; }
 
+    /// <summary>是否声明了机密类型（插件页显示机密表单）。</summary>
+    public required bool HasSecrets { get; init; }
+
     /// <summary>启用中的专有页面标题；没有时为 null。</summary>
     public string? PageTitle { get; init; }
 

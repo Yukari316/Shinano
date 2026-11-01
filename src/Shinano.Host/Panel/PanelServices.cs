@@ -13,6 +13,7 @@ public static class PanelServices
         services.AddSingleton<LocalConfigFile>();
         services.AddSingleton<PanelTokenStore>();
         services.AddSingleton<LoginThrottle>();
+        services.AddSingleton<HostConfigConnectionCheck>();
         services.AddSingleton<HostConfigEditor>();
         services.AddSingleton<AppearanceStore>();
         services.AddSingleton(sp => new PluginEndpointDataSource(sp));

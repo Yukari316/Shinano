@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, describeError } from '../api'
 import PageFooter from '../components/PageFooter.vue'
+import SecretInput from '../components/SecretInput.vue'
+import SecretStatus from '../components/SecretStatus.vue'
 import { openRestartDialog } from '../restart'
 import type { HostConfigEntry } from '../types'
 
@@ -24,8 +26,13 @@ const router = useRouter()
 const entries = ref<HostConfigEntry[]>([])
 // 编辑中的值：整数列表以换行分隔的文本编辑，保存时再转换。
 const drafts = ref<Record<string, string | number | boolean | null>>({})
+// 敏感项只写：输入框从空开始，留空表示不修改；可选项可以标记清除。
+const secretDrafts = ref<Record<string, string>>({})
+const secretClears = ref<Record<string, boolean>>({})
 const error = ref('')
 const saved = ref(false)
+const notes = ref<string[]>([])
+const saving = ref(false)
 const newToken = ref<string | null>(null)
 const confirmDialog = ref<HTMLDialogElement | null>(null)
 
@@ -57,16 +64,28 @@ async function load(): Promise<void> {
         .filter((entry) => entry.field.kind !== 'Secret')
         .map((entry) => [keyOf(entry), draftOf(entry)])
     )
+    resetSecrets()
   } catch (e) {
     error.value = describeError(e)
   }
+}
+
+function resetSecrets(): void {
+  const secrets = entries.value.filter((entry) => entry.field.kind === 'Secret')
+  secretDrafts.value = Object.fromEntries(secrets.map((entry) => [keyOf(entry), '']))
+  secretClears.value = Object.fromEntries(secrets.map((entry) => [keyOf(entry), false]))
 }
 
 // 只提交修改过的配置项；未提交的项在本地配置文件中保持不变。
 function changes(): Record<string, Record<string, unknown>> {
   const result: Record<string, Record<string, unknown>> = {}
   for (const entry of entries.value) {
-    if (entry.field.kind === 'Secret') continue
+    if (entry.field.kind === 'Secret') {
+      const key = keyOf(entry)
+      const secret = secretClears.value[key] ? null : secretDrafts.value[key] || undefined
+      if (secret !== undefined) result[entry.field.section] = { ...result[entry.field.section], [entry.field.key]: secret }
+      continue
+    }
     let value: unknown = drafts.value[keyOf(entry)]
     if (entry.field.kind === 'IntegerList') {
       value = String(value ?? '')
@@ -84,15 +103,24 @@ const pendingCount = computed(() =>
   Object.values(changes()).reduce((sum, section) => sum + Object.keys(section).length, 0)
 )
 
+// 涉及数据库、LLBot、RustFS 或证书的修改由宿主先实际连接检查，可能需要几秒。
+// 提交后无论成败都清空机密输入，机密不在页面中停留；其他未保存的修改保留以便更正。
 async function save(): Promise<void> {
   error.value = ''
   saved.value = false
+  notes.value = []
+  saving.value = true
+  const body = changes()
+  resetSecrets()
   try {
-    await api.put('/api/config', changes())
+    const result = await api.put<{ notes: string[] }>('/api/config', body)
+    notes.value = result.notes
     saved.value = true
     await load()
   } catch (e) {
     error.value = describeError(e)
+  } finally {
+    saving.value = false
   }
 }
 
@@ -120,10 +148,21 @@ async function finishTokenChange(): Promise<void> {
           <h2 class="card-title">{{ SECTION_TITLES[section] ?? section }}</h2>
           <div class="grid gap-x-8 xl:grid-cols-2">
             <fieldset v-for="entry in items" :key="keyOf(entry)" class="fieldset content-start">
-              <legend class="fieldset-legend">{{ entry.field.label }}</legend>
-              <span v-if="entry.field.kind === 'Secret'" class="badge" :class="entry.value ? 'badge-success' : 'badge-warning'">
-                {{ entry.value ? '已配置' : '未配置' }}
-              </span>
+              <legend class="fieldset-legend">
+                {{ entry.field.label }}
+                <SecretStatus
+                  v-if="entry.field.kind === 'Secret'"
+                  v-model:cleared="secretClears[keyOf(entry)]"
+                  :configured="Boolean(entry.value)"
+                  :clearable="entry.field.optional"
+                />
+              </legend>
+              <SecretInput
+                v-if="entry.field.kind === 'Secret'"
+                v-model="secretDrafts[keyOf(entry)]"
+                :configured="Boolean(entry.value)"
+                :cleared="Boolean(secretClears[keyOf(entry)])"
+              />
               <select v-else-if="entry.field.kind === 'Choice'" v-model="drafts[keyOf(entry)]" class="select w-full max-w-md">
                 <option v-for="option in entry.field.options" :key="option" :value="option">{{ option }}</option>
               </select>
@@ -154,13 +193,16 @@ async function finishTokenChange(): Promise<void> {
 
     <PageFooter>
       <p class="min-w-0 flex-1 text-sm">
-        <span v-if="error" role="alert" class="text-error-strong">{{ error }}</span>
+        <span v-if="error" role="alert" class="text-error-strong whitespace-pre-line">{{ error }}</span>
+        <span v-else-if="saving">正在检查连接并保存…</span>
         <span v-else-if="pendingCount > 0">{{ pendingCount }} 项未保存的修改</span>
-        <span v-else-if="saved" role="status" class="text-success-strong">已保存到本地配置文件，重启后生效</span>
-        <span v-else class="opacity-70">宿主配置只在启动时读取，保存后需要重启生效；敏感配置只能在本地配置文件中修改。</span>
+        <span v-else-if="saved" role="status" class="text-success-strong">
+          已保存到本地配置文件，重启后生效<template v-for="note in notes" :key="note">；{{ note }}</template>
+        </span>
+        <span v-else class="opacity-70">宿主配置只在启动时读取，保存后需要重启生效；修改数据库、LLBot、RustFS 或证书时先实际连接检查，通过才保存。</span>
       </p>
       <button v-if="saved && pendingCount === 0" type="button" class="btn btn-warning" @click="openRestartDialog">立即重启</button>
-      <button type="submit" form="host-config-form" class="btn btn-primary" :disabled="pendingCount === 0">保存</button>
+      <button type="submit" form="host-config-form" class="btn btn-primary" :disabled="pendingCount === 0 || saving">保存</button>
     </PageFooter>
 
     <section class="surface card">

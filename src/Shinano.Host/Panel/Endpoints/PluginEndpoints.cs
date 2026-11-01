@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.StaticFiles;
 using Shinano.Host.Plugins;
@@ -5,7 +6,7 @@ using Shinano.Host.Plugins.Models;
 
 namespace Shinano.Host.Panel.Endpoints;
 
-/// <summary>插件管理：状态、启停、顺序、配置表单与专有面板的页面资源。</summary>
+/// <summary>插件管理：状态、启停、顺序、配置表单、机密表单与专有面板的页面资源。</summary>
 internal static class PluginEndpoints
 {
     private static readonly FileExtensionContentTypeProvider ContentTypes = new();
@@ -46,6 +47,44 @@ internal static class PluginEndpoints
             { Count: 0 }             => Results.NoContent(),
             IReadOnlyList<string> errors => Results.Json(new { message = "配置无效", errors }, statusCode: StatusCodes.Status400BadRequest)
         };
+
+    internal static async Task<IResult> GetSecretsAsync(string id, PluginRuntime plugins, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await plugins.GetSecretsAsync(id, cancellationToken) is { } fields
+                ? Results.Ok(fields)
+                : PanelResults.Error(StatusCodes.Status404NotFound, "插件不存在或没有机密");
+        }
+        catch (JsonException)
+        {
+            return SecretsFileInvalid(id);
+        }
+    }
+
+    internal static async Task<IResult> SaveSecretsAsync(
+        string            id,
+        JsonObject        changes,
+        PluginRuntime     plugins,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await plugins.SaveSecretsAsync(id, changes, cancellationToken) switch
+            {
+                null                         => PanelResults.Error(StatusCodes.Status404NotFound, "插件不存在或没有机密"),
+                { Count: 0 }                 => Results.NoContent(),
+                IReadOnlyList<string> errors => Results.Json(new { message = "机密无效", errors }, statusCode: StatusCodes.Status400BadRequest)
+            };
+        }
+        catch (JsonException)
+        {
+            return SecretsFileInvalid(id);
+        }
+    }
+
+    private static IResult SecretsFileInvalid(string id) =>
+        PanelResults.Error(StatusCodes.Status409Conflict, $"机密文件 secrets/{id}.json 的内容与插件的机密类型不兼容，请检查或删除该文件");
 
     // 只在插件启用且登记了页面时提供 web/ 下的文件，路径不能越出 web/。
     internal static IResult ServeWebFile(string id, string path, PluginRuntime plugins)

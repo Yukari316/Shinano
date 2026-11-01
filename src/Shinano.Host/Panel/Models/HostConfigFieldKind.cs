@@ -18,6 +18,6 @@ public enum HostConfigFieldKind
     /// <summary>开关。</summary>
     Boolean,
 
-    /// <summary>敏感项：只显示是否已配置，面板不读取、不修改其值。</summary>
+    /// <summary>敏感项：只写，读取时只显示是否已配置，面板不回显其值。</summary>
     Secret
 }

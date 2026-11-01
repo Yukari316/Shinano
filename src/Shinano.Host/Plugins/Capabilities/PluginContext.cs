@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Shinano.Framework.Plugins;
 
 namespace Shinano.Host.Plugins.Capabilities;
@@ -11,8 +13,8 @@ internal sealed class PluginContext : IPluginInitializationContext
     private readonly PluginConfigStore    _configStore;
     private readonly string               _secretsPath;
     private readonly Lock                 _lock = new();
-    private          IPluginConfigHolder? _config;
-    private          object?              _secrets;
+    private          IPluginConfigHolder?  _config;
+    private          IPluginSecretsHolder? _secrets;
 
     /// <summary>创建能力集合。</summary>
     public PluginContext(
@@ -124,14 +126,40 @@ internal sealed class PluginContext : IPluginInitializationContext
         }
     }
 
+    /// <summary>插件在 ConfigurePanel 中声明的机密类型；未声明时为 null。</summary>
+    public Type? SecretsType { get; set; }
+
     /// <inheritdoc />
     public IPluginSecrets<T> Secrets<T>() where T : class, new()
     {
+        if (SecretsType is not null && SecretsType != typeof(T))
+            throw new InvalidOperationException($"插件 {PluginId} 在 ConfigurePanel 中声明的机密类型是 {SecretsType.Name}，不是 {typeof(T).Name}");
+
         lock (_lock)
         {
             _secrets ??= new PluginSecrets<T>(_secretsPath);
             return _secrets as IPluginSecrets<T>
                    ?? throw new InvalidOperationException($"插件 {PluginId} 已使用其他机密类型");
+        }
+    }
+
+    /// <summary>按声明的机密类型取得机密，与插件经 <see cref="Secrets{T}" /> 取得的是同一实例。</summary>
+    /// <exception cref="System.Text.Json.JsonException">机密文件内容与机密类型不兼容。</exception>
+    public IPluginSecretsHolder SecretsHolder(Type secretsType)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                // SAFE: PluginSecrets<T> 有接受文件路径的公共构造函数，且实现 IPluginSecretsHolder。
+                _secrets ??= (IPluginSecretsHolder)Activator.CreateInstance(typeof(PluginSecrets<>).MakeGenericType(secretsType), _secretsPath)!;
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
+
+            return _secrets;
         }
     }
 }

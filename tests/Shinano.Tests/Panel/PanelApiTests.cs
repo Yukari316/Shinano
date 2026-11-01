@@ -98,6 +98,42 @@ public sealed class PanelApiTests
     }
 
     [Fact]
+    public async Task PluginSecrets_AreWriteOnly_AndAppliedImmediately()
+    {
+        const string SECRET = "s3cret-value";
+        await using PanelHarness panel = await StartAsync();
+        using HttpClient client = await LoggedInClientAsync(panel);
+        Assert.Null(await panel.Plugins.Runtime.EnableAsync(PLUGIN_A, Token));
+
+        JsonArray? fields = await client.GetFromJsonAsync<JsonArray>($"/api/plugins/{PLUGIN_A}/secrets", Token);
+        Assert.Equal(["ApiKey", "Session"], fields?.Select(field => field?["key"]?.GetValue<string>()));
+        Assert.Equal("密钥", fields?[0]?["label"]?.GetValue<string>());
+        Assert.False(fields?[0]?["configured"]?.GetValue<bool>());
+        Assert.False(fields?[1]?["editable"]?.GetValue<bool>());
+
+        HttpResponseMessage invalid = await client.PutAsJsonAsync(
+            $"/api/plugins/{PLUGIN_A}/secrets",
+            new JsonObject { ["Session"] = "x", ["ApiKey"] = "" },
+            Token);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Equal(2, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
+
+        HttpResponseMessage saved = await client.PutAsJsonAsync($"/api/plugins/{PLUGIN_A}/secrets", new JsonObject { ["ApiKey"] = SECRET }, Token);
+        Assert.Equal(HttpStatusCode.NoContent, saved.StatusCode);
+        string listed = await client.GetStringAsync($"/api/plugins/{PLUGIN_A}/secrets", Token);
+        Assert.DoesNotContain(SECRET, listed);
+        Assert.True(JsonNode.Parse(listed)?[0]?["configured"]?.GetValue<bool>());
+        await panel.Plugins.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "secret-a");
+        await panel.Plugins.ExpectReplyAsync($"secret-a={SECRET.Length}");
+
+        HttpResponseMessage cleared = await client.PutAsJsonAsync($"/api/plugins/{PLUGIN_A}/secrets", new JsonObject { ["ApiKey"] = null }, Token);
+        Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
+        await panel.Plugins.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "secret-a");
+        await panel.Plugins.ExpectReplyAsync("secret-a=0");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plugins/{PLUGIN_B}/secrets", Token)).StatusCode);
+    }
+
+    [Fact]
     public async Task PluginPanel_IsAvailableOnlyWhileEnabled()
     {
         await using PanelHarness panel = await StartAsync();
@@ -126,41 +162,63 @@ public sealed class PanelApiTests
     }
 
     [Fact]
-    public async Task HostConfig_HidesSecrets_ValidatesAndWritesLocalConfig()
+    public async Task HostConfig_SecretsAreWriteOnly_ValidatedAndWrittenToLocalConfig()
     {
+        const string PASSWORD = "pfx-password";
         await using PanelHarness panel = await StartAsync();
         using HttpClient client = await LoggedInClientAsync(panel);
 
         JsonArray? fields = await client.GetFromJsonAsync<JsonArray>("/api/config", Token);
-        JsonNode? token = fields?.Single(item => item?["field"]?["key"]?.GetValue<string>() == "Token");
-        Assert.True(token?["value"]?.GetValue<bool>());
+        Assert.DoesNotContain(fields ?? [], item => item?["field"]?["key"]?.GetValue<string>() == "Token");
         Assert.DoesNotContain(panel.Token, fields?.ToJsonString() ?? string.Empty);
 
         HttpResponseMessage invalid = await client.PutAsJsonAsync(
             "/api/config",
             new JsonObject
             {
-                ["LlBot"] = new JsonObject { ["Port"] = 70000 },
-                ["Web"]   = new JsonObject { ["Token"] = "x" }
+                ["LlBot"]    = new JsonObject { ["Port"] = 70000 },
+                ["Web"]      = new JsonObject { ["Token"] = "x" },
+                ["Database"] = new JsonObject { ["Dsn"] = null }
             },
             Token);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-        Assert.Equal(2, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
+        Assert.Equal(3, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
 
+        // 修改数据库 DSN 时先实际连接，连不上则不写入。
+        HttpResponseMessage unreachable = await client.PutAsJsonAsync(
+            "/api/config",
+            new JsonObject { ["Database"] = new JsonObject { ["Dsn"] = "postgres://user:pass@127.0.0.1:1/none" } },
+            Token);
+        Assert.Equal(HttpStatusCode.BadRequest, unreachable.StatusCode);
+        Assert.DoesNotContain("pass@", await unreachable.Content.ReadAsStringAsync(Token));
+
+        // 证书路径为空时证书密码不需要检查，可直接保存；保存后只报告已配置。
         HttpResponseMessage saved = await client.PutAsJsonAsync(
             "/api/config",
             new JsonObject
             {
-                ["LlBot"]      = new JsonObject { ["Port"] = 3015 },
-                ["Deployment"] = new JsonObject { ["SuperUsers"] = new JsonArray(1, 2) }
+                ["Logging"]    = new JsonObject { ["MinimumLevel"] = "Warning" },
+                ["Deployment"] = new JsonObject { ["SuperUsers"] = new JsonArray(1, 2) },
+                ["Monitor"]    = new JsonObject { ["CertificatePassword"] = PASSWORD }
             },
             Token);
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        string listed = await client.GetStringAsync("/api/config", Token);
+        Assert.DoesNotContain(PASSWORD, listed);
 
         JsonNode? local = JsonNode.Parse(await File.ReadAllTextAsync(panel.LocalConfigPath, Token));
-        Assert.Equal(3015, local?["Shinano"]?["LlBot"]?["Port"]?.GetValue<int>());
+        Assert.Equal("Warning", local?["Shinano"]?["Logging"]?["MinimumLevel"]?.GetValue<string>());
         Assert.Equal(2, local?["Shinano"]?["Deployment"]?["SuperUsers"]?.AsArray().Count);
+        Assert.Equal(PASSWORD, local?["Shinano"]?["Monitor"]?["CertificatePassword"]?.GetValue<string>());
         Assert.Equal(panel.Token, local?["Shinano"]?["Web"]?["Token"]?.GetValue<string>());
+
+        HttpResponseMessage cleared = await client.PutAsJsonAsync(
+            "/api/config",
+            new JsonObject { ["Monitor"] = new JsonObject { ["CertificatePassword"] = null } },
+            Token);
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        local = JsonNode.Parse(await File.ReadAllTextAsync(panel.LocalConfigPath, Token));
+        Assert.Null(local?["Shinano"]?["Monitor"]?["CertificatePassword"]);
     }
 
     [Fact]

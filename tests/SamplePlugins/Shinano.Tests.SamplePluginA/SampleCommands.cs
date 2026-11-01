@@ -29,6 +29,11 @@ public sealed class SampleCommands
     public async ValueTask ConfigAsync(MessageReceivedEvent e) =>
         await e.ReplyAsync(_context.Config<SampleConfig>().Value.Greeting);
 
+    /// <summary>回复机密密钥的长度，用于验证面板保存后插件立即读到新机密。</summary>
+    [Command(Expressions = ["secret-a"])]
+    public async ValueTask SecretAsync(MessageReceivedEvent e) =>
+        await e.ReplyAsync($"secret-a={_context.Secrets<SampleSecrets>().Value.ApiKey?.Length ?? 0}");
+
     /// <summary>回复初始化次数。</summary>
     [Command(Expressions = ["init-count-a"])]
     public async ValueTask InitCountAsync(MessageReceivedEvent e) =>

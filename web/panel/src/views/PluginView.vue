@@ -3,6 +3,7 @@ import { createPluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, shallowRef, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, describeError, redirectToLogin } from '../api'
+import PluginSecretsCard from '../components/PluginSecretsCard.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { pageTitle } from '../pageTitle'
 import { plugins, refreshPlugins } from '../plugins'
@@ -116,6 +117,7 @@ async function save(): Promise<void> {
         <p class="text-sm opacity-70">无可配置项</p>
       </div>
     </section>
+    <PluginSecretsCard v-if="plugin.hasSecrets" :plugin-id="plugin.id" />
     <section v-if="plugin.pageTitle" class="surface card flex-1">
       <div class="card-body">
         <h2 class="card-title">{{ plugin.pageTitle }}</h2>
