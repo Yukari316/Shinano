@@ -53,19 +53,19 @@ public sealed class ResultSender : IDisposable
     }
 
     /// <summary>发送插画结果：卡片，然后原图；R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。</summary>
-    public async Task SendIllustrationAsync(MessageReceivedEvent e, SearchHit hit, bool lowSimilarity, CancellationToken cancellationToken)
+    public async Task SendIllustrationAsync(MessageReceivedEvent e, SearchHit hit, double threshold, bool lowSimilarity, CancellationToken cancellationToken)
     {
         ImageResolution resolution = hit.Adult ? ImageResolution.None : await _resolver.ResolveAsync(hit.Sources, cancellationToken);
-        await SendCardAsync(e, SearchCards.Illustration(hit, resolution, lowSimilarity));
+        await SendCardAsync(e, SearchCards.Illustration(hit, resolution, threshold, lowSimilarity));
         if (hit.Adult || resolution.Adult) await SendAdultImageAsync(e, cancellationToken);
         else if (resolution.Image is { } image) await SendOriginalAsync(e, image, cancellationToken);
         else if (resolution.Deleted) await e.ReplyAsync(new MessageBody(ReplyTexts.DELETED));
     }
 
     /// <summary>发送番剧结果：卡片，再附 trace.moe 的画面预览（成人番以替代图代替）；预览取不到时只记录日志。</summary>
-    public async Task SendAnimeAsync(MessageReceivedEvent e, SearchHit hit, bool lowSimilarity, CancellationToken cancellationToken)
+    public async Task SendAnimeAsync(MessageReceivedEvent e, SearchHit hit, double threshold, bool lowSimilarity, CancellationToken cancellationToken)
     {
-        await SendCardAsync(e, SearchCards.Anime(hit, lowSimilarity));
+        await SendCardAsync(e, SearchCards.Anime(hit, threshold, lowSimilarity));
         if (hit.Adult)
         {
             await SendAdultImageAsync(e, cancellationToken);
@@ -103,17 +103,17 @@ public sealed class ResultSender : IDisposable
     /// <inheritdoc />
     public void Dispose() => _http.Dispose();
 
-    private async Task SendCardAsync(MessageReceivedEvent e, TextImageDocument card)
+    private async Task SendCardAsync(MessageReceivedEvent e, InfoCard card)
     {
         MessageBody body;
         try
         {
-            body = new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(_context.Images.RenderTextImage(card)));
+            body = new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(_context.Images.RenderInfo(card)));
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "绘制搜图卡片失败，改发文字");
-            body = new MessageBody(string.Join('\n', [card.Title, .. card.Rows.Select(row => row.Label is null ? row.Text : $"{row.Label}：{row.Text}")]));
+            body = new MessageBody(SearchCards.ToText(card));
         }
 
         SendMessageResult result = await e.ReplyAsync(body);

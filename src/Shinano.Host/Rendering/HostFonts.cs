@@ -5,7 +5,8 @@ using SkiaSharp;
 namespace Shinano.Host.Rendering;
 
 /// <summary>
-/// 宿主的公共字体，随宿主交付于程序目录的 <c>Resource/Fonts</c>：Noto Sans SC 常规与粗体（OFL）、Twemoji Mozilla（图形 CC-BY 4.0）。
+/// 宿主的公共字体，随宿主交付于程序目录的 <c>Resource/Fonts</c>：Noto Sans SC 常规与粗体、Space Grotesk 中粗与粗体、
+/// JetBrains Mono（均为 OFL）、Twemoji Mozilla（图形 CC-BY 4.0）。使用静态字重文件：SkiaSharp 直接加载可变字体时只取默认字重。
 /// 选用 COLRv0 格式的 Twemoji：当前 Noto Color Emoji（COLRv1 + SVG）在 Windows 上经 SkiaSharp 绘制为空白。
 /// 字体缺失时不阻止宿主启动，访问时抛出异常，由调用方改用文字。
 /// </summary>
@@ -17,10 +18,16 @@ public sealed class HostFonts : IPluginFonts, IDisposable
     private const string FONTS_DIRECTORY = "Fonts";
     private const string REGULAR_FILE    = "NotoSansSC-Regular.otf";
     private const string BOLD_FILE       = "NotoSansSC-Bold.otf";
+    private const string LATIN_FILE      = "SpaceGrotesk-Medium.ttf";
+    private const string LATIN_BOLD_FILE = "SpaceGrotesk-Bold.ttf";
+    private const string MONO_FILE       = "JetBrainsMono-Regular.ttf";
     private const string EMOJI_FILE      = "TwemojiMozilla.ttf";
 
     private readonly SKTypeface?  _regular;
     private readonly SKTypeface?  _bold;
+    private readonly SKTypeface?  _latin;
+    private readonly SKTypeface?  _latinBold;
+    private readonly SKTypeface?  _mono;
     private readonly SKTypeface?  _emoji;
     private readonly TextPainter? _painter;
 
@@ -29,14 +36,24 @@ public sealed class HostFonts : IPluginFonts, IDisposable
     public HostFonts(string baseDirectory)
     {
         string directory = Path.Combine(baseDirectory, RESOURCE_DIRECTORY, FONTS_DIRECTORY);
-        _regular = Load(Path.Combine(directory, REGULAR_FILE));
-        _bold    = Load(Path.Combine(directory, BOLD_FILE));
-        _emoji   = Load(Path.Combine(directory, EMOJI_FILE));
-        string[] missing = [.. new[] { (REGULAR_FILE, _regular), (BOLD_FILE, _bold), (EMOJI_FILE, _emoji) }
-                               .Where(item => item.Item2 is null)
-                               .Select(item => item.Item1)];
+        _regular   = Load(Path.Combine(directory, REGULAR_FILE));
+        _bold      = Load(Path.Combine(directory, BOLD_FILE));
+        _latin     = Load(Path.Combine(directory, LATIN_FILE));
+        _latinBold = Load(Path.Combine(directory, LATIN_BOLD_FILE));
+        _mono      = Load(Path.Combine(directory, MONO_FILE));
+        _emoji     = Load(Path.Combine(directory, EMOJI_FILE));
+        string[] missing =
+        [
+            .. new[]
+               {
+                   (REGULAR_FILE, _regular), (BOLD_FILE, _bold), (LATIN_FILE, _latin), (LATIN_BOLD_FILE, _latinBold),
+                   (MONO_FILE, _mono), (EMOJI_FILE, _emoji)
+               }
+               .Where(item => item.Item2 is null)
+               .Select(item => item.Item1)
+        ];
         if (missing.Length > 0) LoadError = $"无法加载 {directory} 中的字体：{string.Join("、", missing)}";
-        else if (_emoji is not null) _painter = new TextPainter(_emoji);
+        else if (_regular is not null && _emoji is not null) _painter = new TextPainter([_regular, _emoji]);
     }
 
     /// <summary>字体加载失败的原因；全部加载成功时为 null。</summary>
@@ -49,6 +66,15 @@ public sealed class HostFonts : IPluginFonts, IDisposable
     public SKTypeface Bold => _bold ?? throw Unavailable();
 
     /// <inheritdoc />
+    public SKTypeface Latin => _latin ?? throw Unavailable();
+
+    /// <inheritdoc />
+    public SKTypeface LatinBold => _latinBold ?? throw Unavailable();
+
+    /// <inheritdoc />
+    public SKTypeface Mono => _mono ?? throw Unavailable();
+
+    /// <inheritdoc />
     public SKTypeface Emoji => _emoji ?? throw Unavailable();
 
     /// <inheritdoc />
@@ -59,6 +85,9 @@ public sealed class HostFonts : IPluginFonts, IDisposable
     {
         _regular?.Dispose();
         _bold?.Dispose();
+        _latin?.Dispose();
+        _latinBold?.Dispose();
+        _mono?.Dispose();
         _emoji?.Dispose();
     }
 

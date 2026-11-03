@@ -11,6 +11,9 @@ public sealed class NotificationCard
     /// <summary>标题。</summary>
     public required string Title { get; init; }
 
+    /// <summary>通知种类的英文代号，显示在卡片页脚左侧，如 <c>DB-OFFLINE</c>。</summary>
+    public required string Code { get; init; }
+
     /// <summary>原因；恢复类通知没有原因时为 null。</summary>
     public string? Cause { get; init; }
 

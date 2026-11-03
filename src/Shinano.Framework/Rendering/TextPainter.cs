@@ -6,21 +6,21 @@ using SkiaSharp.HarfBuzz;
 namespace Shinano.Framework.Rendering;
 
 /// <summary>
-/// 文字的测量、换行与绘制。按字素（用户可见字符）在主字体与 emoji 字体之间回退：主字体缺字形的字素改用 emoji 字体；
-/// 每段同字体的文字经 HarfBuzz 整形后绘制，ZWJ 组合的 emoji 可以合成为一个图形。
-/// 线程安全：不持有可变状态，每次调用使用独立的字体对象与整形器。
+/// 文字的测量、换行与绘制。按字素（用户可见字符）回退字体：主字体缺字形的字素依次改用回退字体中第一个有该字形的
+/// （如英文字体中的汉字改用中文字体，再缺的改用 emoji 字体）；每段同字体的文字经 HarfBuzz 整形后绘制，
+/// ZWJ 组合的 emoji 可以合成为一个图形。线程安全：不持有可变状态，每次调用使用独立的字体对象与整形器。
 /// </summary>
 public sealed class TextPainter
 {
     private const string ELLIPSIS = "…";
 
-    private readonly SKTypeface _emoji;
+    private readonly IReadOnlyList<SKTypeface> _fallbacks;
 
     /// <summary>创建绘制辅助。</summary>
-    /// <param name="emoji">主字体缺字形时使用的 emoji 字体。</param>
-    public TextPainter(SKTypeface emoji)
+    /// <param name="fallbacks">主字体缺字形时按顺序尝试的回退字体；都没有该字形时仍用最后一个。</param>
+    public TextPainter(IReadOnlyList<SKTypeface> fallbacks)
     {
-        _emoji = emoji;
+        _fallbacks = fallbacks;
     }
 
     /// <summary>测量一行文字的宽度，单位与 <paramref name="size" /> 相同。</summary>
@@ -111,7 +111,19 @@ public sealed class TextPainter
 
     private IEnumerable<(string Text, SKTypeface Typeface)> Runs(string text, SKTypeface typeface, float size)
     {
-        using SKFont primary = new(typeface, size);
+        List<(SKTypeface Typeface, SKFont Font)> candidates = [.. new[] { typeface }.Concat(_fallbacks).Select(face => (face, new SKFont(face, size)))];
+        try
+        {
+            return Split(text, typeface, candidates);
+        }
+        finally
+        {
+            foreach ((_, SKFont font) in candidates) font.Dispose();
+        }
+    }
+
+    private List<(string Text, SKTypeface Typeface)> Split(string text, SKTypeface typeface, IReadOnlyList<(SKTypeface Typeface, SKFont Font)> candidates)
+    {
         TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(text);
         StringBuilder current = new();
         SKTypeface? currentTypeface = null;
@@ -119,7 +131,10 @@ public sealed class TextPainter
         while (enumerator.MoveNext())
         {
             string element = enumerator.GetTextElement();
-            SKTypeface chosen = primary.ContainsGlyphs(element) ? typeface : _emoji;
+            // 空白沿用当前字体，避免英文词间的空格被切成单独一段改用其他字体。
+            SKTypeface chosen = string.IsNullOrWhiteSpace(element) && currentTypeface is not null
+                ? currentTypeface
+                : candidates.FirstOrDefault(candidate => candidate.Font.ContainsGlyphs(element)).Typeface ?? _fallbacks.LastOrDefault() ?? typeface;
             if (currentTypeface is not null && chosen != currentTypeface)
             {
                 runs.Add((current.ToString(), currentTypeface));

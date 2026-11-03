@@ -65,13 +65,13 @@ public sealed class HealthReactions : IHostedService
                 else _plugins.Resume();
                 TrackGap(ArchiveGapCause.DatabaseOffline, failing, current.Since);
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Error, "数据库不可用", current.Detail, "Bot 暂停响应全部功能")
-                    : Card(NotificationLevel.Normal, "数据库已恢复", null, "已恢复响应"));
+                    ? Card(NotificationLevel.Error, "DB-OFFLINE", "数据库不可用", current.Detail, "Bot 暂停响应全部功能")
+                    : Card(NotificationLevel.Normal, "DB-RECOVERED", "数据库已恢复", null, "已恢复响应"));
                 break;
             case HealthComponent.ObjectStorage:
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Warning, "RustFS 不可用", current.Detail, "媒体功能暂不可用")
-                    : Card(NotificationLevel.Normal, "RustFS 已恢复", null, "媒体功能已恢复"));
+                    ? Card(NotificationLevel.Warning, "RUSTFS-OFFLINE", "RustFS 不可用", current.Detail, "媒体功能暂不可用")
+                    : Card(NotificationLevel.Normal, "RUSTFS-RECOVERED", "RustFS 已恢复", null, "媒体功能已恢复"));
                 break;
             case HealthComponent.Bot:
                 TrackGap(ArchiveGapCause.BotDisconnected, failing, current.Since);
@@ -79,10 +79,11 @@ public sealed class HealthReactions : IHostedService
         }
     }
 
-    private static NotificationCard Card(NotificationLevel level, string title, string? cause, string impact) =>
+    private static NotificationCard Card(NotificationLevel level, string code, string title, string? cause, string impact) =>
         new()
         {
             Level  = level,
+            Code   = code,
             Title  = title,
             Cause  = string.IsNullOrWhiteSpace(cause) ? null : cause,
             Impact = impact

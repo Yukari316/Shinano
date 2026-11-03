@@ -18,12 +18,13 @@
     <PackageReference Include="SkiaSharp"/>
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies"/>
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux"/>
+    <PackageReference Include="Markdig"/>
   </ItemGroup>
 
   <ItemGroup>
     <!-- 内容根目录为程序启动目录，面板静态文件需要随构建输出。 -->
     <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest"/>
-    <!-- 通知卡片的字体与图标。 -->
+    <!-- 消息图片的字体与图标。 -->
     <None Update="Resource\**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 

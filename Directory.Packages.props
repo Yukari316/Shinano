@@ -17,6 +17,7 @@
         <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1"/>
         <PackageVersion Include="SkiaSharp.HarfBuzz" Version="4.153.1"/>
         <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.301"/>
+        <PackageVersion Include="Markdig" Version="1.5.1"/>
         <!-- Storage -->
         <PackageVersion Include="SqlSugarCore" Version="5.1.4.221"/>
         <PackageVersion Include="Npgsql" Version="10.0.3"/>

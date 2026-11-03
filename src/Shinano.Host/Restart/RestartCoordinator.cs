@@ -340,6 +340,7 @@ public sealed class RestartCoordinator : IDisposable
         new()
         {
             Level  = NotificationLevel.Warning,
+            Code   = "PLUGIN-ROLLBACK",
             Title  = "插件更新已回滚",
             Cause  = result.Reason ?? "未知",
             Impact = string.Join("；", result.Changes.Select(Describe))

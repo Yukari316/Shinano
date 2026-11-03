@@ -82,6 +82,7 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
                     new NotificationCard
                     {
                         Level  = NotificationLevel.Normal,
+                        Code   = "ARCHIVE-RECOVERED",
                         Title  = "聊天归档缓冲已恢复",
                         Impact = "已恢复归档"
                     });
@@ -94,6 +95,7 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
                 new NotificationCard
                 {
                     Level  = NotificationLevel.Warning,
+                    Code   = "ARCHIVE-BACKLOG",
                     Title  = "聊天归档缓冲已满",
                     Cause  = "归档处理跟不上消息量",
                     Impact = "新消息暂不归档，登记为归档缺口"

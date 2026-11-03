@@ -46,22 +46,24 @@ public sealed class QaListPage
         return new QaListPage([.. entries.Skip(offset).Take(pageSize)], number, count, entries.Count, offset);
     }
 
-    /// <summary>长图文档。</summary>
-    public TextImageDocument ToDocument() =>
+    /// <summary>列表卡片。</summary>
+    public ListCard ToCard() =>
         new()
         {
             Title    = TITLE,
-            Subtitle = $"第 {Number}/{Count} 页 · 共 {Total} 条",
-            Rows     = [.. Entries.Select((entry, index) => new TextImageRow
+            Subtitle = $"本群共 {Total} 条",
+            Page     = Number,
+            Pages    = Count,
+            Items    = [.. Entries.Select((entry, index) => new ListCardItem
             {
                 Index = _offset + index + 1,
                 Tag   = entry.MatchType == QaMatchType.Regex ? REGEX_TAG : null,
                 Text  = entry.Question
             })],
-            Footer = FOOTER
+            Hint = FOOTER
         };
 
-    /// <summary>长图无法绘制时代替发送的文字。</summary>
+    /// <summary>卡片无法绘制时代替发送的文字。</summary>
     public string ToText() =>
         string.Join(
             '\n',

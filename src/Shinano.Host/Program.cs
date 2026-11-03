@@ -7,6 +7,7 @@ using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Models;
 using Shinano.Host.Rendering;
+using Shinano.Host.Rendering.Models;
 using Shinano.Host.Restart;
 using Shinano.Host.Restart.Models;
 using Shinano.Host.Web;
@@ -103,11 +104,12 @@ builder.Services.AddSingleton<RestartCoordinator>();
 HostFonts fonts = new(AppContext.BaseDirectory);
 builder.Services.AddSingleton(fonts);
 builder.Services.AddSingleton<IPluginFonts>(fonts);
-builder.Services.AddSingleton<TextImageRenderer>();
+builder.Services.AddSingleton(builder.Bind<RenderingOptions>(RenderingOptions.SECTION_NAME));
+builder.Services.AddSingleton<CardRenderer>();
 builder.Services.AddSingleton(sp => new SuperUserNotifier(
                                   sp.GetRequiredService<BotAccessor>(),
                                   deployment,
-                                  sp.GetRequiredService<TextImageRenderer>(),
+                                  sp.GetRequiredService<CardRenderer>(),
                                   TimeProvider.System,
                                   sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
 builder.Services.AddSingleton<ArchiveGapTracker>();

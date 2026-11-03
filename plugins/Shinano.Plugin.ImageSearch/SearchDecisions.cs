@@ -52,12 +52,23 @@ public static class SearchDecisions
         SearchResult  primaryResult,
         SearchResult? fallbackResult)
     {
-        if (primary is not null && primary.Similarity >= primaryThreshold) return new SearchDecision { Hit = primary };
-        if (fallback is not null && fallback.Similarity >= fallbackThreshold) return new SearchDecision { Hit = fallback };
+        if (primary is not null && primary.Similarity >= primaryThreshold)
+            return new SearchDecision
+            {
+                Hit       = primary,
+                Threshold = primaryThreshold
+            };
+        if (fallback is not null && fallback.Similarity >= fallbackThreshold)
+            return new SearchDecision
+            {
+                Hit       = fallback,
+                Threshold = fallbackThreshold
+            };
         if (primary is not null)
             return new SearchDecision
             {
                 Hit           = primary,
+                Threshold     = primaryThreshold,
                 LowSimilarity = true
             };
 

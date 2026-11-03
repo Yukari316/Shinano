@@ -1,6 +1,7 @@
 using Shinano.Host.Bot.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel.Models;
+using Shinano.Host.Rendering.Models;
 using Shinano.Infrastructure.Storage.Models;
 using System.Text.Json.Nodes;
 
@@ -57,6 +58,7 @@ public sealed class HostConfigEditor
         Integer("Web", "Port", "面板端口", 1, MAX_PORT),
         Text("Web", "CertificatePath", "HTTPS 证书路径", "PFX 文件，相对路径基于部署数据目录；留空使用 HTTP", optional: true),
         Secret("Web", "CertificatePassword", "HTTPS 证书密码", optional: true),
+        Integer("Rendering", "Width", "消息图片宽度（像素）", RenderingOptions.MIN_WIDTH, RenderingOptions.MAX_WIDTH, "通知、列表等消息图片的输出宽度，高度随内容增长"),
         Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录"),
         Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
         Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次"),

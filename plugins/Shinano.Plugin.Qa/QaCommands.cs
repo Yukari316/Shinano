@@ -98,7 +98,7 @@ public sealed partial class QaCommands
     public ValueTask DeleteRegexAsync(MessageReceivedEvent e) =>
         DeleteAsync(e, QaMatchType.Regex, DELETE_REGEX_PREFIX);
 
-    /// <summary>看看有人问[页码]：以长图列出本群词条。</summary>
+    /// <summary>看看有人问[页码]：以列表卡片列出本群词条。</summary>
     [Command(Expressions = ["^看看有人问\\s*\\d*$"], MatchType = MatchType.Regex, SourceScope = MessageSourceScope.Group, Description = "列出有人问")]
     public async ValueTask ListAsync(MessageReceivedEvent e)
     {
@@ -120,7 +120,7 @@ public sealed partial class QaCommands
         MessageBody reply;
         try
         {
-            byte[] png = _context.Images.RenderTextImage(page.ToDocument());
+            byte[] png = _context.Images.RenderList(page.ToCard());
             reply = new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png));
         }
         catch (Exception exception)

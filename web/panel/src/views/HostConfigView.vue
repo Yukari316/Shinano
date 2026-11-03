@@ -17,6 +17,7 @@ const SECTION_TITLES: Record<string, string> = {
   ChatArchive: '聊天记录',
   Logging: '日志',
   Web: '管理面板',
+  Rendering: '消息图片',
   Plugins: '插件',
   Restart: '重启',
   Monitor: '监控与状态页'

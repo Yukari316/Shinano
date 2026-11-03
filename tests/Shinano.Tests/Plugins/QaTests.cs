@@ -110,8 +110,8 @@ public sealed class QaTests
 
         Assert.NotNull(second);
         Assert.Equal((2, 3, 7), (second.Number, second.Count, second.Total));
-        Assert.Equal([4, 5, 6], second.ToDocument().Rows.Select(row => row.Index ?? 0));
-        Assert.Equal(["RG", null, "RG"], second.ToDocument().Rows.Select(row => row.Tag));
+        Assert.Equal([4, 5, 6], second.ToCard().Items.Select(item => item.Index));
+        Assert.Equal(["RG", null, "RG"], second.ToCard().Items.Select(item => item.Tag));
         Assert.Null(QaListPage.Take(entries, 4, 3));
         Assert.Null(QaListPage.Take(entries, 0, 3));
     }

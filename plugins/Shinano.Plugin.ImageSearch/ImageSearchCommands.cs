@@ -153,10 +153,10 @@ public sealed class ImageSearchCommands
                 await e.ReplyAsync(new MessageBody(decision.Reply));
                 break;
             case { Kind: HitKind.Anime } anime:
-                await _sender.SendAnimeAsync(e, anime, decision.LowSimilarity, CancellationToken.None);
+                await _sender.SendAnimeAsync(e, anime, decision.Threshold, decision.LowSimilarity, CancellationToken.None);
                 break;
             case { } illustration:
-                await _sender.SendIllustrationAsync(e, illustration, decision.LowSimilarity, CancellationToken.None);
+                await _sender.SendIllustrationAsync(e, illustration, decision.Threshold, decision.LowSimilarity, CancellationToken.None);
                 break;
         }
     }

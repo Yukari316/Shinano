@@ -38,7 +38,7 @@ public sealed class PluginRuntime : IDisposable
     private readonly PluginRuntimeSettings  _settings;
     private readonly PluginEndpointDataSource _endpoints;
     private readonly HostFonts              _fonts;
-    private readonly TextImageRenderer      _images;
+    private readonly CardRenderer           _images;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -56,7 +56,7 @@ public sealed class PluginRuntime : IDisposable
         PluginRuntimeSettings    settings,
         PluginEndpointDataSource endpoints,
         HostFonts                fonts,
-        TextImageRenderer        images,
+        CardRenderer             images,
         ILoggerFactory           loggerFactory)
     {
         _infrastructure = infrastructure;

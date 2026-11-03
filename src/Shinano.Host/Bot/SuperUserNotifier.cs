@@ -16,7 +16,6 @@ namespace Shinano.Host.Bot;
 public sealed class SuperUserNotifier
 {
     private const string BASE64_PREFIX = "base64://";
-    private const string TIME_FORMAT   = "yyyy-MM-dd HH:mm:ss";
     private const string CAUSE_LABEL   = "原因";
     private const string IMPACT_LABEL  = "影响";
 
@@ -30,7 +29,7 @@ public sealed class SuperUserNotifier
     /// <summary>创建通知器。</summary>
     /// <param name="bot">机器人连接。</param>
     /// <param name="deployment">部署配置，提供 Super User 与显示时间所用的时区。</param>
-    /// <param name="images">宿主长图绘制；字体不可用而绘制失败时改发文字。</param>
+    /// <param name="images">宿主消息图片；字体不可用而绘制失败时改发文字。</param>
     /// <param name="time">时间来源。</param>
     /// <param name="logger">日志。</param>
     public SuperUserNotifier(
@@ -85,27 +84,27 @@ public sealed class SuperUserNotifier
         }
     }
 
-    // 副标题只写时间，等级只由竖条颜色表示；正文只有原因与影响两行。
+    // 标题块右上只写时间，等级只由状态标与标签颜色表示；正文只有原因与影响两行。
     private MessageBody Compose(NotificationCard card)
     {
         try
         {
-            DateTimeOffset now = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _timeZone);
-            byte[] png = _images.RenderTextImage(
-                new TextImageDocument
+            byte[] png = _images.RenderNotice(
+                new NoticeCard
                 {
-                    Title    = card.Title,
-                    Subtitle = now.ToString(TIME_FORMAT),
+                    Title = card.Title,
+                    Code  = card.Code,
+                    Time  =TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _timeZone),
                     Level = card.Level switch
                     {
-                        NotificationLevel.Error   => TextImageLevel.Error,
-                        NotificationLevel.Warning => TextImageLevel.Warning,
-                        _                         => TextImageLevel.Normal
+                        NotificationLevel.Error   => CardLevel.Error,
+                        NotificationLevel.Warning => CardLevel.Warning,
+                        _                         => CardLevel.Normal
                     },
                     Rows =
                     [
-                        .. card.Cause is { } cause ? (TextImageRow[]) [new TextImageRow { Label = CAUSE_LABEL, Text = cause }] : [],
-                        new TextImageRow { Label = IMPACT_LABEL, Text = card.Impact }
+                        .. card.Cause is { } cause ? (CardRow[]) [new CardRow { Label = CAUSE_LABEL, Text = cause }] : [],
+                        new CardRow { Label = IMPACT_LABEL, Text = card.Impact }
                     ]
                 });
             return new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png));
