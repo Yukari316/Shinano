@@ -1,3 +1,5 @@
+using Shinano.Plugin.ImageSources.Models;
+
 namespace Shinano.Plugin.ImageSearch.Models;
 
 /// <summary>综合各搜索服务结果后的回复决定：回复一条结果，或回复一句文案。</summary>

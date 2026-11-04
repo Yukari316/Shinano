@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- 契约与 Sora 由宿主提供，插件包内不携带。 -->
+    <ProjectReference Include="../../src/Shinano.Framework/Shinano.Framework.csproj" Private="false" ExcludeAssets="runtime"/>
+    <ProjectReference Include="../Shinano.Plugin.ImageSources/Shinano.Plugin.ImageSources.csproj"/>
+  </ItemGroup>
+
+</Project>

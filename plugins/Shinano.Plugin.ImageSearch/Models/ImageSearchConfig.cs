@@ -16,17 +16,17 @@ public sealed class ImageSearchConfig
     public int WaitSeconds { get; set; } = 60;
 
     /// <summary>SauceNAO 相似度阈值，单位百分比。</summary>
-    [Display(Name = "SauceNAO 相似度阈值（%）", Description = "低于阈值时改查 IQDB；IQDB 也没有可信结果时仍回复该结果，卡片竖条为黄色", Order = 3)]
+    [Display(Name = "SauceNAO 相似度阈值（%）", Description = "低于阈值时仍回复相似度最高的结果，卡片为警告色；SauceNAO 不可用时改查 IQDB", Order = 3)]
     [Range(0, 100)]
     public int SauceNaoThreshold { get; set; } = 60;
 
     /// <summary>IQDB 相似度阈值，单位百分比。</summary>
-    [Display(Name = "IQDB 相似度阈值（%）", Description = "IQDB 低于阈值的结果视为没有找到", Order = 4)]
+    [Display(Name = "IQDB 相似度阈值（%）", Description = "SauceNAO 不可用、改查 IQDB 时使用；低于阈值时卡片为警告色", Order = 4)]
     [Range(0, 100)]
     public int IqdbThreshold { get; set; } = 80;
 
     /// <summary>搜番相似度阈值，单位百分比。</summary>
-    [Display(Name = "搜番相似度阈值（%）", Description = "trace.moe 低于阈值时改查 SauceNAO 的番剧库", Order = 5)]
+    [Display(Name = "搜番相似度阈值（%）", Description = "trace.moe 低于阈值时卡片为警告色；trace.moe 不可用时改查 SauceNAO 的番剧库", Order = 5)]
     [Range(0, 100)]
     public int AnimeThreshold { get; set; } = 90;
 

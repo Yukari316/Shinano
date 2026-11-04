@@ -4,6 +4,8 @@ using Shinano.Framework.Plugins;
 using Shinano.Framework.Plugins.Models;
 using Shinano.Framework.Rendering.Models;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Models;
 using Sora.Core.Enums;
 using Sora.Core.Types;
 using Sora.Entities.Events;
@@ -13,7 +15,7 @@ namespace Shinano.Plugin.ImageSearch.Delivery;
 
 /// <summary>
 /// 发送搜索结果：先发卡片，再另发原图或番剧预览，原图失败不影响卡片；R-18 结果以插件素材中的替代图代替原图或预览。
-/// 原图从图源服务流式转存到插件 bucket，以预签名链接发送：20 MB 以内作为图片，超过 20 MB 时 QQ 不能作为图片发送，
+/// 原图从图源服务流式转存到插件 bucket（下载期间每秒记录进度与速度），以预签名链接发送：20 MB 以内作为图片，超过 20 MB 时 QQ 不能作为图片发送，
 /// 改为上传群文件或私聊文件。图片被拒（腾讯按内容摘要拦截）时改动一个像素重发一次。
 /// 发送成功的对象保留到每小时一次的 <see cref="CleanupAsync" />：宿主归档 Bot 自己发出的消息时，会经同一链接下载图片；
 /// 未发出的对象立即删除。
@@ -28,7 +30,6 @@ public sealed class ResultSender : IDisposable
     private const string BASE64_PREFIX    = "base64://";
     private const string OCTET_STREAM     = "application/octet-stream";
     private const string FILE_NAME_PREFIX = "search";
-    private const string ADULT_IMAGE      = "adult.jpg";
 
     /// <summary>临时原图的保留时间：足够宿主归档读取，超过即由清理任务删除。</summary>
     public static readonly TimeSpan ObjectRetention = TimeSpan.FromHours(1);
@@ -41,7 +42,6 @@ public sealed class ResultSender : IDisposable
     private readonly ILogger<ResultSender>        _logger;
     private readonly HttpClient                   _http = new() { Timeout = PreviewTimeout };
     private          bool                         _bucketReady;
-    private          string?                      _adultImage;
 
     /// <summary>创建发送器。</summary>
     public ResultSender(IPluginInitializationContext context, YukariGateway gateway, ImageResolver resolver, ILogger<ResultSender> logger)
@@ -52,12 +52,21 @@ public sealed class ResultSender : IDisposable
         _logger   = logger;
     }
 
-    /// <summary>发送插画结果：卡片，然后原图；R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。</summary>
+    /// <summary>
+    /// 发送插画结果：拿到搜索结果就先发卡片（只用搜索结果中的信息），再查来源作品并下载原图发到同一会话；
+    /// R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。
+    /// </summary>
     public async Task SendIllustrationAsync(MessageReceivedEvent e, SearchHit hit, double threshold, bool lowSimilarity, CancellationToken cancellationToken)
     {
+        await SendCardAsync(e, SearchCards.Illustration(hit, threshold, lowSimilarity));
         ImageResolution resolution = hit.Adult ? ImageResolution.None : await _resolver.ResolveAsync(hit.Sources, cancellationToken);
-        await SendCardAsync(e, SearchCards.Illustration(hit, resolution, threshold, lowSimilarity));
-        if (hit.Adult || resolution.Adult) await SendAdultImageAsync(e, cancellationToken);
+        _logger.LogInformation(
+            "搜图结果 {Source} 的来源作品：原图 {Image}，R-18 {Adult}，已删除 {Deleted}",
+            hit.SourceName,
+            resolution.Image is { } source ? $"{source.Site}:{source.Id}" : "无",
+            hit.Adult || resolution.Adult,
+            resolution.Deleted);
+        if (hit.Adult || resolution.Adult) await SendAdultImageAsync(e);
         else if (resolution.Image is { } image) await SendOriginalAsync(e, image, cancellationToken);
         else if (resolution.Deleted) await e.ReplyAsync(new MessageBody(ReplyTexts.DELETED));
     }
@@ -68,7 +77,7 @@ public sealed class ResultSender : IDisposable
         await SendCardAsync(e, SearchCards.Anime(hit, threshold, lowSimilarity));
         if (hit.Adult)
         {
-            await SendAdultImageAsync(e, cancellationToken);
+            await SendAdultImageAsync(e);
             return;
         }
 
@@ -120,10 +129,9 @@ public sealed class ResultSender : IDisposable
         if (!result.IsSuccess) _logger.LogWarning("发送搜图卡片失败：{Code} {Error}", result.Code, result.ErrorMessage);
     }
 
-    private async Task SendAdultImageAsync(MessageReceivedEvent e, CancellationToken cancellationToken)
+    private async Task SendAdultImageAsync(MessageReceivedEvent e)
     {
-        _adultImage ??= BASE64_PREFIX + Convert.ToBase64String(await _context.Assets.ReadAllBytesAsync(ADULT_IMAGE, cancellationToken));
-        SendMessageResult result = await e.ReplyAsync(new MessageBody().AddImage(_adultImage));
+        SendMessageResult result = await e.ReplyAsync(new MessageBody().AddImage(AdultPlaceholder.ImageUri));
         if (!result.IsSuccess) _logger.LogWarning("发送 R-18 替代图失败：{Code} {Error}", result.Code, result.ErrorMessage);
     }
 
@@ -153,7 +161,8 @@ public sealed class ResultSender : IDisposable
         try
         {
             await EnsureBucketAsync(bucket, cancellationToken);
-            await using (Stream content = await response.Content.ReadAsStreamAsync(cancellationToken))
+            string label = source.Page is { } page ? $" {source.Site} 作品 {source.Id} 第 {page} 页" : $" {source.Site} 作品 {source.Id}";
+            await using (Stream content = new DownloadProgressStream(await response.Content.ReadAsStreamAsync(cancellationToken), length, label, _logger))
                 size = await bucket.PutAsync(key, content, mediaType, limit, cancellationToken);
             _logger.LogInformation(
                 "从图源服务取得 {Site} 作品 {Id} 的原图（声明 {Length}），已写入 bucket {Bucket}/{Key}：{MediaType}，{Size}",

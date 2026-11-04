@@ -55,6 +55,7 @@ public sealed class EntertainmentCommands
         MatchType = MatchType.Regex,
         SourceScope = MessageSourceScope.Group | MessageSourceScope.Friend,
         Description = "是啊，吃什么")]
+    [Cooldown(10)]
     public async ValueTask Eat(MessageReceivedEvent e)
     {
         await e.ReplyAsync("是啊，吃什么");

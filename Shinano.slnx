@@ -2,7 +2,9 @@
   <Folder Name="/plugins/">
     <Project Path="plugins/Shinano.Plugin.Cheru/Shinano.Plugin.Cheru.csproj" />
     <Project Path="plugins/Shinano.Plugin.Entertainment/Shinano.Plugin.Entertainment.csproj" />
+    <Project Path="plugins/Shinano.Plugin.Hso/Shinano.Plugin.Hso.csproj" />
     <Project Path="plugins/Shinano.Plugin.ImageSearch/Shinano.Plugin.ImageSearch.csproj" />
+    <Project Path="plugins/Shinano.Plugin.ImageSources/Shinano.Plugin.ImageSources.csproj" />
     <Project Path="plugins/Shinano.Plugin.OnlineCheck/Shinano.Plugin.OnlineCheck.csproj" />
     <Project Path="plugins/Shinano.Plugin.Qa/Shinano.Plugin.Qa.csproj" />
   </Folder>

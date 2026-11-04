@@ -1,9 +1,14 @@
+using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.ImageSearch.Delivery;
 using Shinano.Plugin.ImageSearch.Models;
 using Shinano.Plugin.ImageSearch.Parsing;
+using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Parsing;
 using Sora.Command.Attributes;
 using Sora.Core.Enums;
 using Sora.Core.Types;
@@ -25,7 +30,7 @@ public sealed class ImageSearchCommands
 {
     private const int SECONDS_PER_MINUTE = 60;
 
-    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan _cooldown = TimeSpan.FromSeconds(20);
 
     private readonly CooldownTracker              _imageCooldown = new(TimeProvider.System);
     private readonly CooldownTracker              _animeCooldown = new(TimeProvider.System);
@@ -52,7 +57,7 @@ public sealed class ImageSearchCommands
 
     private ImageSearchConfig Config => _context.Config<ImageSearchConfig>().Value;
 
-    /// <summary>以图搜图：SauceNAO 为主，没有可信结果时以 IQDB 兜底。</summary>
+    /// <summary>以图搜图：SauceNAO 为主，SauceNAO 不可用时以 IQDB 兜底。</summary>
     [Command(
         Expressions = ["搜图"],
         MatchType = MatchType.Full,
@@ -62,16 +67,14 @@ public sealed class ImageSearchCommands
         RunAsync(e, _imageCooldown, ReplyTexts.RECEIVED_IMAGE, async image =>
         {
             ImageSearchConfig config = Config;
-            SearchResult sauceNao = SauceNaoParser.Parse(await _gateway.SearchAsync(SearchEngine.SauceNao, image.Content, image.MediaType, CancellationToken.None));
-            SearchResult? iqdb = SearchDecisions.NeedsIqdb(sauceNao, config.SauceNaoThreshold)
-                ? IqdbParser.Parse(await _gateway.SearchAsync(SearchEngine.Iqdb, image.Content, image.MediaType, CancellationToken.None))
-                : null;
+            SearchResult sauceNao = await SearchAsync(SearchEngine.SauceNao, SauceNaoParser.Parse, image);
+            SearchResult? iqdb = SearchDecisions.NeedsFallback(sauceNao) ? await SearchAsync(SearchEngine.Iqdb, IqdbParser.Parse, image) : null;
             SearchDecision decision = SearchDecisions.ForImage(sauceNao, iqdb, config.SauceNaoThreshold, config.IqdbThreshold);
             Log("搜图", decision, sauceNao, iqdb);
             return decision;
         });
 
-    /// <summary>以图搜番：trace.moe 为主，没有可信结果时以 SauceNAO 的番剧库兜底。</summary>
+    /// <summary>以图搜番：trace.moe 为主，trace.moe 不可用时以 SauceNAO 的番剧库兜底。</summary>
     [Command(
         Expressions = ["搜番"],
         MatchType = MatchType.Full,
@@ -81,10 +84,8 @@ public sealed class ImageSearchCommands
         RunAsync(e, _animeCooldown, ReplyTexts.RECEIVED_ANIME, async image =>
         {
             ImageSearchConfig config = Config;
-            SearchResult traceMoe = TraceMoeParser.Parse(await _gateway.SearchAsync(SearchEngine.TraceMoe, image.Content, image.MediaType, CancellationToken.None));
-            SearchResult? sauceNao = SearchDecisions.NeedsSauceNaoAnime(traceMoe, config.AnimeThreshold)
-                ? SauceNaoParser.Parse(await _gateway.SearchAsync(SearchEngine.SauceNao, image.Content, image.MediaType, CancellationToken.None))
-                : null;
+            SearchResult traceMoe = await SearchAsync(SearchEngine.TraceMoe, TraceMoeParser.Parse, image);
+            SearchResult? sauceNao = SearchDecisions.NeedsFallback(traceMoe) ? await SearchAsync(SearchEngine.SauceNao, SauceNaoParser.Parse, image) : null;
             SearchDecision decision = SearchDecisions.ForAnime(traceMoe, sauceNao, config.AnimeThreshold, config.SauceNaoThreshold);
             Log("搜番", decision, traceMoe, sauceNao);
             return decision;
@@ -99,7 +100,7 @@ public sealed class ImageSearchCommands
         Func<QueryImage, Task<SearchDecision>>    search)
     {
         GroupId groupId = e.Message.SourceType == MessageSourceType.Group ? e.Message.GroupId : default;
-        if (cooldown.IsCooling(groupId, e.Message.SenderId, Cooldown))
+        if (cooldown.IsCooling(groupId, e.Message.SenderId, _cooldown))
         {
             await e.ReplyAsync(new MessageBody(ReplyTexts.COOLDOWN));
             return;
@@ -159,6 +160,25 @@ public sealed class ImageSearchCommands
                 await _sender.SendIllustrationAsync(e, illustration, decision.Threshold, decision.LowSimilarity, CancellationToken.None);
                 break;
         }
+    }
+
+    // 调用一个搜索服务并记录其结果：HTTP 状态码、耗时、最高相似度与其标题。
+    private async Task<SearchResult> SearchAsync(SearchEngine engine, Func<GatewayResponse, SearchResult> parse, QueryImage image)
+    {
+        Stopwatch elapsed = Stopwatch.StartNew();
+        GatewayResponse response = await _gateway.SearchAsync(engine, image.Content, image.MediaType, CancellationToken.None);
+        elapsed.Stop();
+        SearchResult result = parse(response);
+        //过滤可用图库
+        SearchHit? best = result.Hits.FirstOrDefault();
+        _logger.LogInformation(
+            "{Engine} 搜索：HTTP {StatusCode}，{Seconds:0.##} 秒，最高相似度 {Similarity}，标题 {Title}",
+            engine,
+            response.StatusCode,
+            elapsed.Elapsed.TotalSeconds,
+            best is null ? "无" : string.Create(CultureInfo.InvariantCulture, $"{best.Similarity:0.##}%"),
+            best?.Title ?? "无");
+        return result;
     }
 
     private void Log(string command, SearchDecision decision, SearchResult primary, SearchResult? fallback) =>

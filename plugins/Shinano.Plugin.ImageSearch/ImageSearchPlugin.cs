@@ -2,6 +2,7 @@ using Autofac;
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.ImageSearch.Delivery;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources;
 
 namespace Shinano.Plugin.ImageSearch;
 
@@ -20,6 +21,7 @@ public sealed class ImageSearchPlugin : IShinanoPlugin
     /// <inheritdoc />
     public void ConfigureServices(ContainerBuilder builder)
     {
+        builder.RegisterType<SearchGatewaySettings>().As<IGatewaySettings>().SingleInstance();
         builder.RegisterType<YukariGateway>().SingleInstance();
         builder.RegisterType<ImageResolver>().SingleInstance();
         builder.RegisterType<QueryImageReader>().SingleInstance();

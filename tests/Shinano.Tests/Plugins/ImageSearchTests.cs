@@ -3,6 +3,9 @@ using Shinano.Plugin.ImageSearch;
 using Shinano.Plugin.ImageSearch.Delivery;
 using Shinano.Plugin.ImageSearch.Models;
 using Shinano.Plugin.ImageSearch.Parsing;
+using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Parsing;
 using SkiaSharp;
 
 namespace Shinano.Tests.Plugins;
@@ -100,31 +103,38 @@ public sealed class ImageSearchTests
     }
 
     [Fact]
-    public void ImageDecision_FallsBackToIqdbThenLowSimilarityThenReplies()
+    public void ImageDecision_SendsBestHitAndFallsBackOnlyWhenUnavailable()
     {
         SearchResult strong = Ok(Hit("Danbooru", 95));
         SearchResult weak = Ok(Hit("Danbooru", 50));
-        SearchResult iqdbStrong = Ok(Hit("Danbooru", 98, SearchEngine.Iqdb));
+        SearchResult failed = SearchResult.Of(SearchStatus.Failed, "x");
+        SearchResult iqdb = Ok(Hit("Danbooru", 70, SearchEngine.Iqdb));
 
-        Assert.False(SearchDecisions.NeedsIqdb(strong, 60));
-        Assert.True(SearchDecisions.NeedsIqdb(weak, 60));
-        Assert.Same(strong.Hits[0], SearchDecisions.ForImage(strong, null, 60, 80).Hit);
-        Assert.Same(iqdbStrong.Hits[0], SearchDecisions.ForImage(weak, iqdbStrong, 60, 80).Hit);
+        Assert.False(SearchDecisions.NeedsFallback(weak));
+        Assert.True(SearchDecisions.NeedsFallback(failed));
+        Assert.True(SearchDecisions.NeedsFallback(SearchResult.Of(SearchStatus.RateLimited, "x")));
+        Assert.False(SearchDecisions.ForImage(strong, null, 60, 80).LowSimilarity);
 
-        SearchDecision low = SearchDecisions.ForImage(weak, Ok(Hit("Danbooru", 70, SearchEngine.Iqdb)), 60, 80);
+        // 主服务完成搜索时低于阈值也回复其最高结果，只标为低相似度。
+        SearchDecision low = SearchDecisions.ForImage(weak, null, 60, 80);
         Assert.Same(weak.Hits[0], low.Hit);
         Assert.True(low.LowSimilarity);
+        Assert.Equal(60, low.Threshold);
 
-        SearchResult failed = SearchResult.Of(SearchStatus.Failed, "x");
-        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForImage(Ok(), failed, 60, 80).Reply);
+        SearchDecision fallback = SearchDecisions.ForImage(failed, iqdb, 60, 80);
+        Assert.Same(iqdb.Hits[0], fallback.Hit);
+        Assert.True(fallback.LowSimilarity);
+        Assert.Equal(80, fallback.Threshold);
+
+        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForImage(Ok(), null, 60, 80).Reply);
+        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForImage(failed, Ok(), 60, 80).Reply);
         Assert.Equal(ReplyTexts.RATE_LIMITED, SearchDecisions.ForImage(SearchResult.Of(SearchStatus.RateLimited, "x"), failed, 60, 80).Reply);
         Assert.Equal(ReplyTexts.UNCONFIGURED, SearchDecisions.ForImage(SearchResult.Of(SearchStatus.Unconfigured, "x"), failed, 60, 80).Reply);
         Assert.Equal(ReplyTexts.SERVER_ERROR, SearchDecisions.ForImage(failed, failed, 60, 80).Reply);
-        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForImage(failed, Ok(), 60, 80).Reply);
     }
 
     [Fact]
-    public void AnimeDecision_FallsBackToSauceNaoAnimeOnly()
+    public void AnimeDecision_FallsBackToSauceNaoAnimeOnlyWhenUnavailable()
     {
         SearchResult weakTrace = Ok(Anime(70));
         SearchHit sauceAnime = new()
@@ -136,10 +146,12 @@ public sealed class ImageSearchTests
         };
         SearchResult sauce = Ok(Hit("Danbooru", 99), sauceAnime);
 
-        Assert.True(SearchDecisions.NeedsSauceNaoAnime(weakTrace, 90));
-        Assert.Same(sauceAnime, SearchDecisions.ForAnime(weakTrace, sauce, 90, 60).Hit);
-        Assert.Same(weakTrace.Hits[0], SearchDecisions.ForAnime(weakTrace, Ok(Hit("Danbooru", 99)), 90, 60).Hit);
-        Assert.Equal(ReplyTexts.RATE_LIMITED, SearchDecisions.ForAnime(SearchResult.Of(SearchStatus.RateLimited, "x"), Ok(), 90, 60).Reply);
+        SearchResult failed = SearchResult.Of(SearchStatus.Failed, "x");
+
+        Assert.Same(weakTrace.Hits[0], SearchDecisions.ForAnime(weakTrace, null, 90, 60).Hit);
+        Assert.Same(sauceAnime, SearchDecisions.ForAnime(failed, sauce, 90, 60).Hit);
+        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForAnime(failed, Ok(Hit("Danbooru", 99)), 90, 60).Reply);
+        Assert.Equal(ReplyTexts.RATE_LIMITED, SearchDecisions.ForAnime(SearchResult.Of(SearchStatus.RateLimited, "x"), failed, 90, 60).Reply);
     }
 
     [Fact]
@@ -158,6 +170,16 @@ public sealed class ImageSearchTests
         Assert.Equal((8, 6), (decoded.Width, decoded.Height));
         Assert.Null(PixelTweak.Apply(original, "image/gif"));
         Assert.Null(PixelTweak.Apply([1, 2, 3], "image/jpeg"));
+    }
+
+    [Fact]
+    public void AdultPlaceholder_IsEmbeddedJpeg()
+    {
+        const string BASE64_PREFIX = "base64://";
+
+        Assert.StartsWith(BASE64_PREFIX, AdultPlaceholder.ImageUri);
+        using SKCodec? codec = SKCodec.Create(new SKMemoryStream(Convert.FromBase64String(AdultPlaceholder.ImageUri[BASE64_PREFIX.Length..])));
+        Assert.Equal(SKEncodedImageFormat.Jpeg, codec?.EncodedFormat);
     }
 
     [Fact]

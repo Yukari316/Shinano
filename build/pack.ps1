@@ -48,15 +48,20 @@ if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force $work | Out-Null
 
 # 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，自带插件的专有页面构建到各插件包的 web/。
+# 面板构建要读取插件 SDK 的 dist/，pnpm 按依赖顺序先构建 SDK。
 Invoke-Native pnpm -C (Join-Path $repo 'web') install --frozen-lockfile
-Invoke-Native pnpm -C (Join-Path $repo 'web') --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
+Invoke-Native pnpm -C (Join-Path $repo 'web') --filter '@shinano/plugin-sdk' --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
 
 # 原生插件：与平台无关，打成与面板上传相同的插件包。原生库与共享程序集由宿主提供，不放进插件包。
 $plugins = Join-Path $work 'bundled-plugins'
 New-Item -ItemType Directory -Force $plugins | Out-Null
 foreach ($project in Get-ChildItem (Join-Path $repo 'plugins') -Filter '*.csproj' -Recurse) {
-    Invoke-Native dotnet build $project.FullName -c Release
+    # 共享类库没有 plugin.json，随引用它的插件一起构建与打包。
+    if (-not (Test-Path (Join-Path $project.DirectoryName 'plugin.json'))) { continue }
+    # 先删除上次的输出：构建不会清除源码中已删除的文件，残留的文件会被打进插件包。
     $output = Join-Path $repo "artifacts/plugins/$($project.BaseName)"
+    if (Test-Path $output) { Remove-Item $output -Recurse -Force }
+    Invoke-Native dotnet build $project.FullName -c Release
     $manifest = Get-Content (Join-Path $output 'plugin.json') -Raw | ConvertFrom-Json
     $content = Join-Path $work "plugin-$($manifest.id)"
     Copy-Item $output $content -Recurse

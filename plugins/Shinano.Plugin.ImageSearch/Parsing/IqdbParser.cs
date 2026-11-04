@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Parsing;
 
 namespace Shinano.Plugin.ImageSearch.Parsing;
 

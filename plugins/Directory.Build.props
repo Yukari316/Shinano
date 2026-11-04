@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest"/>
+    <!-- 共享类库（如 Shinano.Plugin.ImageSources）没有 plugin.json，不是插件包。 -->
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('plugin.json')"/>
     <None Include="assets/**" CopyToOutputDirectory="PreserveNewest"/>
     <None Include="web/**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>

@@ -1,3 +1,4 @@
+using Shinano.Tool.HsoImport;
 using Shinano.Tool.Run;
 using Shinano.Tool.Services;
 using Shinano.Tool.Setup;
@@ -16,7 +17,11 @@ public static class ToolApplication
                                                         用本发布包升级指定的部署
                                    service <install|uninstall|start|stop|status>
                                                         管理本部署的系统服务
-                                 通常通过 scripts 下的 init、start、upgrade、service 脚本调用。
+                                   hso-import --dir <目录> [--dsn <DSN>] [--rustfs-endpoint <地址>] [--access-key <AccessKey>]
+                                              [--secret-key <SecretKey>] [--bucket-prefix <前缀>]
+                                                        把目录中的图片导入 Hso 图库（需先在面板启用过一次 Hso 插件）；
+                                                        数据库与 RustFS 默认取本部署的本地配置
+                                 通常通过 scripts 下的 init、start、upgrade、service、hso-import 脚本调用。
                                  """;
 
     /// <summary>运行工具。</summary>
@@ -29,11 +34,12 @@ public static class ToolApplication
             string command = arguments.Positionals.FirstOrDefault() ?? string.Empty;
             (IReadOnlyCollection<string> options, Func<ToolContext, Task<int>> handler)? entry = command switch
             {
-                "init"    => (InitCommand.Options, InitCommand.RunAsync),
-                "run"     => (Supervisor.Options, Supervisor.RunAsync),
-                "upgrade" => (UpgradeCommand.Options, UpgradeCommand.RunAsync),
-                "service" => (ServiceCommand.Options, ServiceCommand.RunAsync),
-                _         => null
+                "init"       => (InitCommand.Options, InitCommand.RunAsync),
+                "run"        => (Supervisor.Options, Supervisor.RunAsync),
+                "upgrade"    => (UpgradeCommand.Options, UpgradeCommand.RunAsync),
+                "service"    => (ServiceCommand.Options, ServiceCommand.RunAsync),
+                "hso-import" => (HsoImportCommand.Options, HsoImportCommand.RunAsync),
+                _            => null
             };
             if (entry is not { } known)
             {

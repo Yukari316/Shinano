@@ -72,6 +72,9 @@ public static class ConfigKeys
     /// <summary>监听配置节下的 PFX 证书密码。</summary>
     public const string CERTIFICATE_PASSWORD = "CertificatePassword";
 
+    /// <summary>未配置时宿主使用的 bucket 前缀。</summary>
+    public const string DEFAULT_BUCKET_PREFIX = "shinano";
+
     /// <summary>默认插件目录。</summary>
     public const string DEFAULT_PLUGIN_DIRECTORY = "plugins";
 

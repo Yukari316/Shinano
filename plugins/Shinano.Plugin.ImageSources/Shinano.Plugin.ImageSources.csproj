@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 搜图与 Hso 共用的图源服务客户端、SauceNAO 解析与分级判定。不是插件：没有 plugin.json，随引用它的插件包一起交付。 -->
+  <PropertyGroup>
+    <EnableDynamicLoading>false</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 「H是不行的」占位图，见 AdultPlaceholder。 -->
+    <EmbeddedResource Include="Resources/adult.jpg" LogicalName="Shinano.Plugin.ImageSources.adult.jpg"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 契约与 Sora 由宿主提供，插件包内不携带。 -->
+    <ProjectReference Include="../../src/Shinano.Framework/Shinano.Framework.csproj" Private="false" ExcludeAssets="runtime"/>
+  </ItemGroup>
+
+</Project>

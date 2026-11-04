@@ -14,14 +14,19 @@ rm -rf "$work"
 mkdir -p "$work/bundled-plugins"
 
 # 前端：管理面板构建到宿主 wwwroot，状态页构建到监控 wwwroot，自带插件的专有页面构建到各插件包的 web/。
+# 面板构建要读取插件 SDK 的 dist/，pnpm 按依赖顺序先构建 SDK。
 pnpm -C "$repo/web" install --frozen-lockfile
-pnpm -C "$repo/web" --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
+pnpm -C "$repo/web" --filter '@shinano/plugin-sdk' --filter '@shinano/panel' --filter '@shinano/status' --filter './plugins/*' run build
 
 # 原生插件：与平台无关，打成与面板上传相同的插件包。原生库与共享程序集由宿主提供，不放进插件包。
 for project in "$repo"/plugins/*/*.csproj; do
-    dotnet build "$project" -c Release
+    # 共享类库没有 plugin.json，随引用它的插件一起构建与打包。
+    [ -f "$(dirname "$project")/plugin.json" ] || continue
     name=$(basename "$project" .csproj)
     output="$repo/artifacts/plugins/$name"
+    # 先删除上次的输出：构建不会清除源码中已删除的文件，残留的文件会被打进插件包。
+    rm -rf "$output"
+    dotnet build "$project" -c Release
     id=$(sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$output/plugin.json" | head -n 1)
     (cd "$output" && zip -qr "$work/bundled-plugins/$id.zip" . -x 'runtimes/*')
 done

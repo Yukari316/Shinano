@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources;
 using Sora.Core.Enums;
 using Sora.Core.Types;
 using Sora.Entities.Events;

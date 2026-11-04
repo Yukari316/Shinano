@@ -1,6 +1,7 @@
 using System.Globalization;
 using Shinano.Framework.Rendering.Models;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources.Models;
 
 namespace Shinano.Plugin.ImageSearch.Delivery;
 
@@ -15,18 +16,19 @@ public static class SearchCards
     private const string META_ANIME        = "ANIME";
     private const string LOW_NOTE          = "相似度低于阈值，可能不准";
 
-    /// <summary>插画结果卡片：标题为来源名，正文为标题、作者、作品号与页数（多于 1 页时）。</summary>
-    public static InfoCard Illustration(SearchHit hit, ImageResolution resolution, double threshold, bool lowSimilarity) =>
+    /// <summary>
+    /// 插画结果卡片：标题为来源名，正文为标题、作者与作品号。拿到搜索结果就发送，只用搜索结果中的信息，不等待查询来源作品。
+    /// </summary>
+    public static InfoCard Illustration(SearchHit hit, double threshold, bool lowSimilarity) =>
         Card(
             hit,
             META_ILLUST,
             hit.SourceName,
             threshold,
             lowSimilarity,
-            Row("标题", hit.Title ?? resolution.Title),
-            Row("作者", hit.Author ?? resolution.Author),
-            Row("作品号", hit.WorkId),
-            Row("页数", resolution.PageCount > 1 ? $"共 {resolution.PageCount} 张" : null));
+            Row("标题", hit.Title),
+            Row("作者", hit.Author),
+            Row("作品号", hit.WorkId));
 
     /// <summary>番剧卡片：标题为番名，正文为集数、时间点与来源库。</summary>
     public static InfoCard Anime(SearchHit hit, double threshold, bool lowSimilarity) =>

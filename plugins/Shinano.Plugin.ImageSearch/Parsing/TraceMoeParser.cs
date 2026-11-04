@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Parsing;
 
 namespace Shinano.Plugin.ImageSearch.Parsing;
 
