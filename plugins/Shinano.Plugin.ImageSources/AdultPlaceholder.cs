@@ -1,7 +1,7 @@
 namespace Shinano.Plugin.ImageSources;
 
 /// <summary>
-/// 「H是不行的」占位图：R-18 或不允许 NSFW 时代替原图发送。图片作为资源嵌入本程序集，搜图与 Hso 共用同一份。
+/// 「H是不行的」占位图：搜图结果为 R-18 时代替原图或预览发送。图片作为资源嵌入本程序集，引用本库的插件包不另带素材。
 /// </summary>
 public static class AdultPlaceholder
 {

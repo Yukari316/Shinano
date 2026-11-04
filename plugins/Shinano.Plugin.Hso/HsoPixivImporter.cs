@@ -69,6 +69,8 @@ public sealed class HsoPixivImporter
                     Page       = page,
                     Title      = work.Title,
                     Author     = work.Author,
+                    AuthorId   = work.AuthorId,
+                    Tags       = work.Tags,
                     Nsfw       = work.Adult
                 }
             });

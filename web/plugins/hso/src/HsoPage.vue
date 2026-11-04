@@ -161,7 +161,7 @@ onMounted(async () => {
         <h3 class="font-semibold">群设置</h3>
         <button class="btn btn-ghost btn-xs" aria-label="刷新群列表" @click="loadGroups"><PhArrowsClockwise class="size-4" />刷新</button>
       </div>
-      <p class="text-sm opacity-70">屏蔽的群中全部 Hso 指令不响应；不允许 NSFW 的群以占位图代替 NSFW 图片，信息卡照发。新群默认不屏蔽、不允许 NSFW。</p>
+      <p class="text-sm opacity-70">屏蔽的群中全部 Hso 指令不响应；不允许 NSFW 的群只抽取非 NSFW 图片。新群默认不屏蔽、不允许 NSFW。</p>
       <div class="max-h-72 overflow-y-auto">
         <table class="table table-sm">
           <thead>

@@ -50,18 +50,25 @@ public sealed class HsoTests
     [Fact]
     public void Card_ShowsPixivWork()
     {
-        InfoCard? card = HsoSender.Card(new HsoImageRecord
+        HsoImageRecord record = new()
         {
-            Pid    = 127307417,
-            Page   = 2,
-            Title  = "夏の終わり",
-            Author = "再音さく"
-        });
+            Pid      = 127307417,
+            Page     = 2,
+            Title    = "夏の終わり",
+            Author   = "再音さく",
+            AuthorId = 11246082,
+            TagList  = ["オリジナル", "女の子"]
+        };
 
+        InfoCard? card = HsoSender.Card(record);
+
+        Assert.Equal("オリジナル\n女の子", record.Tags);
         Assert.NotNull(card);
         Assert.Equal("夏の終わり", card.Title);
         Assert.Equal("PIXIV", card.Meta);
-        Assert.Equal(["作者：再音さく", "作品号：127307417 - p2"], card.Rows.Select(row => $"{row.Label}：{row.Text}"));
+        Assert.Equal(
+            ["作者：再音さく", "作者 ID：11246082", "作品号：127307417", "标签：#オリジナル #女の子"],
+            card.Rows.Select(row => $"{row.Label}：{row.Text}"));
     }
 
     [Fact]

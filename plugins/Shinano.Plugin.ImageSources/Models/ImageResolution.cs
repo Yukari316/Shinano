@@ -18,6 +18,12 @@ public sealed class ImageResolution
     /// <summary>从作品信息补充的作者；没有时为 null。</summary>
     public string? Author { get; init; }
 
+    /// <summary>Pixiv 作者的用户 ID；来源不是 Pixiv 时为 null。</summary>
+    public long? AuthorId { get; init; }
+
+    /// <summary>Pixiv 作品的标签（原文），按作品中的顺序；来源不是 Pixiv 时为空。</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
     /// <summary>Pixiv 作品的页数；未知时为 null。</summary>
     public int? PageCount { get; init; }
 

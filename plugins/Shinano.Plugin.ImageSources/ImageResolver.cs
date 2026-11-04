@@ -61,8 +61,8 @@ public sealed class ImageResolver
         if (data?["illust"] is not JsonObject illust) return null;
 
         int pageCount = (int)(JsonFields.Number(illust["page_count"]) ?? 1);
-        bool adult = JsonFields.Number(illust["x_restrict"]) > 0
-                  || (illust["tags"] as JsonArray ?? []).Any(tag => JsonFields.Text(tag?["name"]) is { } name && AdultTags.Contains(name));
+        string[] tags = [.. (illust["tags"] as JsonArray ?? []).Select(tag => JsonFields.Text(tag?["name"])).OfType<string>()];
+        bool adult = JsonFields.Number(illust["x_restrict"]) > 0 || tags.Any(AdultTags.Contains);
         int page = source.Page is { } requested && requested < pageCount ? requested : 0;
         return new ImageResolution
         {
@@ -77,6 +77,8 @@ public sealed class ImageResolver
             Adult     = adult,
             Title     = JsonFields.Text(illust["title"]),
             Author    = JsonFields.Text(illust["user"]?["name"]),
+            AuthorId  = JsonFields.Number(illust["user"]?["id"]) is { } authorId ? (long)authorId : null,
+            Tags      = tags,
             PageCount = pageCount
         };
     }

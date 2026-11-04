@@ -13,7 +13,7 @@ using Sora.Entities.Message;
 namespace Shinano.Plugin.Hso;
 
 /// <summary>
-/// 在群里发送图库图片：先发图，再发作品信息卡（没有作品信息时不发）。不允许 NSFW 的群以插件素材中的占位图代替原图，信息卡照发。
+/// 在群里发送图库图片：先发图，再发作品信息卡（没有作品信息时不发）。是否允许 NSFW 由抽图时决定（见 <see cref="HsoCommands" />），这里不再判断。
 /// 原图以预签名链接发送：20 MB 以内作为图片，超过时 QQ 不能作为图片发送，改为上传群文件。
 /// 图片被拒（腾讯按内容摘要拦截）时改动一个像素另存为临时对象重发，成功则标记该图，之后每次发送都直接改像素；图库对象本身不替换。
 /// 临时对象保留到每小时一次的 <see cref="CleanupAsync" />，供宿主归档经同一链接读取；未发出的立即删除。
@@ -26,6 +26,7 @@ public sealed class HsoSender
     private const string BASE64_PREFIX = "base64://";
     private const string CARD_LABEL    = "HSO";
     private const string UNTITLED      = "无题";
+    private const string TAG_PREFIX    = "#";
 
     /// <summary>临时对象的保留时间：足够宿主归档读取，超过即由清理任务删除。</summary>
     public static readonly TimeSpan TempRetention = TimeSpan.FromHours(1);
@@ -42,13 +43,11 @@ public sealed class HsoSender
         _logger  = logger;
     }
 
-    /// <summary>发送图片（或占位图），成功后发送信息卡。</summary>
+    /// <summary>发送图片，成功后发送信息卡。</summary>
     /// <returns>图片是否发出；信息卡失败只记录日志。</returns>
-    public async Task<bool> SendAsync(MessageReceivedEvent e, HsoImageRecord record, bool allowNsfw, CancellationToken cancellationToken)
+    public async Task<bool> SendAsync(MessageReceivedEvent e, HsoImageRecord record, CancellationToken cancellationToken)
     {
-        bool sent = record.Nsfw && !allowNsfw
-            ? await SendPlaceholderAsync(e)
-            : await SendOriginalAsync(e, record, cancellationToken);
+        bool sent = await SendOriginalAsync(e, record, cancellationToken);
         if (sent && Card(record) is { } card) await SendCardAsync(e, card);
         return sent;
     }
@@ -69,14 +68,12 @@ public sealed class HsoSender
         _logger.LogInformation("Hso 临时对象清理（早于 {Cutoff}）：bucket {Bucket} 删除 {Count} 个对象", cutoff, bucket.Name, deleted);
     }
 
-    /// <summary>作品信息卡；没有任何作品信息时为 null。</summary>
+    /// <summary>作品信息卡：作者、作者 ID、作品号（只显示 pid）与标签；没有任何作品信息时为 null。</summary>
     public static InfoCard? Card(HsoImageRecord record)
     {
         if (record.Title is null && record.Author is null && record.Pid is null) return null;
 
-        string? workId = record.Pid is { } pid
-            ? record.Page is { } page ? string.Create(CultureInfo.InvariantCulture, $"{pid} - p{page}") : pid.ToString(CultureInfo.InvariantCulture)
-            : null;
+        IReadOnlyList<string> tags = record.TagList;
         return new InfoCard
         {
             Label = CARD_LABEL,
@@ -84,18 +81,25 @@ public sealed class HsoSender
             Title = record.Title ?? UNTITLED,
             Rows =
             [
-                .. record.Author is { } author ? (CardRow[]) [new CardRow { Label = "作者", Text = author }] : [],
-                .. workId is not null ? (CardRow[]) [new CardRow { Label = "作品号", Text = workId }] : []
+                .. Row("作者", record.Author),
+                .. Row("作者 ID", record.AuthorId?.ToString(CultureInfo.InvariantCulture)),
+                .. Row("作品号", record.Pid?.ToString(CultureInfo.InvariantCulture)),
+                .. Row("标签", tags.Count == 0 ? null : string.Join(' ', tags.Select(tag => TAG_PREFIX + tag)))
             ]
         };
     }
 
-    private async Task<bool> SendPlaceholderAsync(MessageReceivedEvent e)
-    {
-        SendMessageResult result = await e.ReplyAsync(new MessageBody().AddImage(AdultPlaceholder.ImageUri));
-        if (!result.IsSuccess) _logger.LogWarning("发送 Hso NSFW 占位图失败：{Code} {Error}", result.Code, result.ErrorMessage);
-        return result.IsSuccess;
-    }
+    private static CardRow[] Row(string label, string? text) =>
+        text is null
+            ? []
+            :
+            [
+                new CardRow
+                {
+                    Label = label,
+                    Text  = text
+                }
+            ];
 
     private async Task<bool> SendOriginalAsync(MessageReceivedEvent e, HsoImageRecord record, CancellationToken cancellationToken)
     {

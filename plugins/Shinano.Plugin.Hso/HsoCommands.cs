@@ -24,9 +24,10 @@ namespace Shinano.Plugin.Hso;
 public sealed partial class HsoCommands
 {
     private const int    RANKING_SIZE  = 10;
+    private const int    MAX_LOOKUPS   = 5;
     private const string BASE64_PREFIX = "base64://";
 
-    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(20);
 
     private readonly CooldownTracker              _cooldown = new(TimeProvider.System);
     private readonly IPluginInitializationContext _context;
@@ -74,19 +75,13 @@ public sealed partial class HsoCommands
         }
 
         _cooldown.Record(groupId, e.Message.SenderId);
-        if (await _gallery.PickAsync() is not { } record)
+        if (await DrawAllowedAsync(groupId, setting.AllowNsfw) is not { } record)
         {
             await e.ReplyAsync(new MessageBody(ReplyTexts.EMPTY));
             return;
         }
 
-        if (record.InfoState == (int)HsoInfoState.Pending)
-        {
-            byte[]? content = record.Pid is null ? await _gallery.ReadAsync(record, CancellationToken.None) : null;
-            await _gallery.ApplyLookupAsync(record, await _info.LookupAsync(record, content, CancellationToken.None));
-        }
-
-        if (await _sender.SendAsync(e, record, setting.AllowNsfw, CancellationToken.None))
+        if (await _sender.SendAsync(e, record, CancellationToken.None))
         {
             await _groups.IncrementAsync(groupId, e.Message.SenderId);
             return;
@@ -169,6 +164,24 @@ public sealed partial class HsoCommands
             HsoPixivImportOutcome.NotFound => ReplyTexts.AD_NOT_FOUND,
             _                              => ReplyTexts.AD_FAILED
         }));
+    }
+
+    // 抽一张本群允许的图片，抽中未补全作品信息的图片时先补全。不允许 NSFW 的群只从未标为 NSFW 的图片中抽，
+    // 补全后才发现是 NSFW 的重新抽（信息已保存，之后不会再被抽中）。每次最多补全 MAX_LOOKUPS 张，避免图库里待补全的
+    // NSFW 图片很多时一次抽图反复访问图源服务；超过后只从已补全的图片中抽，这些图片不再需要查询，抽中即可发送。
+    // 没有可发的图片时返回 null。
+    private async Task<HsoImageRecord?> DrawAllowedAsync(GroupId groupId, bool allowNsfw)
+    {
+        for (int lookups = 0; ; lookups++)
+        {
+            if (await _gallery.PickAsync(allowNsfw, resolvedOnly: lookups >= MAX_LOOKUPS) is not { } record) return null;
+            if (record.InfoState != (int)HsoInfoState.Pending) return record;
+
+            byte[]? content = record.Pid is null ? await _gallery.ReadAsync(record, CancellationToken.None) : null;
+            await _gallery.ApplyLookupAsync(record, await _info.LookupAsync(record, content, CancellationToken.None));
+            if (allowNsfw || !record.Nsfw) return record;
+            _logger.LogInformation("群 {GroupId} 不允许 NSFW，抽中的 Hso 图片 {Id} 补全后为 NSFW，重新抽取", groupId, record.Id);
+        }
     }
 
     // 群名片优先，没有时用昵称；取不到时显示 QQ 号。

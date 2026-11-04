@@ -46,9 +46,15 @@ public sealed class HsoGallery
         await Bucket.EnsureCreatedAsync(cancellationToken);
     }
 
-    /// <summary>随机取一张图片；图库为空时返回 null。</summary>
-    public async Task<HsoImageRecord?> PickAsync() =>
-        await Database.Queryable<HsoImageRecord>().OrderBy(record => SqlFunc.GetRandom()).FirstAsync();
+    /// <summary>随机取一张图片；没有符合条件的图片时返回 null。</summary>
+    /// <param name="allowNsfw">为 false 时只取当前未标为 NSFW 的图片（未补全作品信息的图片默认非 NSFW，补全后才能确定）。</param>
+    /// <param name="resolvedOnly">只取已补全作品信息的图片（查得到或查无结果），抽中后不需要再查询。</param>
+    public async Task<HsoImageRecord?> PickAsync(bool allowNsfw, bool resolvedOnly) =>
+        await Database.Queryable<HsoImageRecord>()
+                      .WhereIF(!allowNsfw, record => !record.Nsfw)
+                      .WhereIF(resolvedOnly, record => record.InfoState != (int)HsoInfoState.Pending)
+                      .OrderBy(record => SqlFunc.GetRandom())
+                      .FirstAsync();
 
     /// <summary>按 ID 取图片。</summary>
     public async Task<HsoImageRecord?> FindAsync(long id) =>
@@ -134,6 +140,8 @@ public sealed class HsoGallery
             record.Page       ??= info.Page;
             record.Title      = info.Title;
             record.Author     = info.Author;
+            record.AuthorId   = info.AuthorId;
+            record.TagList    = info.Tags;
             if (!record.NsfwManual) record.Nsfw = info.Nsfw;
         }
 
@@ -146,6 +154,8 @@ public sealed class HsoGallery
                           item.Page,
                           item.Title,
                           item.Author,
+                          item.AuthorId,
+                          item.Tags,
                           item.Nsfw,
                           item.InfoState
                       })

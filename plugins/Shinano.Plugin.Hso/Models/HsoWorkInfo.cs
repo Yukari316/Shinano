@@ -18,6 +18,12 @@ public sealed class HsoWorkInfo
     /// <summary>作者。</summary>
     public string? Author { get; init; }
 
+    /// <summary>Pixiv 作者的用户 ID；来源不是 Pixiv 时为 null。</summary>
+    public long? AuthorId { get; init; }
+
+    /// <summary>Pixiv 标签（原文）；来源不是 Pixiv 时为空。</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
     /// <summary>是否为 NSFW。</summary>
     public required bool Nsfw { get; init; }
 }

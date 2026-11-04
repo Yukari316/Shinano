@@ -11,6 +11,8 @@ namespace Shinano.Plugin.Hso.Entities;
 [SugarIndex("ix_hso_image_pid", nameof(Pid), OrderByType.Asc, nameof(Page), OrderByType.Asc)]
 public sealed class HsoImageRecord
 {
+    private const char TAG_SEPARATOR = '\n';
+
     /// <summary>图片 ID。</summary>
     [SugarColumn(ColumnName = "id", IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
@@ -50,6 +52,22 @@ public sealed class HsoImageRecord
     /// <summary>作者。</summary>
     [SugarColumn(ColumnName = "author", Length = 200, IsNullable = true)]
     public string? Author { get; set; }
+
+    /// <summary>Pixiv 作者的用户 ID；来源不是 Pixiv 或未知时为 null。</summary>
+    [SugarColumn(ColumnName = "author_id", IsNullable = true)]
+    public long? AuthorId { get; set; }
+
+    /// <summary>Pixiv 标签（原文），以换行分隔（标签不含换行）；没有时为 null。读写用 <see cref="TagList" />。</summary>
+    [SugarColumn(ColumnName = "tags", ColumnDataType = "text", IsNullable = true)]
+    public string? Tags { get; set; }
+
+    /// <summary><see cref="Tags" /> 的列表形式。</summary>
+    [SugarColumn(IsIgnore = true)]
+    public IReadOnlyList<string> TagList
+    {
+        get => Tags is null ? [] : Tags.Split(TAG_SEPARATOR);
+        set => Tags = value.Count == 0 ? null : string.Join(TAG_SEPARATOR, value);
+    }
 
     /// <summary>作品信息的来源站名，如 Pixiv、Danbooru。</summary>
     [SugarColumn(ColumnName = "source_name", Length = 50, IsNullable = true)]

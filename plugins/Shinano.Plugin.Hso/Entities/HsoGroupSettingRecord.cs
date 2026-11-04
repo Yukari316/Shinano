@@ -14,7 +14,7 @@ public sealed class HsoGroupSettingRecord
     [SugarColumn(ColumnName = "blocked")]
     public bool Blocked { get; set; }
 
-    /// <summary>是否允许 NSFW 图片；不允许时以占位图代替。</summary>
+    /// <summary>是否允许 NSFW 图片；不允许时只抽取非 NSFW 图片。</summary>
     [SugarColumn(ColumnName = "allow_nsfw")]
     public bool AllowNsfw { get; set; }
 }

@@ -27,7 +27,8 @@ public sealed class HsoImportContractTests
     public void InsertedColumns_CoverEveryRequiredColumn()
     {
         Assert.All(RecordProperties, property => Assert.NotNull(property.GetCustomAttribute<SugarColumn>()));
-        SugarColumn[] columns = [.. RecordProperties.Select(property => property.GetCustomAttribute<SugarColumn>()).OfType<SugarColumn>()];
+        // IsIgnore 的属性（如标签的列表形式）不是表列。
+        SugarColumn[] columns = [.. RecordProperties.Select(property => property.GetCustomAttribute<SugarColumn>()).OfType<SugarColumn>().Where(column => !column.IsIgnore)];
         string[] names = [.. columns.Select(column => column.ColumnName)];
 
         Assert.All(GalleryStore.InsertedColumns, column => Assert.Contains(column, names));

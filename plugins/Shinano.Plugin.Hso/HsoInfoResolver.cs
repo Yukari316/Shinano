@@ -68,6 +68,8 @@ public sealed class HsoInfoResolver
             Page       = page,
             Title      = resolution.Title,
             Author     = resolution.Author,
+            AuthorId   = resolution.AuthorId,
+            Tags       = resolution.Tags,
             Nsfw       = resolution.Adult
         });
     }
@@ -98,6 +100,8 @@ public sealed class HsoInfoResolver
             Page       = pid is null ? null : pixiv?.Page,
             Title      = hit.Title ?? resolution.Title,
             Author     = hit.Author ?? resolution.Author,
+            AuthorId   = resolution.AuthorId,
+            Tags       = resolution.Tags,
             Nsfw       = hit.Adult || resolution.Adult
         });
     }
