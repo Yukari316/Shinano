@@ -8,20 +8,13 @@ namespace Shinano.Plugin.ImageSources.Parsing;
 /// <summary>
 /// 解析经图源服务转发的 SauceNAO 响应（<c>output_type=2</c>）。限额用尽时上游返回 429；
 /// 正文 <c>header.status</c> 为 0 表示成功，负数为请求问题，正数为服务端问题。
+/// 只保留请求时限定的库的结果（见 <see cref="SearchDatabases" />）：图源服务未支持限定时上游会返回全部库的结果。
 /// </summary>
 public static partial class SauceNaoParser
 {
-    private const int    ANIME_INDEX            = 21;
-    private const int    ADULT_ANIME_INDEX      = 22;
-    private const int    TOO_MANY_REQUESTS      = 429;
-    private const int    FORBIDDEN              = 403;
-    private const string UNKNOWN_SOURCE         = "SauceNAO";
-
-    // H-Magazines、H-Game CG、FAKKU、H-Misc（nhentai）、H-Anime、E-Hentai：成人向来源，只发卡片。
-    // private static readonly HashSet<int> _adultIndexes = [0, 2, 16, 18, ADULT_ANIME_INDEX, 38];
-
-    //Danbooru/Pixiv Images/E-Shuushuu/Gelbooru/Yande.re/Sankaku"
-    private static readonly HashSet<int> _supportedSource = [5, 9, 12, 25, 27]; //, .._adultIndexes];
+    private const int    TOO_MANY_REQUESTS = 429;
+    private const int    FORBIDDEN         = 403;
+    private const string UNKNOWN_SOURCE    = "SauceNAO";
 
     // 结果 data 中各图站的作品号字段。
     private static readonly (string Field, ImageSite Site)[] IdFields =
@@ -34,8 +27,10 @@ public static partial class SauceNaoParser
         ("konachan_id", ImageSite.Konachan)
     ];
 
-    /// <summary>解析搜索结果，按相似度从高到低排列。</summary>
-    public static SearchResult Parse(GatewayResponse response)
+    /// <summary>解析搜索结果，只保留 <paramref name="databases" /> 中的库，按相似度从高到低排列。</summary>
+    /// <param name="response">图源服务的响应。</param>
+    /// <param name="databases">请求时限定的库。</param>
+    public static SearchResult Parse(GatewayResponse response, IReadOnlySet<SauceNaoIndex> databases)
     {
         switch (response.Outcome)
         {
@@ -66,11 +61,10 @@ public static partial class SauceNaoParser
         IReadOnlyList<SearchHit> hits =
         [
             .. (root?["results"] as JsonArray ?? [])
-               .Select(ToHit)
+               .Select(result => ToHit(result, databases))
                .OfType<SearchHit>()
                .OrderByDescending(hit => hit.Similarity)
         ];
-        // _supportImgSource.Contains(r.SourceName)
         return new SearchResult
         {
             Status = SearchStatus.Ok,
@@ -79,30 +73,28 @@ public static partial class SauceNaoParser
         };
     }
 
-    private static SearchHit? ToHit(JsonNode? result)
+    private static SearchHit? ToHit(JsonNode? result, IReadOnlySet<SauceNaoIndex> databases)
     {
         JsonNode? header = result?["header"];
         JsonNode? data = result?["data"];
         if (JsonFields.Number(header?["similarity"]) is not { } similarity || JsonFields.Number(header?["index_id"]) is not { } indexValue)
             return null;
 
-        int index = (int)indexValue;
-        if (!_supportedSource.Contains(index))
-            return null;
+        SauceNaoIndex index = (SauceNaoIndex)(int)indexValue;
+        if (!databases.Contains(index)) return null;
 
-        bool anime = index is ANIME_INDEX or ADULT_ANIME_INDEX;
-        // bool adult = _adultIndexes.Contains(index);
+        bool anime = index is SauceNaoIndex.Anime or SauceNaoIndex.HAnime;
         return new SearchHit
         {
             Engine     = SearchEngine.SauceNao,
             Similarity = similarity,
             SourceName = SourceName(JsonFields.Text(header?["index_name"])),
             Kind       = anime ? HitKind.Anime : HitKind.Illustration,
-            Adult      = false, //adult,
+            Adult      = index == SauceNaoIndex.HAnime,
             Title      = anime ? JsonFields.Text(data?["source"]) : FirstText(data, "title", "jp_name", "eng_name", "material"),
             Author     = anime ? null : FirstText(data, "member_name", "author_name", "creator", "twitter_user_handle"),
             WorkId     = IdFields.Select(field => JsonFields.Text(data?[field.Field])).FirstOrDefault(id => id is not null),
-            Sources    = anime ? [] : Sources(data), //|| adult,
+            Sources    = anime ? [] : Sources(data),
             Episode    = anime ? JsonFields.Text(data?["part"]) : null,
             Time       = anime ? JsonFields.Text(data?["est_time"]) : null
         };

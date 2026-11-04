@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -14,8 +15,10 @@ namespace Shinano.Plugin.ImageSources;
 /// </summary>
 public sealed class YukariGateway : IDisposable
 {
-    private const string UPSTREAM_HEADER = "x-yukari-upstream";
-    private const string USER_AGENT      = "Shinano/1.0";
+    private const string UPSTREAM_HEADER   = "x-yukari-upstream";
+    private const string USER_AGENT        = "Shinano/1.0";
+    private const string SAUCENAO_DATABASE = "db";
+    private const string IQDB_SERVICE      = "service";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(100);
 
@@ -36,10 +39,22 @@ public sealed class YukariGateway : IDisposable
 
     private string? Token => _settings.Token;
 
-    /// <summary>上传图片搜索。</summary>
-    public async Task<GatewayResponse> SearchAsync(SearchEngine engine, byte[] image, string mediaType, CancellationToken cancellationToken)
+    /// <summary>上传图片以 SauceNAO 搜索，只检索 <paramref name="databases" /> 中的库（查询参数 <c>db</c>）。</summary>
+    public Task<GatewayResponse> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex> databases, byte[] image, string mediaType, CancellationToken cancellationToken) =>
+        SearchAsync(SearchEngine.SauceNao, Query(SAUCENAO_DATABASE, databases.Select(database => (int)database)), image, mediaType, cancellationToken);
+
+    /// <summary>上传图片以 IQDB 搜索，只检索 <paramref name="sites" /> 对应的服务（查询参数 <c>service</c>）。</summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="sites" /> 含 IQDB 没有的图站（如 Pixiv）。</exception>
+    public Task<GatewayResponse> SearchIqdbAsync(IReadOnlySet<ImageSite> sites, byte[] image, string mediaType, CancellationToken cancellationToken) =>
+        SearchAsync(SearchEngine.Iqdb, Query(IQDB_SERVICE, sites.Select(site => (int)IqdbServiceOf(site))), image, mediaType, cancellationToken);
+
+    /// <summary>上传图片以 trace.moe 搜索。</summary>
+    public Task<GatewayResponse> SearchTraceMoeAsync(byte[] image, string mediaType, CancellationToken cancellationToken) =>
+        SearchAsync(SearchEngine.TraceMoe, string.Empty, image, mediaType, cancellationToken);
+
+    private async Task<GatewayResponse> SearchAsync(SearchEngine engine, string query, byte[] image, string mediaType, CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = CreateRequest(HttpMethod.Post, $"search/{PathOf(engine)}");
+        using HttpRequestMessage request = CreateRequest(HttpMethod.Post, $"search/{PathOf(engine)}{query}");
         request.Content = new ByteArrayContent(image);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
         try
@@ -131,6 +146,24 @@ public sealed class YukariGateway : IDisposable
         if (Token is { Length: > 0 } token) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
+
+    // 同名参数重复，如 ?db=5&db=9；按数值排序，便于在日志中比对。
+    private static string Query(string name, IEnumerable<int> values) =>
+        values.Order().Select(value => $"{name}={value.ToString(CultureInfo.InvariantCulture)}").ToArray() is { Length: > 0 } pairs
+            ? "?" + string.Join('&', pairs)
+            : string.Empty;
+
+    private static IqdbService IqdbServiceOf(ImageSite site) =>
+        site switch
+        {
+            ImageSite.Danbooru  => IqdbService.Danbooru,
+            ImageSite.Konachan  => IqdbService.Konachan,
+            ImageSite.Yandere   => IqdbService.Yandere,
+            ImageSite.Gelbooru  => IqdbService.Gelbooru,
+            ImageSite.Sankaku   => IqdbService.Sankaku,
+            ImageSite.Eshuushuu => IqdbService.Eshuushuu,
+            _                   => throw new ArgumentOutOfRangeException(nameof(site), site, "IQDB 没有该图站")
+        };
 
     private static string PathOf(SearchEngine engine) =>
         engine switch

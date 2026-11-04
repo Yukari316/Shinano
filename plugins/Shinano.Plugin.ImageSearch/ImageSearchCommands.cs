@@ -67,8 +67,8 @@ public sealed class ImageSearchCommands
         RunAsync(e, _imageCooldown, ReplyTexts.RECEIVED_IMAGE, async image =>
         {
             ImageSearchConfig config = Config;
-            SearchResult sauceNao = await SearchAsync(SearchEngine.SauceNao, SauceNaoParser.Parse, image);
-            SearchResult? iqdb = SearchDecisions.NeedsFallback(sauceNao) ? await SearchAsync(SearchEngine.Iqdb, IqdbParser.Parse, image) : null;
+            SearchResult sauceNao = await SearchSauceNaoAsync(SearchDatabases.SauceNaoIllustrations, image);
+            SearchResult? iqdb = SearchDecisions.NeedsFallback(sauceNao) ? await SearchIqdbAsync(image) : null;
             SearchDecision decision = SearchDecisions.ForImage(sauceNao, iqdb, config.SauceNaoThreshold, config.IqdbThreshold);
             Log("搜图", decision, sauceNao, iqdb);
             return decision;
@@ -84,8 +84,11 @@ public sealed class ImageSearchCommands
         RunAsync(e, _animeCooldown, ReplyTexts.RECEIVED_ANIME, async image =>
         {
             ImageSearchConfig config = Config;
-            SearchResult traceMoe = await SearchAsync(SearchEngine.TraceMoe, TraceMoeParser.Parse, image);
-            SearchResult? sauceNao = SearchDecisions.NeedsFallback(traceMoe) ? await SearchAsync(SearchEngine.SauceNao, SauceNaoParser.Parse, image) : null;
+            SearchResult traceMoe = await SearchAsync(
+                SearchEngine.TraceMoe,
+                () => _gateway.SearchTraceMoeAsync(image.Content, image.MediaType, CancellationToken.None),
+                TraceMoeParser.Parse);
+            SearchResult? sauceNao = SearchDecisions.NeedsFallback(traceMoe) ? await SearchSauceNaoAsync(SearchDatabases.SauceNaoAnime, image) : null;
             SearchDecision decision = SearchDecisions.ForAnime(traceMoe, sauceNao, config.AnimeThreshold, config.SauceNaoThreshold);
             Log("搜番", decision, traceMoe, sauceNao);
             return decision;
@@ -162,14 +165,25 @@ public sealed class ImageSearchCommands
         }
     }
 
+    private Task<SearchResult> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex> databases, QueryImage image) =>
+        SearchAsync(
+            SearchEngine.SauceNao,
+            () => _gateway.SearchSauceNaoAsync(databases, image.Content, image.MediaType, CancellationToken.None),
+            response => SauceNaoParser.Parse(response, databases));
+
+    private Task<SearchResult> SearchIqdbAsync(QueryImage image) =>
+        SearchAsync(
+            SearchEngine.Iqdb,
+            () => _gateway.SearchIqdbAsync(SearchDatabases.IqdbIllustrations, image.Content, image.MediaType, CancellationToken.None),
+            response => IqdbParser.Parse(response, SearchDatabases.IqdbIllustrations));
+
     // 调用一个搜索服务并记录其结果：HTTP 状态码、耗时、最高相似度与其标题。
-    private async Task<SearchResult> SearchAsync(SearchEngine engine, Func<GatewayResponse, SearchResult> parse, QueryImage image)
+    private async Task<SearchResult> SearchAsync(SearchEngine engine, Func<Task<GatewayResponse>> send, Func<GatewayResponse, SearchResult> parse)
     {
         Stopwatch elapsed = Stopwatch.StartNew();
-        GatewayResponse response = await _gateway.SearchAsync(engine, image.Content, image.MediaType, CancellationToken.None);
+        GatewayResponse response = await send();
         elapsed.Stop();
         SearchResult result = parse(response);
-        //过滤可用图库
         SearchHit? best = result.Hits.FirstOrDefault();
         _logger.LogInformation(
             "{Engine} 搜索：HTTP {StatusCode}，{Seconds:0.##} 秒，最高相似度 {Similarity}，标题 {Title}",

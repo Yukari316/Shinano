@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Shinano.Plugin.ImageSearch.Models;
+using Shinano.Plugin.ImageSources;
 using Shinano.Plugin.ImageSources.Models;
 using Shinano.Plugin.ImageSources.Parsing;
 
@@ -10,6 +11,7 @@ namespace Shinano.Plugin.ImageSearch.Parsing;
 /// <summary>
 /// 解析经图源服务转发的 IQDB 结果页（HTML）。每条结果是一个 <c>&lt;table&gt;</c>，含作品链接、站点名、
 /// 尺寸与分级标注（Safe/Ero/Explicit）和「NN% similarity」。高负载时页面只有排队提示与读取失败，没有结果表格。
+/// 只保留作品链接属于请求时限定图站的结果（见 <see cref="SearchDatabases.IqdbIllustrations" />）。
 /// </summary>
 public static partial class IqdbParser
 {
@@ -19,8 +21,13 @@ public static partial class IqdbParser
     private const string IQDB_NAME    = "IQDB";
     private const int    DETAIL_CHARS = 200;
 
-    /// <summary>解析结果页，按相似度从高到低排列；没有结果表格且不是「无匹配」页时视为失败。</summary>
-    public static SearchResult Parse(GatewayResponse response)
+    /// <summary>
+    /// 解析结果页，只保留 <paramref name="sites" /> 的结果，按相似度从高到低排列；没有结果表格且不是「无匹配」页时视为失败，
+    /// 有结果表格但都不属于这些图站时为没有结果。
+    /// </summary>
+    /// <param name="response">图源服务的响应。</param>
+    /// <param name="sites">请求时限定的图站。</param>
+    public static SearchResult Parse(GatewayResponse response, IReadOnlySet<ImageSite> sites)
     {
         switch (response.Outcome)
         {
@@ -44,7 +51,7 @@ public static partial class IqdbParser
             return new SearchResult
             {
                 Status = SearchStatus.Ok,
-                Hits   = [.. hits.OrderByDescending(hit => hit.Similarity)]
+                Hits   = [.. hits.Where(hit => hit.Sources is [{ } source] && sites.Contains(source.Site)).OrderByDescending(hit => hit.Similarity)]
             };
 
         return response.Body.Contains(NO_MATCHES, StringComparison.Ordinal)

@@ -15,7 +15,7 @@ public sealed class SearchHit
     /// <summary>类别。</summary>
     public required HitKind Kind { get; init; }
 
-    /// <summary>是否已知为成人内容（H 类来源、成人番、IQDB 的 Explicit 标注）；为 false 时仍可能由作品信息判定为 R-18。</summary>
+    /// <summary>是否已知为成人内容（SauceNAO 的 H-Anime 库、trace.moe 的成人番、IQDB 的 Explicit 标注）；为 false 时仍可能由作品信息判定为 R-18。</summary>
     public bool Adult { get; init; }
 
     /// <summary>作品标题或番名；没有时为 null。</summary>

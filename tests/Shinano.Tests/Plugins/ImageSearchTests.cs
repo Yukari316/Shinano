@@ -18,9 +18,11 @@ public sealed class ImageSearchTests
     [Fact]
     public void SauceNao_ParsesRecordedResponse()
     {
-        SearchResult result = SauceNaoParser.Parse(Upstream(200, Fixture("saucenao-127307417.json")));
+        SearchResult result = SauceNaoParser.Parse(Upstream(200, Fixture("saucenao-127307417.json")), SearchDatabases.SauceNaoIllustrations);
 
         Assert.Equal(SearchStatus.Ok, result.Status);
+        // 录制的响应查了全部库：Twitter 与 Nijie 的结果不在插画图库中，被丢弃。
+        Assert.Equal(["Danbooru", "Pixiv Images"], result.Hits.Select(hit => hit.SourceName));
         SearchHit best = result.Hits[0];
         Assert.Equal(95.39, best.Similarity);
         Assert.Equal("Danbooru", best.SourceName);
@@ -33,19 +35,38 @@ public sealed class ImageSearchTests
     }
 
     [Fact]
+    public void SauceNao_AnimeDatabasesKeepOnlyAnimeAndMarkHAnimeAdult()
+    {
+        const string BODY = """
+            {"header":{"status":0},"results":[
+              {"header":{"similarity":"97.1","index_id":9,"index_name":"Index #9: Danbooru - a.jpg"},"data":{"danbooru_id":1}},
+              {"header":{"similarity":"91.5","index_id":22,"index_name":"Index #22: H-Anime - b.jpg"},"data":{"source":"H","part":"2","est_time":"00:03:01"}},
+              {"header":{"similarity":"88.0","index_id":21,"index_name":"Index #21: Anime - c.jpg"},"data":{"source":"A","part":"5","est_time":"00:12:00"}}
+            ]}
+            """;
+
+        SearchResult result = SauceNaoParser.Parse(Upstream(200, BODY), SearchDatabases.SauceNaoAnime);
+
+        Assert.Equal([("H", true), ("A", false)], result.Hits.Select(hit => (hit.Title, hit.Adult)));
+        Assert.All(result.Hits, hit => Assert.Equal(HitKind.Anime, hit.Kind));
+        Assert.Empty(SauceNaoParser.Parse(Upstream(200, Fixture("saucenao-127307417.json")), SearchDatabases.SauceNaoAnime).Hits);
+    }
+
+    [Fact]
     public void SauceNao_MapsLimitsAndKeyErrors()
     {
-        Assert.Equal(SearchStatus.RateLimited, SauceNaoParser.Parse(Upstream(429, "{}")).Status);
-        Assert.Equal(SearchStatus.Unconfigured, SauceNaoParser.Parse(Upstream(403, "{}")).Status);
-        Assert.Equal(SearchStatus.Unconfigured, SauceNaoParser.Parse(new GatewayResponse { Outcome = GatewayOutcome.Unconfigured, StatusCode = 503 }).Status);
-        Assert.Equal(SearchStatus.Failed, SauceNaoParser.Parse(Upstream(200, """{"header":{"status":-2,"message":"x"}}""")).Status);
-        Assert.Equal(SearchStatus.Failed, SauceNaoParser.Parse(Upstream(200, "<html>challenge</html>")).Status);
+        IReadOnlySet<SauceNaoIndex> databases = SearchDatabases.SauceNaoIllustrations;
+        Assert.Equal(SearchStatus.RateLimited, SauceNaoParser.Parse(Upstream(429, "{}"), databases).Status);
+        Assert.Equal(SearchStatus.Unconfigured, SauceNaoParser.Parse(Upstream(403, "{}"), databases).Status);
+        Assert.Equal(SearchStatus.Unconfigured, SauceNaoParser.Parse(new GatewayResponse { Outcome = GatewayOutcome.Unconfigured, StatusCode = 503 }, databases).Status);
+        Assert.Equal(SearchStatus.Failed, SauceNaoParser.Parse(Upstream(200, """{"header":{"status":-2,"message":"x"}}"""), databases).Status);
+        Assert.Equal(SearchStatus.Failed, SauceNaoParser.Parse(Upstream(200, "<html>challenge</html>"), databases).Status);
     }
 
     [Fact]
     public void Iqdb_ParsesResultsAndTreatsQueuePageAsFailure()
     {
-        SearchResult result = IqdbParser.Parse(Upstream(200, Fixture("iqdb-127307417.html")));
+        SearchResult result = IqdbParser.Parse(Upstream(200, Fixture("iqdb-127307417.html")), SearchDatabases.IqdbIllustrations);
 
         Assert.Equal(SearchStatus.Ok, result.Status);
         SearchHit best = result.Hits[0];
@@ -54,8 +75,14 @@ public sealed class ImageSearchTests
         Assert.False(best.Adult);
         Assert.Equal([new SourceRef { Site = ImageSite.Danbooru, Id = "8861752" }], best.Sources);
         Assert.Contains(result.Hits, hit => hit.Sources is [{ Site: ImageSite.Yandere }]);
+        Assert.All(result.Hits, hit => Assert.Contains(Assert.Single(hit.Sources).Site, SearchDatabases.IqdbIllustrations));
 
-        Assert.Equal(SearchStatus.Failed, IqdbParser.Parse(Upstream(200, Fixture("iqdb-queue-failure.html"))).Status);
+        // 只保留限定的图站：不含 Danbooru 时最佳结果换成其他图站。
+        SearchResult yandereOnly = IqdbParser.Parse(Upstream(200, Fixture("iqdb-127307417.html")), new HashSet<ImageSite> { ImageSite.Yandere });
+        Assert.All(yandereOnly.Hits, hit => Assert.Equal(ImageSite.Yandere, Assert.Single(hit.Sources).Site));
+        Assert.NotEmpty(yandereOnly.Hits);
+
+        Assert.Equal(SearchStatus.Failed, IqdbParser.Parse(Upstream(200, Fixture("iqdb-queue-failure.html")), SearchDatabases.IqdbIllustrations).Status);
     }
 
     [Fact]
@@ -144,13 +171,12 @@ public sealed class ImageSearchTests
             SourceName = "Anime",
             Kind       = HitKind.Anime
         };
-        SearchResult sauce = Ok(Hit("Danbooru", 99), sauceAnime);
-
         SearchResult failed = SearchResult.Of(SearchStatus.Failed, "x");
 
         Assert.Same(weakTrace.Hits[0], SearchDecisions.ForAnime(weakTrace, null, 90, 60).Hit);
-        Assert.Same(sauceAnime, SearchDecisions.ForAnime(failed, sauce, 90, 60).Hit);
-        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForAnime(failed, Ok(Hit("Danbooru", 99)), 90, 60).Reply);
+        // 兜底只查 SauceNAO 的番剧库，直接取其最高结果。
+        Assert.Same(sauceAnime, SearchDecisions.ForAnime(failed, Ok(sauceAnime), 90, 60).Hit);
+        Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForAnime(failed, Ok(), 90, 60).Reply);
         Assert.Equal(ReplyTexts.RATE_LIMITED, SearchDecisions.ForAnime(SearchResult.Of(SearchStatus.RateLimited, "x"), failed, 90, 60).Reply);
     }
 
