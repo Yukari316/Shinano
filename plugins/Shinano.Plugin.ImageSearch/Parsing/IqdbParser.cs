@@ -17,6 +17,7 @@ public static partial class IqdbParser
 {
     private const string YOUR_IMAGE   = "Your image";
     private const string NO_MATCHES   = "No relevant matches";
+    private const string READ_FAILURE = "Can't read query result";
     private const string EXPLICIT     = "Explicit";
     private const string IQDB_NAME    = "IQDB";
     private const int    DETAIL_CHARS = 200;
@@ -80,6 +81,13 @@ public static partial class IqdbParser
             Sources    = source is null ? [] : [source]
         };
     }
+
+    /// <summary>
+    /// IQDB 排队后返回的读取失败页（HTTP 200，正文为「Can't read query result!」）。这是上游的间歇性问题，
+    /// 不计额度，重试通常能成功（见图源服务 docs/search-engines.md）。
+    /// </summary>
+    public static bool IsReadFailure(GatewayResponse response) =>
+        response is { Outcome: GatewayOutcome.Upstream, StatusCode: (int)HttpStatusCode.OK } && response.Body.Contains(READ_FAILURE, StringComparison.Ordinal);
 
     // 失败页只保留可读文字的开头，用于日志。
     private static string Summary(string html) =>

@@ -15,16 +15,22 @@ namespace Shinano.Plugin.ImageSources;
 /// </summary>
 public sealed class YukariGateway : IDisposable
 {
-    private const string UPSTREAM_HEADER   = "x-yukari-upstream";
-    private const string USER_AGENT        = "Shinano/1.0";
-    private const string SAUCENAO_DATABASE = "db";
-    private const string IQDB_SERVICE      = "service";
+    private const string UPSTREAM_HEADER = "x-yukari-upstream";
+    private const string USER_AGENT      = "Shinano/1.0";
+
+    // 图源服务限定检索库的查询参数，可重复；取值为搜索服务原生的编号（SauceNAO 的 index、IQDB 的 service），
+    // 网关校验后换算为上游参数，不合法时返回 400 且不请求上游。
+    private const string DATABASE_PARAMETER = "db";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(100);
 
+    // IQDB 高负载时先返回响应头，再长时间推送排队进度后才输出结果（2026-11-05 实测排队达 90 秒），单独放宽超时。
+    private static readonly TimeSpan IqdbTimeout = TimeSpan.FromSeconds(180);
+
     private readonly IGatewaySettings       _settings;
     private readonly ILogger<YukariGateway> _logger;
-    private readonly HttpClient             _http = new() { Timeout = Timeout };
+    private readonly HttpClient             _http     = new() { Timeout = Timeout };
+    private readonly HttpClient             _iqdbHttp = new() { Timeout = IqdbTimeout };
 
     /// <summary>创建客户端。</summary>
     public YukariGateway(IGatewaySettings settings, ILogger<YukariGateway> logger)
@@ -32,6 +38,7 @@ public sealed class YukariGateway : IDisposable
         _settings = settings;
         _logger   = logger;
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(USER_AGENT);
+        _iqdbHttp.DefaultRequestHeaders.UserAgent.ParseAdd(USER_AGENT);
     }
 
     /// <summary>是否配置了令牌。</summary>
@@ -39,27 +46,32 @@ public sealed class YukariGateway : IDisposable
 
     private string? Token => _settings.Token;
 
-    /// <summary>上传图片以 SauceNAO 搜索，只检索 <paramref name="databases" /> 中的库（查询参数 <c>db</c>）。</summary>
-    public Task<GatewayResponse> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex> databases, byte[] image, string mediaType, CancellationToken cancellationToken) =>
-        SearchAsync(SearchEngine.SauceNao, Query(SAUCENAO_DATABASE, databases.Select(database => (int)database)), image, mediaType, cancellationToken);
+    /// <summary>
+    /// 上传图片以 SauceNAO 搜索，只检索 <paramref name="databases" /> 中的库（查询参数 <c>db</c> 为 index 编号）；
+    /// 为 null 时检索全部库。
+    /// </summary>
+    public Task<GatewayResponse> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex>? databases, byte[] image, string mediaType, CancellationToken cancellationToken) =>
+        SearchAsync(_http, SearchEngine.SauceNao, DatabaseQuery(databases?.Select(database => (int)database) ?? []), image, mediaType, cancellationToken);
 
-    /// <summary>上传图片以 IQDB 搜索，只检索 <paramref name="sites" /> 对应的服务（查询参数 <c>service</c>）。</summary>
+    /// <summary>
+    /// 上传图片以 IQDB 搜索，只检索 <paramref name="sites" /> 对应的服务（查询参数 <c>db</c> 为 service 编号）；超时为 180 秒，长于其他请求的 100 秒。
+    /// </summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="sites" /> 含 IQDB 没有的图站（如 Pixiv）。</exception>
     public Task<GatewayResponse> SearchIqdbAsync(IReadOnlySet<ImageSite> sites, byte[] image, string mediaType, CancellationToken cancellationToken) =>
-        SearchAsync(SearchEngine.Iqdb, Query(IQDB_SERVICE, sites.Select(site => (int)IqdbServiceOf(site))), image, mediaType, cancellationToken);
+        SearchAsync(_iqdbHttp, SearchEngine.Iqdb, DatabaseQuery(sites.Select(site => (int)IqdbServiceOf(site))), image, mediaType, cancellationToken);
 
     /// <summary>上传图片以 trace.moe 搜索。</summary>
     public Task<GatewayResponse> SearchTraceMoeAsync(byte[] image, string mediaType, CancellationToken cancellationToken) =>
-        SearchAsync(SearchEngine.TraceMoe, string.Empty, image, mediaType, cancellationToken);
+        SearchAsync(_http, SearchEngine.TraceMoe, string.Empty, image, mediaType, cancellationToken);
 
-    private async Task<GatewayResponse> SearchAsync(SearchEngine engine, string query, byte[] image, string mediaType, CancellationToken cancellationToken)
+    private async Task<GatewayResponse> SearchAsync(HttpClient http, SearchEngine engine, string query, byte[] image, string mediaType, CancellationToken cancellationToken)
     {
         using HttpRequestMessage request = CreateRequest(HttpMethod.Post, $"search/{PathOf(engine)}{query}");
         request.Content = new ByteArrayContent(image);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
         try
         {
-            using HttpResponseMessage response = await _http.SendAsync(request, cancellationToken);
+            using HttpResponseMessage response = await http.SendAsync(request, cancellationToken);
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
             GatewayOutcome outcome = response.Headers.Contains(UPSTREAM_HEADER) ? GatewayOutcome.Upstream
                 : response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? GatewayOutcome.Unauthorized
@@ -137,7 +149,11 @@ public sealed class YukariGateway : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        _http.Dispose();
+        _iqdbHttp.Dispose();
+    }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)
     {
@@ -148,8 +164,8 @@ public sealed class YukariGateway : IDisposable
     }
 
     // 同名参数重复，如 ?db=5&db=9；按数值排序，便于在日志中比对。
-    private static string Query(string name, IEnumerable<int> values) =>
-        values.Order().Select(value => $"{name}={value.ToString(CultureInfo.InvariantCulture)}").ToArray() is { Length: > 0 } pairs
+    private static string DatabaseQuery(IEnumerable<int> values) =>
+        values.Order().Select(value => $"{DATABASE_PARAMETER}={value.ToString(CultureInfo.InvariantCulture)}").ToArray() is { Length: > 0 } pairs
             ? "?" + string.Join('&', pairs)
             : string.Empty;
 

@@ -24,6 +24,9 @@ public static class ReplyTexts
     /// <summary>搜索服务的额度用完，且兜底也没有结果。</summary>
     public const string RATE_LIMITED = "已经冲尽了";
 
+    /// <summary>主搜索服务不可用、改查兜底服务之前的提示（IQDB 排队可能很久，先告知发起人）。</summary>
+    public const string TRYING_FALLBACK = "搜索服务爆炸了喵，在尝试别的方式喵";
+
     /// <summary>网关、网络或搜索服务出错。</summary>
     public const string SERVER_ERROR = "服务器爆炸了喵";
 

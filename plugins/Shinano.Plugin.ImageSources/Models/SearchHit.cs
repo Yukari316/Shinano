@@ -15,6 +15,9 @@ public sealed class SearchHit
     /// <summary>类别。</summary>
     public required HitKind Kind { get; init; }
 
+    /// <summary>结果所在的库：SauceNAO 为 <c>index_id</c>；其他搜索服务为 null。</summary>
+    public int? DatabaseId { get; init; }
+
     /// <summary>是否已知为成人内容（SauceNAO 的 H-Anime 库、trace.moe 的成人番、IQDB 的 Explicit 标注）；为 false 时仍可能由作品信息判定为 R-18。</summary>
     public bool Adult { get; init; }
 

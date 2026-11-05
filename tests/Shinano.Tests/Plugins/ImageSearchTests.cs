@@ -43,15 +43,50 @@ public sealed class ImageSearchTests
             {"header":{"status":0},"results":[
               {"header":{"similarity":"97.1","index_id":9,"index_name":"Index #9: Danbooru - a.jpg"},"data":{"danbooru_id":1}},
               {"header":{"similarity":"91.5","index_id":22,"index_name":"Index #22: H-Anime - b.jpg"},"data":{"source":"H","part":"2","est_time":"00:03:01"}},
-              {"header":{"similarity":"88.0","index_id":21,"index_name":"Index #21: Anime - c.jpg"},"data":{"source":"A","part":"5","est_time":"00:12:00"}}
+              {"header":{"similarity":"88.0","index_id":21,"index_name":"Index #21: Anime* - 22203-20-922256.jpg (29707)"},"data":{"source":"A","part":"5","est_time":"00:12:00"}}
             ]}
             """;
 
         SearchResult result = SauceNaoParser.Parse(Upstream(200, BODY), SearchDatabases.SauceNaoAnime);
 
         Assert.Equal([("H", true), ("A", false)], result.Hits.Select(hit => (hit.Title, hit.Adult)));
+        // 实测的番剧库 index_name 库名带星号、文件名后带编号，库名仍能取出。
+        Assert.Equal(["H-Anime", "Anime"], result.Hits.Select(hit => hit.SourceName));
         Assert.All(result.Hits, hit => Assert.Equal(HitKind.Anime, hit.Kind));
         Assert.Empty(SauceNaoParser.Parse(Upstream(200, Fixture("saucenao-127307417.json")), SearchDatabases.SauceNaoAnime).Hits);
+    }
+
+    [Fact]
+    public void SauceNao_AllDatabasesKeepEveryResultWithItsIndex()
+    {
+        SearchResult result = SauceNaoParser.Parse(Upstream(200, Fixture("saucenao-127307417.json")), null);
+
+        // 录制的响应查了全部库：不限定时 Twitter（41）与 Nijie（11）的结果也保留。
+        Assert.Equal(8, result.Hits.Count);
+        Assert.Equal([9, 41, 5, 11], result.Hits.Select(hit => hit.DatabaseId ?? -1).Distinct());
+    }
+
+    [Fact]
+    public void FullSearch_RunsBelowThresholdAndMergedBestDecidesWhetherToFetch()
+    {
+        SearchResult weak = Ok(Indexed(Hit("Danbooru", 45), SauceNaoIndex.Danbooru));
+        SearchResult strong = Ok(Indexed(Hit("Danbooru", 95), SauceNaoIndex.Danbooru));
+        SearchHit twitter = Indexed(Hit("Twitter", 52), 41);
+
+        Assert.True(SearchDecisions.NeedsFullSearch(weak, 60));
+        Assert.True(SearchDecisions.NeedsFullSearch(Ok(), 60));
+        Assert.False(SearchDecisions.NeedsFullSearch(strong, 60));
+        Assert.False(SearchDecisions.NeedsFullSearch(SearchResult.Of(SearchStatus.RateLimited, "x"), 60));
+
+        // 合并后取相似度最高的：来自插画图库之外的库时只发基础信息卡。
+        SearchResult merged = SearchDecisions.Merge(weak, Ok(twitter, Indexed(Hit("Danbooru", 45), SauceNaoIndex.Danbooru)));
+        Assert.Same(twitter, merged.Hits[0]);
+        Assert.False(SearchDecisions.CanFetchOriginal(twitter));
+        Assert.True(SearchDecisions.CanFetchOriginal(merged.Hits[1]));
+        Assert.True(SearchDecisions.CanFetchOriginal(Hit("Danbooru", 70, SearchEngine.Iqdb)));
+
+        // 全部库没有完成搜索时只用插画图库的结果。
+        Assert.Same(weak, SearchDecisions.Merge(weak, SearchResult.Of(SearchStatus.RateLimited, "x")));
     }
 
     [Fact]
@@ -84,7 +119,10 @@ public sealed class ImageSearchTests
         Assert.All(yandereOnly.Hits, hit => Assert.Equal(ImageSite.Yandere, Assert.Single(hit.Sources).Site));
         Assert.NotEmpty(yandereOnly.Hits);
 
-        Assert.Equal(SearchStatus.Failed, IqdbParser.Parse(Upstream(200, Fixture("iqdb-queue-failure.html")), SearchDatabases.IqdbIllustrations).Status);
+        GatewayResponse queueFailure = Upstream(200, Fixture("iqdb-queue-failure.html"));
+        Assert.Equal(SearchStatus.Failed, IqdbParser.Parse(queueFailure, SearchDatabases.IqdbIllustrations).Status);
+        Assert.True(IqdbParser.IsReadFailure(queueFailure));
+        Assert.False(IqdbParser.IsReadFailure(Upstream(200, Fixture("iqdb-127307417.html"))));
     }
 
     [Fact]
@@ -303,6 +341,18 @@ public sealed class ImageSearchTests
             Similarity = similarity,
             SourceName = source,
             Kind       = HitKind.Illustration
+        };
+
+    private static SearchHit Indexed(SearchHit hit, SauceNaoIndex index) => Indexed(hit, (int)index);
+
+    private static SearchHit Indexed(SearchHit hit, int index) =>
+        new()
+        {
+            Engine     = hit.Engine,
+            Similarity = hit.Similarity,
+            SourceName = hit.SourceName,
+            Kind       = hit.Kind,
+            DatabaseId = index
         };
 
     private static SearchHit Anime(double similarity) =>

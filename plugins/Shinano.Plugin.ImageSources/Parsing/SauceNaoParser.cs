@@ -8,7 +8,7 @@ namespace Shinano.Plugin.ImageSources.Parsing;
 /// <summary>
 /// 解析经图源服务转发的 SauceNAO 响应（<c>output_type=2</c>）。限额用尽时上游返回 429；
 /// 正文 <c>header.status</c> 为 0 表示成功，负数为请求问题，正数为服务端问题。
-/// 只保留请求时限定的库的结果（见 <see cref="SearchDatabases" />）：图源服务未支持限定时上游会返回全部库的结果。
+/// 限定库时只保留这些库的结果（见 <see cref="SearchDatabases" />），作为对上游响应的校验；不限定时保留全部结果。
 /// </summary>
 public static partial class SauceNaoParser
 {
@@ -27,10 +27,10 @@ public static partial class SauceNaoParser
         ("konachan_id", ImageSite.Konachan)
     ];
 
-    /// <summary>解析搜索结果，只保留 <paramref name="databases" /> 中的库，按相似度从高到低排列。</summary>
+    /// <summary>解析搜索结果，按相似度从高到低排列。</summary>
     /// <param name="response">图源服务的响应。</param>
-    /// <param name="databases">请求时限定的库。</param>
-    public static SearchResult Parse(GatewayResponse response, IReadOnlySet<SauceNaoIndex> databases)
+    /// <param name="databases">请求时限定的库，只保留这些库的结果；为 null 时检索的是全部库，保留全部结果。</param>
+    public static SearchResult Parse(GatewayResponse response, IReadOnlySet<SauceNaoIndex>? databases)
     {
         switch (response.Outcome)
         {
@@ -73,15 +73,16 @@ public static partial class SauceNaoParser
         };
     }
 
-    private static SearchHit? ToHit(JsonNode? result, IReadOnlySet<SauceNaoIndex> databases)
+    private static SearchHit? ToHit(JsonNode? result, IReadOnlySet<SauceNaoIndex>? databases)
     {
         JsonNode? header = result?["header"];
         JsonNode? data = result?["data"];
         if (JsonFields.Number(header?["similarity"]) is not { } similarity || JsonFields.Number(header?["index_id"]) is not { } indexValue)
             return null;
 
+        // 不限定时 index 可以是 SauceNaoIndex 之外的任意库，枚举只用于比较。
         SauceNaoIndex index = (SauceNaoIndex)(int)indexValue;
-        if (!databases.Contains(index)) return null;
+        if (databases is not null && !databases.Contains(index)) return null;
 
         bool anime = index is SauceNaoIndex.Anime or SauceNaoIndex.HAnime;
         return new SearchHit
@@ -90,6 +91,7 @@ public static partial class SauceNaoParser
             Similarity = similarity,
             SourceName = SourceName(JsonFields.Text(header?["index_name"])),
             Kind       = anime ? HitKind.Anime : HitKind.Illustration,
+            DatabaseId = (int)index,
             Adult      = index == SauceNaoIndex.HAnime,
             Title      = anime ? JsonFields.Text(data?["source"]) : FirstText(data, "title", "jp_name", "eng_name", "material"),
             Author     = anime ? null : FirstText(data, "member_name", "author_name", "creator", "twitter_user_handle"),
@@ -100,10 +102,11 @@ public static partial class SauceNaoParser
         };
     }
 
-    // index_name 形如「Index #9: Danbooru - a2f2….jpg」，取中间的库名。
+    // index_name 形如「Index #9: Danbooru - a2f2….jpg」，取中间的库名；番剧库形如「Index #21: Anime* - 22203-20-922256.jpg (29707)」，
+    // 库名后带星号、文件名后带编号（2026-11-05 实测），库名去掉星号。
     private static string SourceName(string? indexName) =>
         indexName is null ? UNKNOWN_SOURCE
-        : IndexName().Match(indexName) is { Success: true } match ? match.Groups["name"].Value.Trim()
+        : IndexName().Match(indexName) is { Success: true } match ? match.Groups["name"].Value.Trim().TrimEnd('*')
         : indexName;
 
     private static IReadOnlyList<SourceRef> Sources(JsonNode? data)
@@ -135,6 +138,6 @@ public static partial class SauceNaoParser
     private static string? FirstText(JsonNode? data, params string[] fields) =>
         fields.Select(field => JsonFields.Text(data?[field])).FirstOrDefault(text => text is not null);
 
-    [GeneratedRegex(@"^Index #\d+:\s*(?<name>.+?)\s+-\s+\S+$")]
+    [GeneratedRegex(@"^Index #\d+:\s*(?<name>.+?)\s+-\s+\S")]
     private static partial Regex IndexName();
 }

@@ -16,6 +16,33 @@ public static class SearchDecisions
     /// <summary>主服务不可用，需要查兜底服务。</summary>
     public static bool NeedsFallback(SearchResult primary) => primary.Status != SearchStatus.Ok;
 
+    /// <summary>
+    /// SauceNAO 的插画图库完成搜索，但没有结果或最高结果低于阈值，需要再检索全部库：部分作品（如 AI 作品）不在这些图库中。
+    /// </summary>
+    public static bool NeedsFullSearch(SearchResult illustrations, double threshold) =>
+        illustrations.Status == SearchStatus.Ok && (illustrations.Hits.FirstOrDefault()?.Similarity ?? 0) < threshold;
+
+    /// <summary>
+    /// 合并插画图库与全部库的结果，按相似度从高到低排列，相似度相同时插画图库的结果在前（能取原图）；
+    /// 全部库没有完成搜索（如短时额度用完）时只用插画图库的结果。
+    /// </summary>
+    public static SearchResult Merge(SearchResult illustrations, SearchResult all) =>
+        all.Status != SearchStatus.Ok
+            ? illustrations
+            : new SearchResult
+            {
+                Status = SearchStatus.Ok,
+                Hits   = [.. illustrations.Hits.Concat(all.Hits).OrderByDescending(hit => hit.Similarity)],
+                Detail = all.Detail
+            };
+
+    /// <summary>
+    /// 结果是否来自能取原图的库：SauceNAO 的结果须在插画图库中，其他搜索服务的结果在请求时已限定。
+    /// 不在其中的（检索全部库得到的）只发基础信息卡，不查来源作品、不取原图。
+    /// </summary>
+    public static bool CanFetchOriginal(SearchHit hit) =>
+        hit is not { Engine: SearchEngine.SauceNao, DatabaseId: { } database } || SearchDatabases.SauceNaoIllustrations.Contains((SauceNaoIndex)database);
+
     /// <summary>搜图的回复。</summary>
     /// <param name="sauceNao">SauceNAO 的结果。</param>
     /// <param name="iqdb">IQDB 的结果；没有查询时为 null。</param>

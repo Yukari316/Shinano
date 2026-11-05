@@ -20,23 +20,30 @@ public sealed class ImageSearchConfig
     [Range(0, 100)]
     public int SauceNaoThreshold { get; set; } = 60;
 
+    /// <summary>插画图库的最高结果低于 SauceNAO 阈值时，是否再检索 SauceNAO 全部库。</summary>
+    [Display(
+        Name = "低于阈值时检索全部库",
+        Description = "插画图库没有结果或最高相似度低于 SauceNAO 阈值时，再检索 SauceNAO 全部库并合并结果（会多用一次 SauceNAO 额度）；最高结果不在插画图库中时只发基础信息卡，不下载原图",
+        Order = 4)]
+    public bool FullSearchBelowThreshold { get; set; } = true;
+
     /// <summary>IQDB 相似度阈值，单位百分比。</summary>
-    [Display(Name = "IQDB 相似度阈值（%）", Description = "SauceNAO 不可用、改查 IQDB 时使用；低于阈值时卡片为警告色", Order = 4)]
+    [Display(Name = "IQDB 相似度阈值（%）", Description = "SauceNAO 不可用、改查 IQDB 时使用；低于阈值时卡片为警告色", Order = 5)]
     [Range(0, 100)]
     public int IqdbThreshold { get; set; } = 80;
 
     /// <summary>搜番相似度阈值，单位百分比。</summary>
-    [Display(Name = "搜番相似度阈值（%）", Description = "trace.moe 低于阈值时卡片为警告色；trace.moe 不可用时改查 SauceNAO 的番剧库", Order = 5)]
+    [Display(Name = "搜番相似度阈值（%）", Description = "trace.moe 低于阈值时卡片为警告色；trace.moe 不可用时改查 SauceNAO 的番剧库", Order = 6)]
     [Range(0, 100)]
     public int AnimeThreshold { get; set; } = 90;
 
     /// <summary>原图大小上限，单位 MiB。</summary>
-    [Display(Name = "原图大小上限（MiB）", Description = "超过时不发送原图；实际上限不超过部署的单文件上限", Order = 6)]
+    [Display(Name = "原图大小上限（MiB）", Description = "超过时不发送原图；实际上限不超过部署的单文件上限", Order = 7)]
     [Range(1, 1024)]
     public int MaxOriginalMiB { get; set; } = 100;
 
     /// <summary>插画卡片最多显示的标签数。</summary>
-    [Display(Name = "最多显示标签数", Description = "插画卡片的 TAG 行最多显示的标签个数，按来源作品中的顺序截取；为 0 时不显示 TAG 行", Order = 7)]
+    [Display(Name = "最多显示标签数", Description = "插画卡片的 TAG 行最多显示的标签个数，按来源作品中的顺序截取；为 0 时不显示 TAG 行", Order = 8)]
     [Range(0, 100)]
     public int MaxTags { get; set; } = 20;
 }

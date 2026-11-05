@@ -29,6 +29,7 @@ namespace Shinano.Plugin.ImageSearch;
 public sealed class ImageSearchCommands
 {
     private const int SECONDS_PER_MINUTE = 60;
+    private const int IQDB_ATTEMPTS      = 2;
 
     private static readonly TimeSpan _cooldown = TimeSpan.FromSeconds(20);
 
@@ -57,7 +58,9 @@ public sealed class ImageSearchCommands
 
     private ImageSearchConfig Config => _context.Config<ImageSearchConfig>().Value;
 
-    /// <summary>以图搜图：SauceNAO 为主，SauceNAO 不可用时以 IQDB 兜底。</summary>
+    /// <summary>
+    /// 以图搜图：SauceNAO 的插画图库为主，最高结果低于阈值时再检索全部库并合并结果（可在插件配置关闭）；SauceNAO 不可用时先提示，再以 IQDB 兜底。
+    /// </summary>
     [Command(
         Expressions = ["搜图"],
         MatchType = MatchType.Full,
@@ -68,13 +71,26 @@ public sealed class ImageSearchCommands
         {
             ImageSearchConfig config = Config;
             SearchResult sauceNao = await SearchSauceNaoAsync(SearchDatabases.SauceNaoIllustrations, image);
-            SearchResult? iqdb = SearchDecisions.NeedsFallback(sauceNao) ? await SearchIqdbAsync(image) : null;
+            SearchResult? iqdb = null;
+            if (SearchDecisions.NeedsFallback(sauceNao))
+            {
+                await e.ReplyAsync(new MessageBody(ReplyTexts.TRYING_FALLBACK));
+                iqdb = await SearchIqdbAsync(image);
+            }
+            else if (config.FullSearchBelowThreshold && SearchDecisions.NeedsFullSearch(sauceNao, config.SauceNaoThreshold))
+            {
+                _logger.LogInformation(
+                    "SauceNAO 插画图库的最高相似度 {Similarity} 低于阈值 {Threshold}%，再检索全部库并合并结果",
+                    sauceNao.Hits.FirstOrDefault() is { } best ? string.Create(CultureInfo.InvariantCulture, $"{best.Similarity:0.##}%") : "无",
+                    config.SauceNaoThreshold);
+                sauceNao = SearchDecisions.Merge(sauceNao, await SearchSauceNaoAsync(null, image));
+            }
             SearchDecision decision = SearchDecisions.ForImage(sauceNao, iqdb, config.SauceNaoThreshold, config.IqdbThreshold);
             Log("搜图", decision, sauceNao, iqdb);
             return decision;
         });
 
-    /// <summary>以图搜番：trace.moe 为主，trace.moe 不可用时以 SauceNAO 的番剧库兜底。</summary>
+    /// <summary>以图搜番：trace.moe 为主，trace.moe 不可用时先提示，再以 SauceNAO 的番剧库兜底。</summary>
     [Command(
         Expressions = ["搜番"],
         MatchType = MatchType.Full,
@@ -88,7 +104,12 @@ public sealed class ImageSearchCommands
                 SearchEngine.TraceMoe,
                 () => _gateway.SearchTraceMoeAsync(image.Content, image.MediaType, CancellationToken.None),
                 TraceMoeParser.Parse);
-            SearchResult? sauceNao = SearchDecisions.NeedsFallback(traceMoe) ? await SearchSauceNaoAsync(SearchDatabases.SauceNaoAnime, image) : null;
+            SearchResult? sauceNao = null;
+            if (SearchDecisions.NeedsFallback(traceMoe))
+            {
+                await e.ReplyAsync(new MessageBody(ReplyTexts.TRYING_FALLBACK));
+                sauceNao = await SearchSauceNaoAsync(SearchDatabases.SauceNaoAnime, image);
+            }
             SearchDecision decision = SearchDecisions.ForAnime(traceMoe, sauceNao, config.AnimeThreshold, config.SauceNaoThreshold);
             Log("搜番", decision, traceMoe, sauceNao);
             return decision;
@@ -165,17 +186,31 @@ public sealed class ImageSearchCommands
         }
     }
 
-    private Task<SearchResult> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex> databases, QueryImage image) =>
+    // databases 为 null 时检索全部库。
+    private Task<SearchResult> SearchSauceNaoAsync(IReadOnlySet<SauceNaoIndex>? databases, QueryImage image) =>
         SearchAsync(
             SearchEngine.SauceNao,
             () => _gateway.SearchSauceNaoAsync(databases, image.Content, image.MediaType, CancellationToken.None),
             response => SauceNaoParser.Parse(response, databases));
 
-    private Task<SearchResult> SearchIqdbAsync(QueryImage image) =>
-        SearchAsync(
-            SearchEngine.Iqdb,
-            () => _gateway.SearchIqdbAsync(SearchDatabases.IqdbIllustrations, image.Content, image.MediaType, CancellationToken.None),
-            response => IqdbParser.Parse(response, SearchDatabases.IqdbIllustrations));
+    // IQDB 排队后间歇性返回读取失败页，不计额度，重试一次；网关出错或超时不重试，避免等待时间翻倍。
+    private async Task<SearchResult> SearchIqdbAsync(QueryImage image)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            bool readFailure = false;
+            SearchResult result = await SearchAsync(
+                SearchEngine.Iqdb,
+                () => _gateway.SearchIqdbAsync(SearchDatabases.IqdbIllustrations, image.Content, image.MediaType, CancellationToken.None),
+                response =>
+                {
+                    readFailure = IqdbParser.IsReadFailure(response);
+                    return IqdbParser.Parse(response, SearchDatabases.IqdbIllustrations);
+                });
+            if (!readFailure || attempt >= IQDB_ATTEMPTS) return result;
+            _logger.LogInformation("IQDB 返回读取失败页，第 {Attempt} 次重试", attempt);
+        }
+    }
 
     // 调用一个搜索服务并记录其结果：HTTP 状态码、耗时、最高相似度与其标题。
     private async Task<SearchResult> SearchAsync(SearchEngine engine, Func<Task<GatewayResponse>> send, Func<GatewayResponse, SearchResult> parse)

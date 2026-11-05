@@ -55,10 +55,18 @@ public sealed class ResultSender : IDisposable
     /// <summary>
     /// 发送插画结果：先查来源作品，再发卡片（来源为 Pixiv 时用 Pixiv 的作品信息，并附来源作品的标签），
     /// 之后下载原图发到同一会话；R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。
-    /// 已知为成人内容的结果（如 IQDB 的 Explicit）不查来源作品，卡片只用搜索结果中的信息。
+    /// 已知为成人内容的结果（如 IQDB 的 Explicit）不查来源作品，卡片只用搜索结果中的信息；
+    /// 检索全部库得到、不在插画图库中的结果只发基础信息卡，不查来源作品、不取原图。
     /// </summary>
     public async Task SendIllustrationAsync(MessageReceivedEvent e, SearchHit hit, double threshold, bool lowSimilarity, CancellationToken cancellationToken)
     {
+        if (!SearchDecisions.CanFetchOriginal(hit))
+        {
+            _logger.LogInformation("搜图结果 {Source}（SauceNAO index {Database}）不在插画图库中，只发基础信息卡", hit.SourceName, hit.DatabaseId);
+            await SendCardAsync(e, SearchCards.Illustration(hit, ImageResolution.None, threshold, lowSimilarity, 0));
+            return;
+        }
+
         ImageResolution resolution = hit.Adult ? ImageResolution.None : await _resolver.ResolveAsync(hit.Sources, cancellationToken);
         _logger.LogInformation(
             "搜图结果 {Source} 的来源作品：{Work}，原图 {Image}，R-18 {Adult}，已删除 {Deleted}，标签 {Tags} 个",
