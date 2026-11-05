@@ -49,7 +49,10 @@ public sealed class HostScheduler : IHostedService, IAsyncDisposable
         bool                          runImmediately)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
-        _loops.Add(Task.Run(() => RunLoopAsync(owner, name, interval, job, runImmediately)));
+        // 不传递登记方的执行上下文：SqlSugarScope 以 AsyncLocal 为每个异步流程分配客户端，继承后任务会与登记方
+        // （如插件 InitializeAsync）及同批登记的其他任务共用同一个数据库连接并发执行命令。
+        using (ExecutionContext.SuppressFlow())
+            _loops.Add(Task.Run(() => RunLoopAsync(owner, name, interval, job, runImmediately)));
     }
 
     /// <summary>启用或停用某个所有者的全部任务，从下一次触发生效。</summary>
