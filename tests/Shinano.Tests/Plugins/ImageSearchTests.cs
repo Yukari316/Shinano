@@ -67,6 +67,29 @@ public sealed class ImageSearchTests
     }
 
     [Fact]
+    public void HitPicker_PrefersPixivResultReachingThreshold()
+    {
+        // 形状取自实测：同一张图的图站结果略高于 Pixiv 结果，图站帖子没有标注 Pixiv 来源。
+        SearchHit yandere = Hit("Yande.re", 94.79);
+        SearchHit pixiv = new()
+        {
+            Engine     = SearchEngine.SauceNao,
+            Similarity = 94.34,
+            SourceName = "Pixiv Images",
+            Kind       = HitKind.Illustration,
+            Sources    = [new SourceRef { Site = ImageSite.Pixiv, Id = "100000003" }]
+        };
+        SearchResult result = Ok(yandere, pixiv, Hit("Yande.re", 70));
+
+        Assert.Same(pixiv, HitPicker.Pick(result.Hits, 60));
+        Assert.Same(pixiv, SearchDecisions.ForImage(result, null, 60, 80).Hit);
+        // 低于阈值的 Pixiv 结果不优先；没有 Pixiv 结果时取最高结果。
+        Assert.Same(yandere, HitPicker.Pick(result.Hits, 94.5));
+        Assert.Same(yandere, HitPicker.Pick(Ok(yandere).Hits, 60));
+        Assert.Null(HitPicker.Pick([], 60));
+    }
+
+    [Fact]
     public void FullSearch_RunsBelowThresholdAndMergedBestDecidesWhetherToFetch()
     {
         SearchResult weak = Ok(Indexed(Hit("Danbooru", 45), SauceNaoIndex.Danbooru));

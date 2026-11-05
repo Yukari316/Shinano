@@ -24,16 +24,15 @@ namespace Shinano.Plugin.Hso;
 public sealed partial class HsoCommands
 {
     private const int    RANKING_SIZE  = 10;
-    private const int    MAX_LOOKUPS   = 5;
     private const string BASE64_PREFIX = "base64://";
 
-    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(1);
 
     private readonly CooldownTracker              _cooldown = new(TimeProvider.System);
     private readonly IPluginInitializationContext _context;
     private readonly HsoGallery                   _gallery;
     private readonly HsoGroups                    _groups;
-    private readonly HsoInfoResolver              _info;
+    private readonly HsoCompleter                 _completer;
     private readonly HsoSender                    _sender;
     private readonly HsoPixivImporter             _importer;
     private readonly ILogger<HsoCommands>         _logger;
@@ -43,21 +42,21 @@ public sealed partial class HsoCommands
         IPluginInitializationContext context,
         HsoGallery                   gallery,
         HsoGroups                    groups,
-        HsoInfoResolver              info,
+        HsoCompleter                 completer,
         HsoSender                    sender,
         HsoPixivImporter             importer,
         ILogger<HsoCommands>         logger)
     {
-        _context  = context;
-        _gallery  = gallery;
-        _groups   = groups;
-        _info     = info;
-        _sender   = sender;
-        _importer = importer;
-        _logger   = logger;
+        _context   = context;
+        _gallery   = gallery;
+        _groups    = groups;
+        _completer = completer;
+        _sender    = sender;
+        _importer  = importer;
+        _logger    = logger;
     }
 
-    /// <summary>从图库随机发一张图，再发作品信息卡。</summary>
+    /// <summary>从图库随机发一张图；作品信息已确认时再发信息卡。抽到待补全的图片时在后台补全它。</summary>
     [Command(
         Expressions = ["来点色图", "来点涩图", "我要看色图"],
         MatchType = MatchType.Full,
@@ -81,7 +80,9 @@ public sealed partial class HsoCommands
             return;
         }
 
-        if (await _sender.SendAsync(e, record, CancellationToken.None))
+        bool sent = await _sender.SendAsync(e, record, CancellationToken.None);
+        if (record.InfoState == (int)HsoInfoState.Pending) _completer.Enqueue(record.Id);
+        if (sent)
         {
             await _groups.IncrementAsync(groupId, e.Message.SenderId);
             return;
@@ -166,22 +167,17 @@ public sealed partial class HsoCommands
         }));
     }
 
-    // 抽一张本群允许的图片，抽中未补全作品信息的图片时先补全。不允许 NSFW 的群只从未标为 NSFW 的图片中抽，
-    // 补全后才发现是 NSFW 的重新抽（信息已保存，之后不会再被抽中）。每次最多补全 MAX_LOOKUPS 张，避免图库里待补全的
-    // NSFW 图片很多时一次抽图反复访问图源服务；超过后只从已补全的图片中抽，这些图片不再需要查询，抽中即可发送。
-    // 没有可发的图片时返回 null。
+    // 抽一张本群允许的图片；没有可发的图片时返回 null。不允许 NSFW 的群只从未标为 NSFW 的图片中抽；作品信息补全在后台进行，
+    // 抽到待补全的图片时还不能确定它是否 NSFW：配置不允许发送时在后台补全它，改抽一张已确定不是 NSFW 的图（已确认、查无信息或待审核）。
     private async Task<HsoImageRecord?> DrawAllowedAsync(GroupId groupId, bool allowNsfw)
     {
-        for (int lookups = 0; ; lookups++)
-        {
-            if (await _gallery.PickAsync(allowNsfw, resolvedOnly: lookups >= MAX_LOOKUPS) is not { } record) return null;
-            if (record.InfoState != (int)HsoInfoState.Pending) return record;
+        HsoImageRecord? record = await _gallery.PickAsync(allowNsfw, resolvedOnly: false);
+        if (allowNsfw || record is not { InfoState: (int)HsoInfoState.Pending } || _context.Config<HsoConfig>().Value.SendPendingInRestrictedGroups)
+            return record;
 
-            byte[]? content = record.Pid is null ? await _gallery.ReadAsync(record, CancellationToken.None) : null;
-            await _gallery.ApplyLookupAsync(record, await _info.LookupAsync(record, content, CancellationToken.None));
-            if (allowNsfw || !record.Nsfw) return record;
-            _logger.LogInformation("群 {GroupId} 不允许 NSFW，抽中的 Hso 图片 {Id} 补全后为 NSFW，重新抽取", groupId, record.Id);
-        }
+        _logger.LogInformation("群 {GroupId} 不允许 NSFW，抽到的 Hso 图片 {Id} 作品信息待补全，转为后台补全并改抽已确定的图片", groupId, record.Id);
+        _completer.Enqueue(record.Id);
+        return await _gallery.PickAsync(allowNsfw: false, resolvedOnly: true);
     }
 
     // 群名片优先，没有时用昵称；取不到时显示 QQ 号。

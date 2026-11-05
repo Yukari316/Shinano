@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { PhArrowsClockwise, PhCaretLeft, PhCaretRight, PhProhibit, PhTrash, PhUploadSimple } from '@phosphor-icons/vue'
+import { PhArrowsClockwise, PhCaretLeft, PhCaretRight, PhListChecks, PhProhibit, PhTrash, PhUploadSimple } from '@phosphor-icons/vue'
 import { PLUGIN_API_PREFIX, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, watch } from 'vue'
-import type { GalleryImage, Group, ImagePage, ImportOutcome, ImportResult } from './types'
+import { formatSize } from './format'
+import ReviewDialog from './ReviewDialog.vue'
+import type { GalleryImage, Group, ImagePage, ImportOutcome, ImportResult, InfoState } from './types'
 
 const props = defineProps<{ context: PluginPageContext }>()
 
@@ -19,6 +21,13 @@ const ORIGIN_LABEL: Record<GalleryImage['origin'], string> = {
   Pixiv: 'AD',
   Tool: '工具'
 }
+// 没有标题、作者与 pid 时在图库网格中代替显示的补全状态。
+const STATE_LABEL: Record<InfoState, string> = {
+  Pending: '作品信息待补全',
+  Review: '作品信息待审核',
+  Found: '作品信息已确认',
+  NotFound: '没有作品信息'
+}
 
 const error = ref('')
 const uploading = ref(false)
@@ -31,6 +40,8 @@ const nsfw = ref<'' | 'true' | 'false'>('')
 const hasPid = ref<'' | 'true' | 'false'>('')
 const blocked = ref<'' | 'true' | 'false'>('')
 const keyword = ref('')
+const reviewCount = ref(0)
+const reviewing = ref(false)
 
 const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const imported = computed(() => results.value.filter((result) => result.outcome === 'Imported').length)
@@ -82,6 +93,15 @@ async function loadImages() {
   total.value = result?.total ?? 0
 }
 
+async function loadReviewCount() {
+  reviewCount.value = ((await call<number[]>('/reviews')) ?? []).length
+}
+
+function closeReview() {
+  reviewing.value = false
+  void Promise.all([loadReviewCount(), loadImages()])
+}
+
 async function setNsfw(image: GalleryImage, value: boolean) {
   await call(`/images/${image.id}/nsfw`, {
     method: 'PUT',
@@ -108,12 +128,6 @@ function describe(image: GalleryImage): string {
   return image.fileName ?? `#${image.id}`
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
 let keywordTimer: number | undefined
 watch([nsfw, hasPid, blocked], () => {
   page.value = 1
@@ -129,7 +143,7 @@ watch(keyword, () => {
 watch(page, () => void loadImages())
 
 onMounted(async () => {
-  await Promise.all([loadGroups(), loadImages()])
+  await Promise.all([loadGroups(), loadImages(), loadReviewCount()])
 })
 </script>
 
@@ -137,9 +151,15 @@ onMounted(async () => {
   <div class="flex flex-col gap-6">
     <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
 
+    <div class="flex items-center gap-3">
+      <p class="text-sm opacity-70">查到的来源原图与图库图片不一致或下载失败时，作品信息进入审核队列；审核前抽到这张图只发图片，不发信息卡。</p>
+      <button class="btn btn-primary btn-sm ml-auto shrink-0" @click="reviewing = true"><PhListChecks class="size-4" />审核队列（{{ reviewCount }}）</button>
+    </div>
+    <ReviewDialog v-if="reviewing" :context="context" :api-base="apiBase" @changed="reviewCount = Math.max(0, reviewCount - 1)" @close="closeReview" />
+
     <section class="flex flex-col gap-3">
       <h3 class="font-semibold">上传</h3>
-      <p class="text-sm opacity-70">可一次选择多张图片或 zip；按文件名 <code>&lt;pid&gt;_p&lt;页号&gt;</code> 识别 Pixiv 作品，作品信息在图片第一次被抽中时补全。相同内容的图片只保存一份。</p>
+      <p class="text-sm opacity-70">可一次选择多张图片或 zip；按文件名 <code>&lt;pid&gt;_p&lt;页号&gt;</code> 识别 Pixiv 作品，作品信息在图片被抽中后或由每日任务在后台补全。相同内容的图片只保存一份。</p>
       <label class="btn btn-primary btn-sm w-fit" :class="{ 'btn-disabled': uploading }">
         <span v-if="uploading" class="loading loading-spinner loading-xs"></span>
         <PhUploadSimple v-else class="size-4" />{{ uploading ? '上传中' : '选择文件' }}
@@ -214,8 +234,9 @@ onMounted(async () => {
           <div class="flex flex-col gap-0.5 text-sm">
             <span class="font-semibold [overflow-wrap:anywhere]">{{ image.title ?? describe(image) }}</span>
             <span class="text-xs opacity-70 [overflow-wrap:anywhere]">
-              {{ [image.author, image.pid !== null ? describe(image) : image.sourceName].filter(Boolean).join(' · ') || (image.infoState === 'Pending' ? '作品信息待补全' : '没有作品信息') }}
+              {{ [image.author, image.pid !== null ? describe(image) : image.sourceName].filter(Boolean).join(' · ') || STATE_LABEL[image.infoState] }}
             </span>
+            <span v-if="image.infoState === 'Review'" class="text-xs text-warning-strong">待审核</span>
             <span class="text-xs opacity-60 tabular-nums">{{ ORIGIN_LABEL[image.origin] }} · {{ formatSize(image.size) }}</span>
           </div>
           <div class="flex flex-wrap items-center gap-2">

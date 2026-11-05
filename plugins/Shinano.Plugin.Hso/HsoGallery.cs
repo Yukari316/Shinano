@@ -42,13 +42,30 @@ public sealed class HsoGallery
     /// <summary>创建缺失的表与 bucket。</summary>
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        Database.CodeFirst.InitTables<HsoImageRecord>();
+        Database.CodeFirst.InitTables<HsoImageRecord, HsoReviewRecord>();
         await Bucket.EnsureCreatedAsync(cancellationToken);
     }
 
+    /// <summary>最早导入的若干张待补全图片的 ID，供后台任务补全。</summary>
+    public async Task<List<long>> PendingIdsAsync(int count) =>
+        await Database.Queryable<HsoImageRecord>()
+                      .Where(record => record.InfoState == (int)HsoInfoState.Pending)
+                      .OrderBy(record => record.ImportedAt)
+                      .OrderBy(record => record.Id)
+                      .Take(count)
+                      .Select(record => record.Id)
+                      .ToListAsync();
+
+    /// <summary>内容 SHA256 为 <paramref name="sha256" /> 的其他图片的 ID；没有时为 null。</summary>
+    public async Task<long?> FindOtherBySha256Async(string sha256, long excludeId) =>
+        await Database.Queryable<HsoImageRecord>()
+                      .Where(record => record.Sha256 == sha256 && record.Id != excludeId)
+                      .Select(record => (long?)record.Id)
+                      .FirstAsync();
+
     /// <summary>随机取一张图片；没有符合条件的图片时返回 null。</summary>
-    /// <param name="allowNsfw">为 false 时只取当前未标为 NSFW 的图片（未补全作品信息的图片默认非 NSFW，补全后才能确定）。</param>
-    /// <param name="resolvedOnly">只取已补全作品信息的图片（查得到或查无结果），抽中后不需要再查询。</param>
+    /// <param name="allowNsfw">为 false 时只取当前未标为 NSFW 的图片（待补全的图片默认非 NSFW，补全后才能确定）。</param>
+    /// <param name="resolvedOnly">只取不是待补全的图片（已确认、查无信息或待审核），它们的 NSFW 已按作品信息确定。</param>
     public async Task<HsoImageRecord?> PickAsync(bool allowNsfw, bool resolvedOnly) =>
         await Database.Queryable<HsoImageRecord>()
                       .WhereIF(!allowNsfw, record => !record.Nsfw)
@@ -128,24 +145,44 @@ public sealed class HsoGallery
         };
     }
 
-    /// <summary>记录补全的作品信息；管理员手动设置过的 NSFW 不被覆盖。</summary>
+    /// <summary>记录补全的结果并直接确认（查到时为已确认，查无结果时为查无信息）；查询失败时不改动。管理员手动设置过的 NSFW 不被覆盖。</summary>
     public async Task ApplyLookupAsync(HsoImageRecord record, HsoLookup lookup)
     {
-        if (lookup.Status == HsoLookupStatus.Failed) return;
-
-        if (lookup.Info is { } info)
+        switch (lookup)
         {
-            record.SourceName = info.SourceName;
-            record.Pid        ??= info.Pid;
-            record.Page       ??= info.Page;
-            record.Title      = info.Title;
-            record.Author     = info.Author;
-            record.AuthorId   = info.AuthorId;
-            record.TagList    = info.Tags;
-            if (!record.NsfwManual) record.Nsfw = info.Nsfw;
+            case { Status: HsoLookupStatus.Failed }:
+                return;
+            case { Status: HsoLookupStatus.Found, Info: { } info }:
+                await SaveInfoAsync(record, info, HsoInfoState.Found);
+                return;
+            default:
+                record.InfoState = (int)HsoInfoState.NotFound;
+                await UpdateInfoAsync(record);
+                return;
         }
+    }
 
-        record.InfoState = (int)(lookup.Status == HsoLookupStatus.Found ? HsoInfoState.Found : HsoInfoState.NotFound);
+    /// <summary>
+    /// 把查到的作品信息写入记录并设为 <paramref name="state" />（已确认或待审核）。记录没有 pid 时采用查到的 pid 与页号；
+    /// 管理员手动设置过的 NSFW 不被覆盖。
+    /// </summary>
+    public Task SaveInfoAsync(HsoImageRecord record, HsoWorkInfo info, HsoInfoState state)
+    {
+        record.SourceName = info.SourceName;
+        record.Pid        ??= info.Pid;
+        record.Page       ??= info.Page;
+        record.Title      = info.Title;
+        record.Author     = info.Author;
+        record.AuthorId   = info.AuthorId;
+        record.TagList    = info.Tags;
+        if (!record.NsfwManual) record.Nsfw = info.Nsfw;
+        record.InfoState = (int)state;
+        return UpdateInfoAsync(record);
+    }
+
+    /// <summary>写入记录的作品信息各列（含 pid 与页号）、NSFW 及其是否手动设置与补全状态。</summary>
+    public async Task UpdateInfoAsync(HsoImageRecord record)
+    {
         await Database.Updateable(record)
                       .UpdateColumns(item => new
                       {
@@ -157,17 +194,40 @@ public sealed class HsoGallery
                           item.AuthorId,
                           item.Tags,
                           item.Nsfw,
+                          item.NsfwManual,
                           item.InfoState
                       })
                       .ExecuteCommandAsync();
         _logger.LogInformation(
-            "Hso 图片 {Id} 的作品信息补全：{Status}，来源 {Source}，pid {Pid} 页 {Page}，NSFW {Nsfw}",
+            "Hso 图片 {Id} 的作品信息：{State}，来源 {Source}，pid {Pid} 页 {Page}，NSFW {Nsfw}",
             record.Id,
-            lookup.Status,
+            (HsoInfoState)record.InfoState,
             record.SourceName,
             record.Pid,
             record.Page,
             record.Nsfw);
+    }
+
+    /// <summary>以新内容替换图片的对象（审核中「覆盖」）：更新 key、SHA256、格式与大小并清除被拦截标记，作品信息设为已确认。</summary>
+    public async Task ReplaceContentAsync(HsoImageRecord record, string objectKey, string sha256, string mediaType, long size)
+    {
+        record.ObjectKey = objectKey;
+        record.Sha256    = sha256;
+        record.MediaType = mediaType;
+        record.Size      = size;
+        record.Blocked   = false;
+        record.InfoState = (int)HsoInfoState.Found;
+        await Database.Updateable(record)
+                      .UpdateColumns(item => new
+                      {
+                          item.ObjectKey,
+                          item.Sha256,
+                          item.MediaType,
+                          item.Size,
+                          item.Blocked,
+                          item.InfoState
+                      })
+                      .ExecuteCommandAsync();
     }
 
     /// <summary>标记为被拦截，之后发送时直接改像素。</summary>
@@ -233,11 +293,17 @@ public sealed class HsoGallery
         return updated > 0;
     }
 
-    /// <summary>删除图片的对象与记录。</summary>
+    /// <summary>删除图片的对象与记录；有待审核记录时一并删除它与暂存的来源原图。</summary>
     /// <returns>图片不存在时为 false。</returns>
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken)
     {
         if (await FindAsync(id) is not { } record) return false;
+
+        if (await Database.Queryable<HsoReviewRecord>().InSingleAsync(id) is { } review)
+        {
+            if (review.ObjectKey is { } candidate) await Bucket.DeleteObjectAsync(candidate, cancellationToken);
+            await Database.Deleteable<HsoReviewRecord>().In(id).ExecuteCommandAsync();
+        }
 
         await Bucket.DeleteObjectAsync(record.ObjectKey, cancellationToken);
         await Database.Deleteable<HsoImageRecord>().In(id).ExecuteCommandAsync();

@@ -120,6 +120,53 @@ internal static class HsoPanelEndpoints
     internal static async Task<IResult> DeleteAsync(HsoGallery gallery, long id, CancellationToken cancellationToken) =>
         await gallery.DeleteAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound();
 
+    /// <summary>审核队列中全部图片的 ID，先进入的在前。</summary>
+    internal static async Task<IResult> ReviewIdsAsync(HsoReviews reviews) => Results.Ok(await reviews.IdsAsync());
+
+    /// <summary>审核队列中一张图片的对比与作品信息。</summary>
+    internal static async Task<IResult> ReviewAsync(HsoReviews reviews, long id, CancellationToken cancellationToken) =>
+        await reviews.DetailAsync(id, cancellationToken) is { } view ? Results.Ok(view) : Results.NotFound();
+
+    /// <summary>即时绘制查询获取的原图的缩略图。</summary>
+    internal static async Task<IResult> CandidateThumbnailAsync(HsoReviews reviews, HsoGallery gallery, long id, CancellationToken cancellationToken)
+    {
+        if (await reviews.FindAsync(id) is not { ObjectKey: { } key }) return Results.NotFound();
+        await using Stream? stream = await gallery.Bucket.OpenReadAsync(key, cancellationToken);
+        if (stream is null) return Results.NotFound();
+        using MemoryStream buffer = new();
+        await stream.CopyToAsync(buffer, cancellationToken);
+        return HsoThumbnails.Render(buffer.ToArray()) is { } thumbnail ? Results.File(thumbnail, JPEG) : Results.NotFound();
+    }
+
+    /// <summary>查询获取的原图。</summary>
+    internal static async Task<IResult> CandidateAsync(HsoReviews reviews, HsoGallery gallery, long id, CancellationToken cancellationToken)
+    {
+        if (await reviews.FindAsync(id) is not { ObjectKey: { } key, MediaType: { } mediaType }) return Results.NotFound();
+        Stream? stream = await gallery.Bucket.OpenReadAsync(key, cancellationToken);
+        return stream is null ? Results.NotFound() : Results.Stream(stream, mediaType);
+    }
+
+    /// <summary>覆盖：用查询获取的原图替换图库图片，并确认作品信息。</summary>
+    internal static async Task<IResult> ReplaceReviewAsync(HsoReviews reviews, long id, CancellationToken cancellationToken) =>
+        ReviewResult(await reviews.ReplaceAsync(id, cancellationToken));
+
+    /// <summary>只确认信息：保留图库图片。</summary>
+    internal static async Task<IResult> AcceptReviewAsync(HsoReviews reviews, long id, CancellationToken cancellationToken) =>
+        ReviewResult(await reviews.AcceptAsync(id, cancellationToken));
+
+    /// <summary>否决：丢弃查到的作品信息，改用手动补全的信息（全部留空时记为查无信息）。</summary>
+    internal static async Task<IResult> RejectReviewAsync(HsoReviews reviews, long id, HsoManualInfo manual, CancellationToken cancellationToken) =>
+        ReviewResult(await reviews.RejectAsync(id, manual, cancellationToken));
+
+    private static IResult ReviewResult(HsoReviewResult result) =>
+        result.Outcome switch
+        {
+            HsoReviewOutcome.Done        => Results.NoContent(),
+            HsoReviewOutcome.NotFound    => Results.NotFound(new { error = "这张图片已处理或已删除" }),
+            HsoReviewOutcome.NoCandidate => Results.Conflict(new { error = "原图获取失败，没有可覆盖的原图" }),
+            _                            => Results.Conflict(new { error = $"查询获取的原图与图库中的 #{result.DuplicateId} 相同，未覆盖" })
+        };
+
     private static async Task ImportZipAsync(Stream stream, HsoGallery gallery, List<HsoImportResult> results, CancellationToken cancellationToken)
     {
         ZipArchive archive;

@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- 搜图插件的解析测试以真实录制的响应为输入（已去掉 Key 与账号 ID）。 -->
     <None Update="Plugins\ImageSearchFixtures\**" CopyToOutputDirectory="PreserveNewest"/>
+    <None Update="Plugins\HsoFixtures\**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>

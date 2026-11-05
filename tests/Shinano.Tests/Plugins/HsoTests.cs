@@ -2,11 +2,12 @@ using Shinano.Framework.Rendering.Models;
 using Shinano.Plugin.Hso;
 using Shinano.Plugin.Hso.Entities;
 using Shinano.Plugin.Hso.Models;
+using Shinano.Plugin.ImageSources.Models;
 using SkiaSharp;
 
 namespace Shinano.Tests.Plugins;
 
-/// <summary>Hso 图库的文件识别、信息卡与缩略图。</summary>
+/// <summary>Hso 图库的文件识别、作品信息、信息卡与缩略图。</summary>
 public sealed class HsoTests
 {
     [Theory]
@@ -39,6 +40,51 @@ public sealed class HsoTests
         Assert.NotNull(detected);
         Assert.Equal(mediaType, detected.MediaType);
         Assert.Equal(extension, detected.Extension);
+        Assert.Equal((16, 16), (detected.Width, detected.Height));
+    }
+
+    [Fact]
+    public void SauceNaoInfo_PrefersPixivWorkFoundThroughBooruPost()
+    {
+        // 结果形状取自实测（数据为虚构）：最高结果是 Yande.re，来源只有图站帖子，标题字段是作品出处、作者是图站画师标签；
+        // 帖子标注的来源是 Pixiv 作品。
+        SearchHit yandere = new()
+        {
+            Engine     = SearchEngine.SauceNao,
+            Similarity = 94.79,
+            SourceName = "Yande.re",
+            Kind       = HitKind.Illustration,
+            Title      = "original",
+            Author     = "booru_artist",
+            Sources    = [new SourceRef { Site = ImageSite.Danbooru, Id = "1000001" }, new SourceRef { Site = ImageSite.Yandere, Id = "2000002" }]
+        };
+        ImageResolution pixiv = new()
+        {
+            Work     = new SourceRef { Site = ImageSite.Pixiv, Id = "100000003", Page = 0 },
+            Title    = "作品标题",
+            Author   = "作者名",
+            AuthorId = 4000004,
+            Tags     = [new WorkTag { Name = "オリジナル", Translation = "原创" }],
+            Adult    = true
+        };
+
+        HsoWorkInfo info = HsoInfoResolver.InfoFromSauceNao(yandere, pixiv);
+
+        Assert.Equal(("Pixiv", 100000003L, 0, "作品标题", "作者名", 4000004L), (info.SourceName, info.Pid, info.Page, info.Title, info.Author, info.AuthorId));
+        Assert.Equal(["原创"], info.Tags);
+        Assert.True(info.Nsfw);
+
+        // 查不到 Pixiv 时用搜索结果中的信息，没有 pid。
+        HsoWorkInfo booru = HsoInfoResolver.InfoFromSauceNao(yandere, new ImageResolution { Work = new SourceRef { Site = ImageSite.Yandere, Id = "2000002" } });
+        Assert.Equal(("Yande.re", (long?)null, "original"), (booru.SourceName, booru.Pid, booru.Title));
+    }
+
+    [Fact]
+    public void ManualInfo_CountsOnlyNonBlankFieldsAsInfo()
+    {
+        Assert.False(HsoReviews.HasAnyInfo(new HsoManualInfo { Title = "  ", Tags = [" "], Nsfw = true }));
+        Assert.True(HsoReviews.HasAnyInfo(new HsoManualInfo { Tags = ["原创"] }));
+        Assert.True(HsoReviews.HasAnyInfo(new HsoManualInfo { Pid = 1 }));
     }
 
     [Fact]

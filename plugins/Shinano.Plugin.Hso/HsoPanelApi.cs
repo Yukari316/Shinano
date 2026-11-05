@@ -17,14 +17,16 @@ public sealed class HsoPanelApi
 {
     private readonly HsoGallery                   _gallery;
     private readonly HsoGroups                    _groups;
+    private readonly HsoReviews                   _reviews;
     private readonly IPluginInitializationContext _context;
     private readonly ILogger<HsoPanelApi>         _logger;
 
     /// <summary>创建路由登记。</summary>
-    public HsoPanelApi(HsoGallery gallery, HsoGroups groups, IPluginInitializationContext context, ILogger<HsoPanelApi> logger)
+    public HsoPanelApi(HsoGallery gallery, HsoGroups groups, HsoReviews reviews, IPluginInitializationContext context, ILogger<HsoPanelApi> logger)
     {
         _gallery = gallery;
         _groups  = groups;
+        _reviews = reviews;
         _context = context;
         _logger  = logger;
     }
@@ -53,5 +55,24 @@ public sealed class HsoPanelApi
         routes.MapDelete(
             "/images/{id:long}",
             (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.DeleteAsync(_gallery, id, cancellationToken));
+        routes.MapGet("/reviews", () => HsoPanelEndpoints.ReviewIdsAsync(_reviews));
+        routes.MapGet(
+            "/reviews/{id:long}",
+            (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.ReviewAsync(_reviews, id, cancellationToken));
+        routes.MapGet(
+            "/reviews/{id:long}/candidate/thumbnail",
+            (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.CandidateThumbnailAsync(_reviews, _gallery, id, cancellationToken));
+        routes.MapGet(
+            "/reviews/{id:long}/candidate",
+            (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.CandidateAsync(_reviews, _gallery, id, cancellationToken));
+        routes.MapPost(
+            "/reviews/{id:long}/replace",
+            (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.ReplaceReviewAsync(_reviews, id, cancellationToken));
+        routes.MapPost(
+            "/reviews/{id:long}/accept",
+            (long id, CancellationToken cancellationToken) => HsoPanelEndpoints.AcceptReviewAsync(_reviews, id, cancellationToken));
+        routes.MapPost(
+            "/reviews/{id:long}/reject",
+            (long id, HsoManualInfo manual, CancellationToken cancellationToken) => HsoPanelEndpoints.RejectReviewAsync(_reviews, id, manual, cancellationToken));
     }
 }

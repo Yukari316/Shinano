@@ -26,6 +26,19 @@ public static class TestEnvironment
     public static void RequireConfigured() =>
         Assert.SkipUnless(IsConfigured, "未设置 SHINANO_TEST_DSN 与 SHINANO_TEST_S3_* 环境变量");
 
+    /// <summary>
+    /// 图源服务（YukariApiNext）的访问令牌，用于调用真实图源服务的测试。这类测试会消耗 SauceNAO 额度，
+    /// 只在修改作品信息查询相关功能时手动设置运行，平时不设置。
+    /// </summary>
+    public static string? GatewayToken => Read("SHINANO_TEST_GATEWAY_TOKEN");
+
+    /// <summary>图源服务地址；未设置时用插件的默认地址。</summary>
+    public static string? GatewayUrl => Read("SHINANO_TEST_GATEWAY_URL");
+
+    /// <summary>未设置图源服务令牌时跳过当前测试。</summary>
+    public static void RequireGateway() =>
+        Assert.SkipUnless(GatewayToken is not null, "未设置 SHINANO_TEST_GATEWAY_TOKEN 环境变量（调用真实图源服务，会消耗 SauceNAO 额度）");
+
     private static string? Read(string name)
     {
         string? value = Environment.GetEnvironmentVariable(name);

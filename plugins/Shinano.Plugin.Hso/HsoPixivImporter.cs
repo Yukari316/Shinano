@@ -8,26 +8,26 @@ namespace Shinano.Plugin.Hso;
 
 /// <summary>
 /// <c>AD&lt;pid&gt; &lt;页号&gt;</c>：经图源服务查询 Pixiv 作品并下载指定页导入图库。为判断作品与页号是否存在必须先查作品信息，
-/// 查到的信息随导入一并保存，发送时不必再查。
+/// 查到的信息随导入一并保存并直接确认（图片就是从 Pixiv 下载的原图，不进入审核），发送时不必再查。
 /// </summary>
 public sealed class HsoPixivImporter
 {
-    private const long   MAX_DOWNLOAD_BYTES = 200L * 1024 * 1024;
-    private const int    BUFFER_SIZE        = 81920;
-    private const string PIXIV              = "Pixiv";
+    private const string PIXIV = "Pixiv";
 
     private readonly YukariGateway             _gateway;
     private readonly ImageResolver             _resolver;
+    private readonly HsoOriginals              _originals;
     private readonly HsoGallery                _gallery;
     private readonly ILogger<HsoPixivImporter> _logger;
 
     /// <summary>创建导入器。</summary>
-    public HsoPixivImporter(YukariGateway gateway, ImageResolver resolver, HsoGallery gallery, ILogger<HsoPixivImporter> logger)
+    public HsoPixivImporter(YukariGateway gateway, ImageResolver resolver, HsoOriginals originals, HsoGallery gallery, ILogger<HsoPixivImporter> logger)
     {
-        _gateway  = gateway;
-        _resolver = resolver;
-        _gallery  = gallery;
-        _logger   = logger;
+        _gateway   = gateway;
+        _resolver  = resolver;
+        _originals = originals;
+        _gallery   = gallery;
+        _logger    = logger;
     }
 
     /// <summary>导入 Pixiv 作品的一页。</summary>
@@ -50,7 +50,7 @@ public sealed class HsoPixivImporter
         if (work.Deleted || page >= work.PageCount) return HsoPixivImportOutcome.NotFound;
         if (work.PageCount is null) return HsoPixivImportOutcome.Failed;
 
-        if (await DownloadAsync(source, cancellationToken) is not { } content) return HsoPixivImportOutcome.Failed;
+        if ((await _originals.DownloadAsync(source, cancellationToken)).Content is not { } content) return HsoPixivImportOutcome.Failed;
 
         HsoImportResult result = await _gallery.ImportAsync(content, null, HsoImageOrigin.Pixiv, pid, page, cancellationToken);
         if (result.Outcome == HsoImportOutcome.Duplicate) return HsoPixivImportOutcome.Exists;
@@ -64,6 +64,8 @@ public sealed class HsoPixivImporter
                 Status = HsoLookupStatus.Found,
                 Info = new HsoWorkInfo
                 {
+                    Method     = HsoLookupMethod.Pixiv,
+                    Work       = work.Work,
                     SourceName = PIXIV,
                     Pid        = pid,
                     Page       = page,
@@ -75,35 +77,5 @@ public sealed class HsoPixivImporter
                 }
             });
         return HsoPixivImportOutcome.Imported;
-    }
-
-    private async Task<byte[]?> DownloadAsync(SourceRef source, CancellationToken cancellationToken)
-    {
-        using HttpResponseMessage? response = await _gateway.OpenOriginalAsync(source, cancellationToken);
-        if (response is null) return null;
-        if (response.Content.Headers.ContentLength > MAX_DOWNLOAD_BYTES)
-        {
-            _logger.LogWarning("Pixiv 作品 {Pid} 第 {Page} 页 {Size}，超过下载上限", source.Id, source.Page, ImageInspector.FormatSize(response.Content.Headers.ContentLength));
-            return null;
-        }
-
-        // 下载期间每秒记录进度与速度，读完时记录总量。
-        await using Stream stream = new DownloadProgressStream(
-            await response.Content.ReadAsStreamAsync(cancellationToken),
-            response.Content.Headers.ContentLength,
-            $" Pixiv 作品 {source.Id} 第 {source.Page} 页",
-            _logger);
-        using MemoryStream buffer = new();
-        byte[] chunk = new byte[BUFFER_SIZE];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
-        {
-            buffer.Write(chunk, 0, read);
-            if (buffer.Length <= MAX_DOWNLOAD_BYTES) continue;
-            _logger.LogWarning("Pixiv 作品 {Pid} 第 {Page} 页超过下载上限 {Limit}", source.Id, source.Page, ImageInspector.FormatSize(MAX_DOWNLOAD_BYTES));
-            return null;
-        }
-
-        return buffer.ToArray();
     }
 }

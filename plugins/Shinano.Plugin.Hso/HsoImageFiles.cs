@@ -10,17 +10,17 @@ namespace Shinano.Plugin.Hso;
 /// </summary>
 public static partial class HsoImageFiles
 {
-    /// <summary>识别图片格式；不是 JPEG、PNG、GIF 或 WebP 时返回 null。只读取文件头，不解码像素。</summary>
+    /// <summary>识别图片格式与尺寸；不是 JPEG、PNG、GIF 或 WebP 时返回 null。只读取文件头，不解码像素。</summary>
     public static HsoImageFormat? Detect(byte[] content)
     {
         using SKData data = SKData.CreateCopy(content);
         using SKCodec? codec = SKCodec.Create(data);
         return codec?.EncodedFormat switch
         {
-            SKEncodedImageFormat.Jpeg => Format("image/jpeg", ".jpg"),
-            SKEncodedImageFormat.Png  => Format("image/png", ".png"),
-            SKEncodedImageFormat.Gif  => Format("image/gif", ".gif"),
-            SKEncodedImageFormat.Webp => Format("image/webp", ".webp"),
+            SKEncodedImageFormat.Jpeg => Format(codec, "image/jpeg", ".jpg"),
+            SKEncodedImageFormat.Png  => Format(codec, "image/png", ".png"),
+            SKEncodedImageFormat.Gif  => Format(codec, "image/gif", ".gif"),
+            SKEncodedImageFormat.Webp => Format(codec, "image/webp", ".webp"),
             _                         => null
         };
     }
@@ -38,11 +38,13 @@ public static partial class HsoImageFiles
             : null;
     }
 
-    private static HsoImageFormat Format(string mediaType, string extension) =>
+    private static HsoImageFormat Format(SKCodec codec, string mediaType, string extension) =>
         new()
         {
             MediaType = mediaType,
-            Extension = extension
+            Extension = extension,
+            Width     = codec.Info.Width,
+            Height    = codec.Info.Height
         };
 
     [GeneratedRegex(@"^(?<pid>\d{1,12})_p(?<page>\d{1,4})\.[A-Za-z0-9]+$")]

@@ -5,6 +5,7 @@ using Shinano.Framework.Plugins;
 using Shinano.Framework.Plugins.Models;
 using Shinano.Framework.Rendering.Models;
 using Shinano.Plugin.Hso.Entities;
+using Shinano.Plugin.Hso.Models;
 using Shinano.Plugin.ImageSources;
 using Sora.Core.Types;
 using Sora.Entities.Events;
@@ -13,7 +14,7 @@ using Sora.Entities.Message;
 namespace Shinano.Plugin.Hso;
 
 /// <summary>
-/// 在群里发送图库图片：先发图，再发作品信息卡（没有作品信息时不发）。是否允许 NSFW 由抽图时决定（见 <see cref="HsoCommands" />），这里不再判断。
+/// 在群里发送图库图片：先发图，作品信息已确认时再发作品信息卡。是否允许 NSFW 由抽图时决定（见 <see cref="HsoCommands" />），这里不再判断。
 /// 原图以预签名链接发送：20 MB 以内作为图片，超过时 QQ 不能作为图片发送，改为上传群文件。
 /// 图片被拒（腾讯按内容摘要拦截）时改动一个像素另存为临时对象重发，成功则标记该图，之后每次发送都直接改像素；图库对象本身不替换。
 /// 临时对象保留到每小时一次的 <see cref="CleanupAsync" />，供宿主归档经同一链接读取；未发出的立即删除。
@@ -42,12 +43,12 @@ public sealed class HsoSender
         _logger  = logger;
     }
 
-    /// <summary>发送图片，成功后发送信息卡。</summary>
+    /// <summary>发送图片，成功后在作品信息已确认时发送信息卡（待补全、待审核与查无信息时不发）。</summary>
     /// <returns>图片是否发出；信息卡失败只记录日志。</returns>
     public async Task<bool> SendAsync(MessageReceivedEvent e, HsoImageRecord record, CancellationToken cancellationToken)
     {
         bool sent = await SendOriginalAsync(e, record, cancellationToken);
-        if (sent && Card(record) is { } card) await SendCardAsync(e, card);
+        if (sent && record.InfoState == (int)HsoInfoState.Found && Card(record) is { } card) await SendCardAsync(e, card);
         return sent;
     }
 
