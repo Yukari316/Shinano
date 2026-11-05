@@ -58,6 +58,13 @@ internal sealed class CardCanvas
     private const float BODY_SIZE         = 18;
     private const float BODY_LEADING      = 1.5f;
     private const float RULE_WIDTH        = 1;
+    private const float ITEM_SIZE         = 15;
+    private const float ITEM_BOX_HEIGHT   = 26;
+    private const float ITEM_PADDING_X    = 8;
+    private const float ITEM_STROKE       = 1.5f;
+    private const float ITEM_BOX_GAP      = 8;
+    private const float ITEM_TEXT_GAP     = 16;
+    private const float ITEM_LINE_GAP     = 6;
 
     private CardCanvas(SKCanvas canvas, IPluginFonts fonts)
     {
@@ -237,6 +244,49 @@ internal sealed class CardCanvas
         Text(label, Fonts.Regular, LABEL_SIZE, CardPalette.InkSecondary, CONTENT_LEFT, Baseline(y, BODY_SIZE, BODY_LEADING));
         float height = Paragraph(text, Fonts.Regular, BODY_SIZE, BODY_LEADING, CardPalette.Ink, textLeft, CONTENT_RIGHT, y);
         float bottom = y + height + ROW_PADDING;
+        if (!last) Rule(CONTENT_LEFT, CONTENT_RIGHT, bottom - RULE_WIDTH, CardPalette.Line);
+        return bottom;
+    }
+
+    /// <summary>
+    /// 元素行：左侧标签，右侧元素从左到右排列、放不下时换到下一行，<paramref name="bordered" /> 时每个元素画墨色直角方框；
+    /// 宽于一行的元素截断并以省略号结尾。下方分隔线（最后一行除外）；返回行底。
+    /// </summary>
+    public float ItemsRow(float top, string label, IReadOnlyList<string> items, bool bordered, bool last)
+    {
+        float left = CONTENT_LEFT + LABEL_WIDTH + LABEL_GAP;
+        float padding = bordered ? ITEM_PADDING_X : 0;
+        float gap = bordered ? ITEM_BOX_GAP : ITEM_TEXT_GAP;
+        float lineHeight = BODY_SIZE * BODY_LEADING;
+        float y = top + ROW_PADDING;
+        Text(label, Fonts.Regular, LABEL_SIZE, CardPalette.InkSecondary, CONTENT_LEFT, Baseline(y, BODY_SIZE, BODY_LEADING));
+
+        using SKPaint stroke = new()
+        {
+            Color       = CardPalette.Ink,
+            IsStroke    = true,
+            StrokeWidth = ITEM_STROKE,
+            IsAntialias = true
+        };
+        float x = left;
+        float lineTop = y;
+        foreach (string item in items)
+        {
+            string text = Painter.Wrap(item, Fonts.Regular, ITEM_SIZE, CONTENT_RIGHT - left - padding * 2, 1) is [{ } first, ..] ? first : string.Empty;
+            float width = Painter.Measure(text, Fonts.Regular, ITEM_SIZE) + padding * 2;
+            if (x > left && x + width > CONTENT_RIGHT)
+            {
+                x = left;
+                lineTop += lineHeight + ITEM_LINE_GAP;
+            }
+
+            float boxTop = lineTop + (lineHeight - ITEM_BOX_HEIGHT) / 2;
+            if (bordered) Canvas.DrawRect(new SKRect(x, boxTop, x + width, boxTop + ITEM_BOX_HEIGHT), stroke);
+            Text(text, Fonts.Regular, ITEM_SIZE, CardPalette.Ink, x + padding, Baseline(boxTop, ITEM_SIZE, ITEM_BOX_HEIGHT / ITEM_SIZE));
+            x += width + gap;
+        }
+
+        float bottom = lineTop + lineHeight + ROW_PADDING;
         if (!last) Rule(CONTENT_LEFT, CONTENT_RIGHT, bottom - RULE_WIDTH, CardPalette.Line);
         return bottom;
     }

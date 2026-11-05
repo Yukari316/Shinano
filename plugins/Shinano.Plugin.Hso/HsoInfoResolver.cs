@@ -69,7 +69,7 @@ public sealed class HsoInfoResolver
             Title      = resolution.Title,
             Author     = resolution.Author,
             AuthorId   = resolution.AuthorId,
-            Tags       = resolution.Tags,
+            Tags       = DisplayTags(resolution),
             Nsfw       = resolution.Adult
         });
     }
@@ -102,10 +102,14 @@ public sealed class HsoInfoResolver
             Title      = hit.Title ?? resolution.Title,
             Author     = hit.Author ?? resolution.Author,
             AuthorId   = resolution.AuthorId,
-            Tags       = resolution.Tags,
+            Tags       = DisplayTags(resolution),
             Nsfw       = hit.Adult || resolution.Adult
         });
     }
+
+    /// <summary>信息卡显示的标签：只取 Pixiv 作品的标签，有中文翻译时用翻译，否则用原文，去掉重复。</summary>
+    internal static IReadOnlyList<string> DisplayTags(ImageResolution resolution) =>
+        resolution.Work?.Site == ImageSite.Pixiv ? [.. resolution.Tags.Select(tag => tag.Translation ?? tag.Name).Distinct()] : [];
 
     private static HsoLookup Found(HsoWorkInfo info) =>
         new()

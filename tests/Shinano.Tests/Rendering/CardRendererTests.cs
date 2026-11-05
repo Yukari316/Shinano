@@ -55,6 +55,16 @@ public sealed class CardRendererTests
     }
 
     [Fact]
+    public void RenderInfo_ItemsRowWrapsAcrossLines()
+    {
+        using SKBitmap few = Decode(TestRendering.Images.RenderInfo(InfoWithItems(2)));
+        using SKBitmap many = Decode(TestRendering.Images.RenderInfo(InfoWithItems(40)));
+
+        Assert.Equal(TestRendering.WIDTH, many.Width);
+        Assert.True(many.Height > few.Height);
+    }
+
+    [Fact]
     public void RenderDocument_SeparateModeReturnsEachImageOnceInOrder()
     {
         byte[] first = Png(20, 10);
@@ -114,4 +124,21 @@ public sealed class CardRendererTests
     }
 
     private static SKBitmap Decode(byte[] png) => SKBitmap.Decode(png);
+
+    private static InfoCard InfoWithItems(int count) =>
+        new()
+        {
+            Label = "HSO",
+            Title = "标签",
+            Rows =
+            [
+                new CardRow
+                {
+                    Label      = "TAG",
+                    Style      = CardRowStyle.Items,
+                    Items      = [.. Enumerable.Range(1, count).Select(index => $"标签{index}")],
+                    ItemBorder = true
+                }
+            ]
+        };
 }

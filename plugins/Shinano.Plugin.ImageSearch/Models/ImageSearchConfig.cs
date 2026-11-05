@@ -34,4 +34,9 @@ public sealed class ImageSearchConfig
     [Display(Name = "原图大小上限（MiB）", Description = "超过时不发送原图；实际上限不超过部署的单文件上限", Order = 6)]
     [Range(1, 1024)]
     public int MaxOriginalMiB { get; set; } = 100;
+
+    /// <summary>插画卡片最多显示的标签数。</summary>
+    [Display(Name = "最多显示标签数", Description = "插画卡片的 TAG 行最多显示的标签个数，按来源作品中的顺序截取；为 0 时不显示 TAG 行", Order = 7)]
+    [Range(0, 100)]
+    public int MaxTags { get; set; } = 20;
 }

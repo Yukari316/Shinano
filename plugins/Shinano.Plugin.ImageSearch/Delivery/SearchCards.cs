@@ -15,20 +15,27 @@ public static class SearchCards
     private const string META_ILLUST       = "ILLUST";
     private const string META_ANIME        = "ANIME";
     private const string LOW_NOTE          = "相似度低于阈值，可能不准";
+    private const string PIXIV             = "Pixiv";
+    private const string TAG_LABEL         = "TAG";
 
     /// <summary>
-    /// 插画结果卡片：标题为来源名，正文为标题、作者与作品号。拿到搜索结果就发送，只用搜索结果中的信息，不等待查询来源作品。
+    /// 插画结果卡片：标题为来源名，正文为标题、作者、作品号与标签（原值，最多 <paramref name="maxTags" /> 个，每个一个方框）。
+    /// 来源作品查到 Pixiv 时，来源名、标题、作者与作品号都换成 Pixiv 的信息；否则用搜索结果中的信息，标签取查到的图站帖子。
     /// </summary>
-    public static InfoCard Illustration(SearchHit hit, double threshold, bool lowSimilarity) =>
-        Card(
+    public static InfoCard Illustration(SearchHit hit, ImageResolution resolution, double threshold, bool lowSimilarity, int maxTags)
+    {
+        bool pixiv = resolution.Work?.Site == ImageSite.Pixiv;
+        return Card(
             hit,
             META_ILLUST,
-            hit.SourceName,
+            pixiv ? PIXIV : hit.SourceName,
             threshold,
             lowSimilarity,
-            Row("标题", hit.Title),
-            Row("作者", hit.Author),
-            Row("作品号", hit.WorkId));
+            Row("标题", pixiv ? resolution.Title : hit.Title),
+            Row("作者", pixiv ? resolution.Author : hit.Author),
+            Row("作品号", pixiv ? resolution.Work?.Id : hit.WorkId),
+            TagRow(resolution.Tags, maxTags));
+    }
 
     /// <summary>番剧卡片：标题为番名，正文为集数、时间点与来源库。</summary>
     public static InfoCard Anime(SearchHit hit, double threshold, bool lowSimilarity) =>
@@ -49,7 +56,7 @@ public static class SearchCards
             (string[])
             [
                 card.Title,
-                .. card.Rows.Select(row => $"{row.Label}：{row.Text}"),
+                .. card.Rows.Select(row => $"{row.Label}：{(row.Style == CardRowStyle.Items ? string.Join(' ', row.Items) : row.Text)}"),
                 .. card.Similarity is { } similarity ? (string[]) [$"相似度：{Percent(similarity)}"] : [],
                 .. card.Note is { } note ? (string[]) [note] : []
             ]);
@@ -82,6 +89,17 @@ public static class SearchCards
             {
                 Label = label,
                 Text  = text
+            };
+
+    private static CardRow? TagRow(IReadOnlyList<WorkTag> tags, int maxTags) =>
+        tags.Count == 0 || maxTags <= 0
+            ? null
+            : new CardRow
+            {
+                Label      = TAG_LABEL,
+                Style      = CardRowStyle.Items,
+                Items      = [.. tags.Take(maxTags).Select(tag => tag.Name)],
+                ItemBorder = true
             };
 
     private static string Percent(double similarity) => similarity.ToString(SIMILARITY_FORMAT, CultureInfo.InvariantCulture) + "%";

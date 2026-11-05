@@ -21,8 +21,11 @@ public sealed class ImageResolution
     /// <summary>Pixiv 作者的用户 ID；来源不是 Pixiv 时为 null。</summary>
     public long? AuthorId { get; init; }
 
-    /// <summary>Pixiv 作品的标签（原文），按作品中的顺序；来源不是 Pixiv 时为空。</summary>
-    public IReadOnlyList<string> Tags { get; init; } = [];
+    /// <summary>查到作品信息的来源（Pixiv 作品或图站帖子），R-18 时同样给出；都查不到时为 null。</summary>
+    public SourceRef? Work { get; init; }
+
+    /// <summary><see cref="Work" /> 的标签，按作品中的顺序；没有时为空。</summary>
+    public IReadOnlyList<WorkTag> Tags { get; init; } = [];
 
     /// <summary>Pixiv 作品的页数；未知时为 null。</summary>
     public int? PageCount { get; init; }

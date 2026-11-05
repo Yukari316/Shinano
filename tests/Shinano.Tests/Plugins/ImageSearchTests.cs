@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
+using Shinano.Framework.Rendering.Models;
 using Shinano.Plugin.ImageSearch;
 using Shinano.Plugin.ImageSearch.Delivery;
 using Shinano.Plugin.ImageSearch.Models;
@@ -178,6 +180,66 @@ public sealed class ImageSearchTests
         Assert.Same(sauceAnime, SearchDecisions.ForAnime(failed, Ok(sauceAnime), 90, 60).Hit);
         Assert.Equal(ReplyTexts.NOT_FOUND, SearchDecisions.ForAnime(failed, Ok(), 90, 60).Reply);
         Assert.Equal(ReplyTexts.RATE_LIMITED, SearchDecisions.ForAnime(SearchResult.Of(SearchStatus.RateLimited, "x"), failed, 90, 60).Reply);
+    }
+
+    [Fact]
+    public void WorkTags_ReadPixivAndBooruShapes()
+    {
+        JsonObject illust = JsonNode.Parse("""
+            {"tags":[{"name":"オリジナル","translated_name":"原创"},{"name":"R-18","translated_name":null},{"name":"オリジナル","translated_name":"原创"}]}
+            """)!.AsObject();
+        Assert.Equal([("オリジナル", "原创"), ("R-18", null)], WorkTags.FromPixiv(illust).Select(tag => (tag.Name, tag.Translation)));
+
+        Assert.Equal(["1girl", "long_hair"], Names("""{"tag_string":"1girl long_hair  1girl","tags":"ignored"}"""));
+        Assert.Equal(["1girl", "solo"], Names("""{"tags":"1girl solo"}"""));
+        Assert.Equal(["blue eyes", "cat"], Names("""{"tags":[{"name":"blue eyes"},{"title":"cat"}]}"""));
+        Assert.Empty(Names("{}"));
+
+        static IEnumerable<string> Names(string post) => WorkTags.FromPost(JsonNode.Parse(post)!.AsObject()).Select(tag => tag.Name);
+    }
+
+    [Fact]
+    public void IllustrationCard_PrefersPixivWorkAndLimitsBooruTags()
+    {
+        SearchHit hit = new()
+        {
+            Engine     = SearchEngine.SauceNao,
+            Similarity = 95,
+            SourceName = "Danbooru",
+            Kind       = HitKind.Illustration,
+            Title      = "booru title",
+            Author     = "booru_artist",
+            WorkId     = "8861752"
+        };
+        ImageResolution pixiv = new()
+        {
+            Work   = new SourceRef { Site = ImageSite.Pixiv, Id = "127307417", Page = 0 },
+            Title  = "夏の終わり",
+            Author = "再音さく",
+            Tags   = [new WorkTag { Name = "オリジナル", Translation = "原创" }]
+        };
+        ImageResolution booru = new()
+        {
+            Work = new SourceRef { Site = ImageSite.Danbooru, Id = "8861752" },
+            Tags = [.. Enumerable.Range(1, 30).Select(index => new WorkTag { Name = $"tag_{index}" })]
+        };
+
+        // 查到 Pixiv：来源名、标题、作者、作品号都换成 Pixiv 的信息，标签原值不翻译。
+        InfoCard fromPixiv = SearchCards.Illustration(hit, pixiv, 60, false, 20);
+        Assert.Equal("Pixiv", fromPixiv.Title);
+        Assert.Equal(["标题：夏の終わり", "作者：再音さく", "作品号：127307417"], fromPixiv.Rows.SkipLast(1).Select(row => $"{row.Label}：{row.Text}"));
+        Assert.Equal(["オリジナル"], fromPixiv.Rows[^1].Items);
+
+        // 图站：用搜索结果的信息，标签按上限截取。
+        InfoCard fromBooru = SearchCards.Illustration(hit, booru, 60, false, 20);
+        Assert.Equal("Danbooru", fromBooru.Title);
+        Assert.Equal("booru title", fromBooru.Rows[0].Text);
+        CardRow tags = fromBooru.Rows[^1];
+        Assert.Equal((CardRowStyle.Items, true, 20), (tags.Style, tags.ItemBorder, tags.Items.Count));
+
+        // 都查不到或上限为 0 时没有 TAG 行。
+        Assert.DoesNotContain(SearchCards.Illustration(hit, ImageResolution.None, 60, false, 20).Rows, row => row.Style == CardRowStyle.Items);
+        Assert.DoesNotContain(SearchCards.Illustration(hit, booru, 60, false, 0).Rows, row => row.Style == CardRowStyle.Items);
     }
 
     [Fact]

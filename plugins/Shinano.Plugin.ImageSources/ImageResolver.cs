@@ -49,7 +49,9 @@ public sealed class ImageResolver
             {
                 Image  = adult ? null : source,
                 Adult  = adult,
-                Author = JsonFields.Text(post["tag_string_artist"])
+                Author = JsonFields.Text(post["tag_string_artist"]),
+                Work   = source,
+                Tags   = WorkTags.FromPost(post)
             };
         }
 
@@ -61,19 +63,19 @@ public sealed class ImageResolver
         if (data?["illust"] is not JsonObject illust) return null;
 
         int pageCount = (int)(JsonFields.Number(illust["page_count"]) ?? 1);
-        string[] tags = [.. (illust["tags"] as JsonArray ?? []).Select(tag => JsonFields.Text(tag?["name"])).OfType<string>()];
-        bool adult = JsonFields.Number(illust["x_restrict"]) > 0 || tags.Any(AdultTags.Contains);
+        IReadOnlyList<WorkTag> tags = WorkTags.FromPixiv(illust);
+        bool adult = JsonFields.Number(illust["x_restrict"]) > 0 || tags.Any(tag => AdultTags.Contains(tag.Name));
         int page = source.Page is { } requested && requested < pageCount ? requested : 0;
+        SourceRef work = new()
+        {
+            Site = ImageSite.Pixiv,
+            Id   = source.Id,
+            Page = page
+        };
         return new ImageResolution
         {
-            Image = adult
-                ? null
-                : new SourceRef
-                {
-                    Site = ImageSite.Pixiv,
-                    Id   = source.Id,
-                    Page = page
-                },
+            Image     = adult ? null : work,
+            Work      = work,
             Adult     = adult,
             Title     = JsonFields.Text(illust["title"]),
             Author    = JsonFields.Text(illust["user"]?["name"]),

@@ -66,9 +66,11 @@ public sealed class HsoTests
         Assert.NotNull(card);
         Assert.Equal("夏の終わり", card.Title);
         Assert.Equal("PIXIV", card.Meta);
-        Assert.Equal(
-            ["作者：再音さく", "作者 ID：11246082", "作品号：127307417", "标签：#オリジナル #女の子"],
-            card.Rows.Select(row => $"{row.Label}：{row.Text}"));
+        Assert.Equal(["作者", "UID", "PID", "TAG"], card.Rows.Select(row => row.Label));
+        CardRow tags = card.Rows[^1];
+        Assert.Equal((CardRowStyle.Items, true), (tags.Style, tags.ItemBorder));
+        Assert.Equal(["オリジナル", "女の子"], tags.Items);
+        Assert.Equal("夏の終わり\n作者：再音さく\nUID：11246082\nPID：127307417\nTAG：オリジナル 女の子", HsoSender.ToText(card));
     }
 
     [Fact]

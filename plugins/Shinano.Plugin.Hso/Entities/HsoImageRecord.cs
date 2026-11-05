@@ -57,7 +57,7 @@ public sealed class HsoImageRecord
     [SugarColumn(ColumnName = "author_id", IsNullable = true)]
     public long? AuthorId { get; set; }
 
-    /// <summary>Pixiv 标签（原文），以换行分隔（标签不含换行）；没有时为 null。读写用 <see cref="TagList" />。</summary>
+    /// <summary>Pixiv 标签（有中文翻译时为翻译，否则为原文），以换行分隔（标签不含换行）；没有时为 null。读写用 <see cref="TagList" />。</summary>
     [SugarColumn(ColumnName = "tags", ColumnDataType = "text", IsNullable = true)]
     public string? Tags { get; set; }
 

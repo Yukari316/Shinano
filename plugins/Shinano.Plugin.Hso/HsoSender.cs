@@ -26,7 +26,6 @@ public sealed class HsoSender
     private const string BASE64_PREFIX = "base64://";
     private const string CARD_LABEL    = "HSO";
     private const string UNTITLED      = "无题";
-    private const string TAG_PREFIX    = "#";
 
     /// <summary>临时对象的保留时间：足够宿主归档读取，超过即由清理任务删除。</summary>
     public static readonly TimeSpan TempRetention = TimeSpan.FromHours(1);
@@ -68,7 +67,7 @@ public sealed class HsoSender
         _logger.LogInformation("Hso 临时对象清理（早于 {Cutoff}）：bucket {Bucket} 删除 {Count} 个对象", cutoff, bucket.Name, deleted);
     }
 
-    /// <summary>作品信息卡：作者、作者 ID、作品号（只显示 pid）与标签；没有任何作品信息时为 null。</summary>
+    /// <summary>作品信息卡：作者、UID（Pixiv 作者 ID）、PID 与 TAG（每个标签一个方框），没有的项不显示；没有任何作品信息时为 null。</summary>
     public static InfoCard? Card(HsoImageRecord record)
     {
         if (record.Title is null && record.Author is null && record.Pid is null) return null;
@@ -82,12 +81,27 @@ public sealed class HsoSender
             Rows =
             [
                 .. Row("作者", record.Author),
-                .. Row("作者 ID", record.AuthorId?.ToString(CultureInfo.InvariantCulture)),
-                .. Row("作品号", record.Pid?.ToString(CultureInfo.InvariantCulture)),
-                .. Row("标签", tags.Count == 0 ? null : string.Join(' ', tags.Select(tag => TAG_PREFIX + tag)))
+                .. Row("UID", record.AuthorId?.ToString(CultureInfo.InvariantCulture)),
+                .. Row("PID", record.Pid?.ToString(CultureInfo.InvariantCulture)),
+                .. tags.Count == 0
+                    ? (CardRow[]) []
+                    :
+                    [
+                        new CardRow
+                        {
+                            Label      = "TAG",
+                            Style      = CardRowStyle.Items,
+                            Items      = tags,
+                            ItemBorder = true
+                        }
+                    ]
             ]
         };
     }
+
+    /// <summary>卡片的文字形式，绘制失败时代替图片发送。</summary>
+    public static string ToText(InfoCard card) =>
+        string.Join('\n', [card.Title, .. card.Rows.Select(row => $"{row.Label}：{(row.Style == CardRowStyle.Items ? string.Join(' ', row.Items) : row.Text)}")]);
 
     private static CardRow[] Row(string label, string? text) =>
         text is null
@@ -173,7 +187,7 @@ public sealed class HsoSender
         catch (Exception exception)
         {
             _logger.LogError(exception, "绘制 Hso 作品信息卡失败，改发文字");
-            body = new MessageBody(string.Join('\n', [card.Title, .. card.Rows.Select(row => $"{row.Label}：{row.Text}")]));
+            body = new MessageBody(ToText(card));
         }
 
         SendMessageResult result = await e.ReplyAsync(body);

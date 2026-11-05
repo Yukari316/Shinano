@@ -70,7 +70,7 @@ public sealed class HsoPixivImporter
                     Title      = work.Title,
                     Author     = work.Author,
                     AuthorId   = work.AuthorId,
-                    Tags       = work.Tags,
+                    Tags       = HsoInfoResolver.DisplayTags(work),
                     Nsfw       = work.Adult
                 }
             });

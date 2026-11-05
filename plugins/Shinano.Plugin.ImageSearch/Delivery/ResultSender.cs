@@ -14,7 +14,7 @@ using Sora.Entities.Message;
 namespace Shinano.Plugin.ImageSearch.Delivery;
 
 /// <summary>
-/// 发送搜索结果：先发卡片，再另发原图或番剧预览，原图失败不影响卡片；R-18 结果以插件素材中的替代图代替原图或预览。
+/// 发送搜索结果：先发卡片，再另发原图或番剧预览，原图失败不影响卡片；R-18 结果以共享库中的替代图代替原图或预览。
 /// 原图从图源服务流式转存到插件 bucket（下载期间每秒记录进度与速度），以预签名链接发送：20 MB 以内作为图片，超过 20 MB 时 QQ 不能作为图片发送，
 /// 改为上传群文件或私聊文件。图片被拒（腾讯按内容摘要拦截）时改动一个像素重发一次。
 /// 发送成功的对象保留到每小时一次的 <see cref="CleanupAsync" />：宿主归档 Bot 自己发出的消息时，会经同一链接下载图片；
@@ -53,19 +53,22 @@ public sealed class ResultSender : IDisposable
     }
 
     /// <summary>
-    /// 发送插画结果：拿到搜索结果就先发卡片（只用搜索结果中的信息），再查来源作品并下载原图发到同一会话；
-    /// R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。
+    /// 发送插画结果：先查来源作品，再发卡片（来源为 Pixiv 时用 Pixiv 的作品信息，并附来源作品的标签），
+    /// 之后下载原图发到同一会话；R-18 时以替代图代替原图，Pixiv 作品已删除时另行说明。
+    /// 已知为成人内容的结果（如 IQDB 的 Explicit）不查来源作品，卡片只用搜索结果中的信息。
     /// </summary>
     public async Task SendIllustrationAsync(MessageReceivedEvent e, SearchHit hit, double threshold, bool lowSimilarity, CancellationToken cancellationToken)
     {
-        await SendCardAsync(e, SearchCards.Illustration(hit, threshold, lowSimilarity));
         ImageResolution resolution = hit.Adult ? ImageResolution.None : await _resolver.ResolveAsync(hit.Sources, cancellationToken);
         _logger.LogInformation(
-            "搜图结果 {Source} 的来源作品：原图 {Image}，R-18 {Adult}，已删除 {Deleted}",
+            "搜图结果 {Source} 的来源作品：{Work}，原图 {Image}，R-18 {Adult}，已删除 {Deleted}，标签 {Tags} 个",
             hit.SourceName,
+            resolution.Work is { } work ? $"{work.Site}:{work.Id}" : "无",
             resolution.Image is { } source ? $"{source.Site}:{source.Id}" : "无",
             hit.Adult || resolution.Adult,
-            resolution.Deleted);
+            resolution.Deleted,
+            resolution.Tags.Count);
+        await SendCardAsync(e, SearchCards.Illustration(hit, resolution, threshold, lowSimilarity, _context.Config<ImageSearchConfig>().Value.MaxTags));
         if (hit.Adult || resolution.Adult) await SendAdultImageAsync(e);
         else if (resolution.Image is { } image) await SendOriginalAsync(e, image, cancellationToken);
         else if (resolution.Deleted) await e.ReplyAsync(new MessageBody(ReplyTexts.DELETED));

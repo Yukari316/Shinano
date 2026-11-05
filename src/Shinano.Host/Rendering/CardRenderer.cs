@@ -180,7 +180,16 @@ public sealed class CardRenderer : IPluginImages
     {
         float y = top;
         for (int index = 0; index < rows.Count; index++)
-            y = panel.KeyValue(y, rows[index].Label, rows[index].Text, index == rows.Count - 1);
+        {
+            CardRow row = rows[index];
+            bool last = index == rows.Count - 1;
+            y = row.Style switch
+            {
+                CardRowStyle.Items => panel.ItemsRow(y, row.Label, row.Items, row.ItemBorder, last),
+                _                  => panel.KeyValue(y, row.Label, row.Text, last)
+            };
+        }
+
         return y;
     }
 
