@@ -1,0 +1,355 @@
+{
+ "code": 0,
+ "message": "0",
+ "data": {
+  "has_more": true,
+  "offset": "1100000000000000001",
+  "update_baseline": "1100000000000000008",
+  "items": [
+   {
+    "id_str": "1100000000000000001",
+    "type": "DYNAMIC_TYPE_DRAW",
+    "modules": {
+     "module_tag": {
+      "text": "置顶"
+     },
+     "module_author": {
+      "mid": 10001,
+      "name": "虚构研究所",
+      "face": "http://img.invalid/face/10001.jpg",
+      "pub_ts": "1780000000",
+      "pub_action": ""
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_OPUS",
+       "opus": {
+        "title": "",
+        "summary": {
+         "text": "置顶的旧动态",
+         "rich_text_nodes": [
+          {
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "text": "置顶的旧动态",
+           "orig_text": "置顶的旧动态"
+          }
+         ]
+        },
+        "pics": [
+         {
+          "url": "http://img.invalid/dyn/1.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         },
+         {
+          "url": "http://img.invalid/dyn/2.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         }
+        ]
+       }
+      },
+      "additional": null
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000005",
+    "type": "DYNAMIC_TYPE_DRAW",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10001,
+      "name": "虚构研究所",
+      "face": "http://img.invalid/face/10001.jpg",
+      "pub_ts": "1790000300",
+      "pub_action": ""
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_OPUS",
+       "opus": {
+        "title": "冬季企划",
+        "summary": {
+         "text": "新企划公开啦，和 @雾岛工作室 一起\n#原创插画#[doge]",
+         "rich_text_nodes": [
+          {
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "text": "新企划公开啦，和 ",
+           "orig_text": "新企划公开啦，和 "
+          },
+          {
+           "type": "RICH_TEXT_NODE_TYPE_AT",
+           "text": "@雾岛工作室",
+           "orig_text": "@雾岛工作室"
+          },
+          {
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "text": " 一起\n",
+           "orig_text": " 一起\n"
+          },
+          {
+           "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+           "text": "#原创插画#",
+           "orig_text": "#原创插画#"
+          },
+          {
+           "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+           "text": "[doge]",
+           "orig_text": "[doge]"
+          }
+         ]
+        },
+        "pics": [
+         {
+          "url": "http://img.invalid/dyn/3.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         },
+         {
+          "url": "http://img.invalid/dyn/4.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         },
+         {
+          "url": "http://img.invalid/dyn/5.jpg",
+          "width": 800,
+          "height": 6000,
+          "size": 100
+         },
+         {
+          "url": "http://img.invalid/dyn/6.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         }
+        ]
+       }
+      },
+      "additional": {
+       "type": "ADDITIONAL_TYPE_RESERVE",
+       "reserve": {
+        "title": "新曲首播"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000004",
+    "type": "DYNAMIC_TYPE_AV",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10002,
+      "name": "晚风电台",
+      "face": "http://img.invalid/face/10002.jpg",
+      "pub_ts": "1790000200",
+      "pub_action": "投稿了视频"
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_ARCHIVE",
+       "archive": {
+        "bvid": "BV1xx411c7aa",
+        "cover": "http://img.invalid/archive/7.jpg",
+        "title": "十一月的回声",
+        "desc": "第一次尝试手书",
+        "duration_text": "04:32"
+       }
+      },
+      "additional": null
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000003",
+    "type": "DYNAMIC_TYPE_FORWARD",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10001,
+      "name": "虚构研究所",
+      "face": "http://img.invalid/face/10001.jpg",
+      "pub_ts": "1790000200",
+      "pub_action": ""
+     },
+     "module_dynamic": {
+      "desc": {
+       "text": "好听！",
+       "rich_text_nodes": [
+        {
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "text": "好听！",
+         "orig_text": "好听！"
+        }
+       ]
+      },
+      "major": null,
+      "additional": null
+     }
+    },
+    "orig": {
+     "id_str": "1099999999999999999",
+     "type": "DYNAMIC_TYPE_AV",
+     "modules": {
+      "module_tag": null,
+      "module_author": {
+       "mid": 10002,
+       "name": "晚风电台",
+       "face": "http://img.invalid/face/10002.jpg",
+       "pub_ts": "1789990000",
+       "pub_action": "投稿了视频"
+      },
+      "module_dynamic": {
+       "desc": null,
+       "major": {
+        "type": "MAJOR_TYPE_ARCHIVE",
+        "archive": {
+         "bvid": "BV1xx411c7bb",
+         "cover": "//img.invalid/archive/8.jpg",
+         "title": "旧作",
+         "desc": "",
+         "duration_text": "01:00"
+        }
+       },
+       "additional": null
+      }
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000002",
+    "type": "DYNAMIC_TYPE_ARTICLE",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10001,
+      "name": "虚构研究所",
+      "face": "http://img.invalid/face/10001.jpg",
+      "pub_ts": "1790000100",
+      "pub_action": "投稿了文章"
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_OPUS",
+       "opus": {
+        "title": "专栏标题",
+        "summary": {
+         "text": "专栏摘要…",
+         "rich_text_nodes": [
+          {
+           "type": "RICH_TEXT_NODE_TYPE_TEXT",
+           "text": "专栏摘要…",
+           "orig_text": "专栏摘要…"
+          }
+         ]
+        },
+        "pics": [
+         {
+          "url": "http://img.invalid/dyn/9.jpg",
+          "width": 1080,
+          "height": 1440,
+          "size": 100
+         }
+        ]
+       }
+      },
+      "additional": null
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000006",
+    "type": "DYNAMIC_TYPE_LIVE_RCMD",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10002,
+      "name": "晚风电台",
+      "face": "http://img.invalid/face/10002.jpg",
+      "pub_ts": "1790000400",
+      "pub_action": "直播了"
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_LIVE_RCMD",
+       "live_rcmd": {
+        "content": "{}"
+       }
+      },
+      "additional": null
+     }
+    }
+   },
+   {
+    "id_str": "1100000000000000007",
+    "type": "DYNAMIC_TYPE_FORWARD",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10002,
+      "name": "晚风电台",
+      "face": "http://img.invalid/face/10002.jpg",
+      "pub_ts": "1790000500",
+      "pub_action": ""
+     },
+     "module_dynamic": {
+      "desc": {
+       "text": "原动态没了",
+       "rich_text_nodes": [
+        {
+         "type": "RICH_TEXT_NODE_TYPE_TEXT",
+         "text": "原动态没了",
+         "orig_text": "原动态没了"
+        }
+       ]
+      },
+      "major": null,
+      "additional": null
+     }
+    },
+    "orig": {
+     "id_str": "",
+     "type": "DYNAMIC_TYPE_NONE",
+     "modules": {}
+    }
+   },
+   {
+    "id_str": "1100000000000000008",
+    "type": "DYNAMIC_TYPE_MUSIC",
+    "modules": {
+     "module_tag": null,
+     "module_author": {
+      "mid": 10002,
+      "name": "晚风电台",
+      "face": "http://img.invalid/face/10002.jpg",
+      "pub_ts": "1790000600",
+      "pub_action": "发布了音频"
+     },
+     "module_dynamic": {
+      "desc": null,
+      "major": {
+       "type": "MAJOR_TYPE_MUSIC",
+       "music": {
+        "title": "小夜曲",
+        "label": "原创",
+        "desc": ""
+       }
+      },
+      "additional": null
+     }
+    }
+   }
+  ]
+ }
+}

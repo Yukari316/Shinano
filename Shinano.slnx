@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/plugins/">
+    <Project Path="plugins/Shinano.Plugin.Bilibili/Shinano.Plugin.Bilibili.csproj" />
     <Project Path="plugins/Shinano.Plugin.Cheru/Shinano.Plugin.Cheru.csproj" />
     <Project Path="plugins/Shinano.Plugin.Entertainment/Shinano.Plugin.Entertainment.csproj" />
     <Project Path="plugins/Shinano.Plugin.Hso/Shinano.Plugin.Hso.csproj" />

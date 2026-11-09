@@ -251,4 +251,5 @@ src/Shinano.Monitor/wwwroot/
 # 自带插件的专有页面由 web/plugins 下的源码构建到插件包的 web/ 目录
 plugins/Shinano.Plugin.Qa/web/
 plugins/Shinano.Plugin.Hso/web/
+plugins/Shinano.Plugin.Bilibili/web/
 web/**/dist/

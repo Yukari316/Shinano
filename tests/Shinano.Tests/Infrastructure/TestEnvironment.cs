@@ -39,6 +39,16 @@ public static class TestEnvironment
     public static void RequireGateway() =>
         Assert.SkipUnless(GatewayToken is not null, "未设置 SHINANO_TEST_GATEWAY_TOKEN 环境变量（调用真实图源服务，会消耗 SauceNAO 额度）");
 
+    /// <summary>
+    /// 浏览器测试使用的部署数据目录（下载的 Chrome for Testing 保存在其中，约 700 MB，重复运行时复用）。浏览器测试会访问
+    /// Chrome for Testing 的版本与下载服务，只在修改浏览器服务时手动设置运行。
+    /// </summary>
+    public static string? BrowserDirectory => Read("SHINANO_TEST_BROWSER_DIR");
+
+    /// <summary>未设置浏览器测试目录时跳过当前测试。</summary>
+    public static void RequireBrowser() =>
+        Assert.SkipUnless(BrowserDirectory is not null, "未设置 SHINANO_TEST_BROWSER_DIR 环境变量（会下载 Chrome for Testing）");
+
     private static string? Read(string name)
     {
         string? value = Environment.GetEnvironmentVariable(name);

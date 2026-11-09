@@ -1,5 +1,6 @@
 using System.Globalization;
 using Shinano.Framework.Plugins;
+using Shinano.Framework.Rendering;
 using Shinano.Framework.Rendering.Models;
 using Shinano.Host.Rendering.Models;
 using SkiaSharp;
@@ -145,6 +146,25 @@ public sealed class CardRenderer : IPluginImages
             Image       = image,
             Attachments = attachments
         };
+    }
+
+    /// <inheritdoc />
+    public byte[] RenderFramed(FramedCard card)
+    {
+        using SKImage? avatar = card.Avatar is { } bytes ? SKImage.FromEncodedData(bytes) : null;
+        return Render(canvas =>
+        {
+            float bottom = canvas.Header(card.Label, CardPalette.Signal, card.Meta, card.Title, card.Subtitle, avatar);
+            bottom = canvas.Panel(bottom, panel =>
+            {
+                panel.Canvas.Save();
+                panel.Canvas.Translate(CardCanvas.CONTENT_LEFT, 0);
+                float height = card.DrawContent(panel.Canvas, CardCanvas.CONTENT_RIGHT - CardCanvas.CONTENT_LEFT);
+                panel.Canvas.Restore();
+                return height;
+            });
+            return canvas.Footer(bottom, card.FooterLeft, card.FooterRight);
+        });
     }
 
     // 先在 720 宽的逻辑版面上录制以得到高度，再铺底色与点阵并按输出宽度缩放回放。

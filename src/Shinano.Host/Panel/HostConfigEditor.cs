@@ -1,4 +1,5 @@
 using Shinano.Host.Bot.Models;
+using Shinano.Host.Browser.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel.Models;
 using Shinano.Host.Rendering.Models;
@@ -14,21 +15,24 @@ namespace Shinano.Host.Panel;
 /// </summary>
 public sealed class HostConfigEditor
 {
-    private const string ROOT_SECTION   = "Shinano";
-    private const string APPSETTINGS    = "appsettings.json";
-    private const int    MAX_PORT       = 65535;
-    private const int    MAX_DAYS       = 3650;
-    private const string DATABASE       = "Database";
-    private const string LLBOT          = "LlBot";
-    private const string RUSTFS         = "RustFs";
-    private const string WEB            = "Web";
-    private const string MONITOR        = "Monitor";
-    private const string CERTIFICATE    = "CertificatePath";
-    private const string CERTIFICATE_PW = "CertificatePassword";
+    private const string ROOT_SECTION        = "Shinano";
+    private const string APPSETTINGS         = "appsettings.json";
+    private const int    MAX_PORT            = 65535;
+    private const int    MAX_DAYS            = 3650;
+    private const int    MAX_BROWSER_VERSION = 999;
+    private const string DATABASE            = "Database";
+    private const string LLBOT               = "LlBot";
+    private const string RUSTFS              = "RustFs";
+    private const string WEB                 = "Web";
+    private const string MONITOR             = "Monitor";
+    private const string CERTIFICATE         = "CertificatePath";
+    private const string CERTIFICATE_PW      = "CertificatePassword";
 
     private static readonly string[] RustFsConnectionKeys = ["Endpoint", "ImEndpoint", "AccessKey", "SecretKey"];
 
     private static readonly string[] LogLevels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+
+    private static readonly string[] BrowserVersionModes = Enum.GetNames<BrowserVersionMode>();
 
     /// <summary>面板显示的全部宿主配置项，按显示顺序排列。</summary>
     public static readonly IReadOnlyList<HostConfigField> Fields =
@@ -60,6 +64,9 @@ public sealed class HostConfigEditor
         Secret("Web", "CertificatePassword", "HTTPS 证书密码", optional: true),
         Integer("Rendering", "Width", "消息图片宽度（像素）", RenderingOptions.MIN_WIDTH, RenderingOptions.MAX_WIDTH, "通知、列表等消息图片的输出宽度，高度随内容增长"),
         Text("Plugins", "Directory", "插件目录", "相对路径基于部署数据目录"),
+        Choice("Browser", "VersionMode", "浏览器版本", BrowserVersionModes, "Latest：最新稳定版，每天最多检查一次；Pinned：PuppeteerSharp 固定版本；Specific：下方指定的主版本"),
+        Integer("Browser", "Version", "浏览器主版本号", 0, MAX_BROWSER_VERSION, "版本为 Specific 时使用，如 157"),
+        Text("Browser", "ExecutablePath", "浏览器路径", "本机 Chrome 可执行文件，相对路径基于部署数据目录；留空时自动下载 Chrome for Testing", optional: true),
         Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
         Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次"),
         Text("Monitor", "ListenAddress", "状态页监听地址", "具体 IP 或 localhost，不接受全部网卡地址；修改后需重启监控进程"),

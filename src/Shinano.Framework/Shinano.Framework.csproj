@@ -16,6 +16,8 @@
     <!-- 绘制能力与宿主共享：插件经契约取得宿主的字体与文字绘制辅助，SkiaSharp 由宿主提供。 -->
     <PackageReference Include="SkiaSharp"/>
     <PackageReference Include="SkiaSharp.HarfBuzz"/>
+    <!-- 浏览器会话交出 PuppeteerSharp 的页面，程序集由宿主提供并与插件共享。 -->
+    <PackageReference Include="PuppeteerSharp"/>
     <PackageReference Include="SqlSugarCore"/>
   </ItemGroup>
 

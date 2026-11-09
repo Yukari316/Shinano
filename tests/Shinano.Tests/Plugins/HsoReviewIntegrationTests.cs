@@ -235,6 +235,10 @@ public sealed class HsoReviewIntegrationTests : IAsyncLifetime
 
         public IPluginImages Images => throw new NotSupportedException();
 
+        public IPluginBrowser Browser => throw new NotSupportedException();
+
+        public IPluginNotices Notices => throw new NotSupportedException();
+
         public IPluginConfig<T> Config<T>() where T : class, new() => throw new NotSupportedException();
 
         public IPluginSecrets<T> Secrets<T>() where T : class, new() => throw new NotSupportedException();

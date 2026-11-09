@@ -85,6 +85,10 @@ public sealed class HsoLiveLookupTests
 
         public IPluginImages Images => throw new NotSupportedException();
 
+        public IPluginBrowser Browser => throw new NotSupportedException();
+
+        public IPluginNotices Notices => throw new NotSupportedException();
+
         public IPluginConfig<T> Config<T>() where T : class, new() =>
             HsoConfig is T config ? new FixedConfig<T> { Value = config } : throw new NotSupportedException();
 

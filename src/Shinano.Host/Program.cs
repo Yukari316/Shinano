@@ -2,6 +2,8 @@ using Serilog;
 using Shinano.Framework.Plugins;
 using Shinano.Host.Bot;
 using Shinano.Host.Bot.Models;
+using Shinano.Host.Browser;
+using Shinano.Host.Browser.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
@@ -112,6 +114,11 @@ builder.Services.AddSingleton(sp => new SuperUserNotifier(
                                   sp.GetRequiredService<CardRenderer>(),
                                   TimeProvider.System,
                                   sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
+builder.Services.AddSingleton(sp => new BrowserService(
+                                  builder.Bind<BrowserOptions>(BrowserOptions.SECTION_NAME),
+                                  paths.DataDirectory,
+                                  sp.GetRequiredService<TimeProvider>(),
+                                  sp.GetRequiredService<ILogger<BrowserService>>()));
 builder.Services.AddSingleton<ArchiveGapTracker>();
 builder.Services.AddHostedService<HealthReactions>();
 // 归档服务在 BotService 之前登记：托管服务按相反顺序停止，Sora 排空记录队列后归档服务才停止。

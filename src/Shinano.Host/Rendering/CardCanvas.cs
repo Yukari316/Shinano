@@ -39,6 +39,9 @@ internal sealed class CardCanvas
     private const int   TITLE_MAX_LINES   = 3;
     private const float DIAMOND_SIZE      = 9;
     private const float DIAMOND_GAP       = 9;
+    private const float AVATAR_SIZE       = 56;
+    private const float AVATAR_GAP        = 16;
+    private const float AVATAR_RING       = 2;
     private const float EDGE_HEIGHT       = 6;
     private const float EDGE_TOP_RATIO    = 0.46f;
     private const float EDGE_BOTTOM_RATIO = 0.44f;
@@ -152,18 +155,23 @@ internal sealed class CardCanvas
     }
 
     /// <summary>
-    /// 墨色反转标题块：左上菱形与英文类型标签（按等级取色），右上说明，中文标题（最多三行）与可选副标题，下缘黄色斜楔。
+    /// 墨色反转标题块：左上菱形与英文类型标签（按等级取色），右上说明，中文标题（最多三行）与可选副标题，下缘黄色斜楔；
+    /// 有头像时画在标题左侧（信号黄圆环），与标题和副标题整体垂直居中。
     /// </summary>
     /// <returns>标题块底边（不含斜楔）。</returns>
-    public float Header(string label, SKColor labelColor, string? meta, string title, string? subtitle)
+    public float Header(string label, SKColor labelColor, string? meta, string title, string? subtitle, SKImage? avatar = null)
     {
         float left = HEADER_PADDING_X;
         float right = WIDTH - HEADER_PADDING_X;
-        IReadOnlyList<string> titleLines = Painter.Wrap(title, Fonts.Bold, TITLE_SIZE, right - left, TITLE_MAX_LINES);
+        float titleLeft = avatar is null ? left : left + AVATAR_SIZE + AVATAR_GAP;
+        IReadOnlyList<string> titleLines = Painter.Wrap(title, Fonts.Bold, TITLE_SIZE, right - titleLeft, TITLE_MAX_LINES);
         float metaHeight = META_SIZE * TITLE_LEADING;
         float titleHeight = titleLines.Count * TITLE_SIZE * TITLE_LEADING;
         float subtitleHeight = subtitle is null ? 0 : SUBTITLE_GAP + SUBTITLE_SIZE * BODY_LEADING;
-        float bottom = HEADER_PADDING_Y + metaHeight + TITLE_GAP + titleHeight + subtitleHeight + HEADER_PADDING_Y;
+        float textHeight = titleHeight + subtitleHeight;
+        float blockHeight = avatar is null ? textHeight : Math.Max(textHeight, AVATAR_SIZE);
+        float blockTop = HEADER_PADDING_Y + metaHeight + TITLE_GAP;
+        float bottom = blockTop + blockHeight + HEADER_PADDING_Y;
 
         Fill(new SKRect(0, 0, WIDTH, bottom), CardPalette.Ink);
         float metaBaseline = Baseline(HEADER_PADDING_Y, META_SIZE, TITLE_LEADING);
@@ -171,18 +179,51 @@ internal sealed class CardCanvas
         Text(label, Fonts.Latin, META_SIZE, labelColor, left + DIAMOND_SIZE + DIAMOND_GAP, metaBaseline);
         if (meta is not null) TextRight(meta, Fonts.Latin, META_SIZE, CardPalette.LineStrong, right, metaBaseline);
 
-        float y = HEADER_PADDING_Y + metaHeight + TITLE_GAP;
+        if (avatar is not null) Avatar(avatar, left, blockTop + (blockHeight - AVATAR_SIZE) / 2);
+
+        float y = blockTop + (blockHeight - textHeight) / 2;
         foreach (string line in titleLines)
         {
-            Text(line, Fonts.Bold, TITLE_SIZE, CardPalette.Paper, left, Baseline(y, TITLE_SIZE, TITLE_LEADING));
+            Text(line, Fonts.Bold, TITLE_SIZE, CardPalette.Paper, titleLeft, Baseline(y, TITLE_SIZE, TITLE_LEADING));
             y += TITLE_SIZE * TITLE_LEADING;
         }
 
         if (subtitle is not null)
-            Text(subtitle, Fonts.Regular, SUBTITLE_SIZE, CardPalette.LineStrong, left, Baseline(y + SUBTITLE_GAP, SUBTITLE_SIZE, BODY_LEADING));
+            Text(subtitle, Fonts.Regular, SUBTITLE_SIZE, CardPalette.LineStrong, titleLeft, Baseline(y + SUBTITLE_GAP, SUBTITLE_SIZE, BODY_LEADING));
 
         Edge(bottom);
         return bottom;
+    }
+
+    private void Avatar(SKImage avatar, float left, float top)
+    {
+        SKRect rect = new(left, top, left + AVATAR_SIZE, top + AVATAR_SIZE);
+        using SKPathBuilder builder = new();
+        builder.AddOval(rect);
+        using SKPath clip = builder.Detach();
+        Canvas.Save();
+        Canvas.ClipPath(clip, antialias: true);
+        Canvas.DrawImage(avatar, CoverSource(avatar, rect), rect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        Canvas.Restore();
+        using SKPaint ring = new()
+        {
+            Color       = CardPalette.Signal,
+            IsStroke    = true,
+            StrokeWidth = AVATAR_RING,
+            IsAntialias = true
+        };
+        Canvas.DrawOval(rect, ring);
+    }
+
+    /// <summary>按目标区域的宽高比，从图片中央裁出铺满目标的源区域。</summary>
+    private static SKRect CoverSource(SKImage image, SKRect target)
+    {
+        float scale = Math.Max(target.Width / image.Width, target.Height / image.Height);
+        float width = target.Width / scale;
+        float height = target.Height / scale;
+        float x = (image.Width - width) / 2;
+        float y = (image.Height - height) / 2;
+        return new SKRect(x, y, x + width, y + height);
     }
 
     /// <summary>贴在 <paramref name="top" /> 下方的信号黄斜楔。</summary>

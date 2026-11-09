@@ -3,7 +3,8 @@ using Shinano.Framework.Rendering.Models;
 namespace Shinano.Framework.Plugins;
 
 /// <summary>
-/// 宿主统一风格的消息图片：白底工业编辑风（参考《明日方舟：终末地》），分为通知、列表、排行、信息卡、状态报告与文档六类。
+/// 宿主统一风格的消息图片：白底工业编辑风（参考《明日方舟：终末地》），分为通知、列表、排行、信息卡、状态报告与文档六类，
+/// 另有内容由调用方绘制的框架卡片。
 /// 输出 PNG，宽度由部署配置决定（默认 1200 像素），高度随内容增长；发送时以 <c>base64://</c> 加 Base64 内容作为图片地址，
 /// 不依赖 RustFS。线程安全。
 /// </summary>
@@ -32,4 +33,11 @@ public interface IPluginImages
 
     /// <summary>把 Markdown 渲染为文档图；单独发送的图片随结果返回。</summary>
     RenderedDocument RenderDocument(DocumentCard card);
+
+    /// <summary>
+    /// 框架卡片：宿主绘制外框，面板内容由 <see cref="FramedCard.DrawContent" /> 绘制；内容颜色使用
+    /// <see cref="Rendering.CardPalette" /> 以保持同一风格。
+    /// </summary>
+    /// <returns>PNG 字节。</returns>
+    byte[] RenderFramed(FramedCard card);
 }

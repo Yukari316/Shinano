@@ -2,6 +2,7 @@ using Autofac;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
 using Shinano.Host.Bot;
+using Shinano.Host.Browser;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins.Capabilities;
 using Shinano.Host.Plugins.Entities;
@@ -39,6 +40,8 @@ public sealed class PluginRuntime : IDisposable
     private readonly PluginEndpointDataSource _endpoints;
     private readonly HostFonts              _fonts;
     private readonly CardRenderer           _images;
+    private readonly BrowserService         _browser;
+    private readonly PluginNotices          _notices;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -57,6 +60,8 @@ public sealed class PluginRuntime : IDisposable
         PluginEndpointDataSource endpoints,
         HostFonts                fonts,
         CardRenderer             images,
+        BrowserService           browser,
+        SuperUserNotifier        notifier,
         ILoggerFactory           loggerFactory)
     {
         _infrastructure = infrastructure;
@@ -67,6 +72,8 @@ public sealed class PluginRuntime : IDisposable
         _endpoints      = endpoints;
         _fonts          = fonts;
         _images         = images;
+        _browser        = browser;
+        _notices        = new PluginNotices(notifier);
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }
@@ -489,6 +496,8 @@ public sealed class PluginRuntime : IDisposable
             new PluginPanel(id, plugin.Directory, _endpoints, () => IsActive(plugin)),
             _fonts,
             _images,
+            new PluginBrowser(id, _browser),
+            _notices,
             _settings.DataDirectory);
     }
 

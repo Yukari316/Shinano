@@ -1,4 +1,5 @@
 using System.Globalization;
+using Shinano.Framework.Rendering;
 using Shinano.Host.Rendering.Models;
 using SkiaSharp;
 

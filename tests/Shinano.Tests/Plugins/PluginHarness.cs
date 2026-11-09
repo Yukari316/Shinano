@@ -2,12 +2,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
+using Shinano.Host.Browser;
+using Shinano.Host.Browser.Models;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Entities;
 using Shinano.Host.Plugins.Models;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Hosting.Models;
 using Shinano.Tests.Infrastructure;
 using Shinano.Tests.Rendering;
 using Sora;
@@ -104,6 +107,8 @@ public sealed class PluginHarness : IAsyncDisposable
             endpoints ?? new PluginEndpointDataSource(new ServiceCollection().BuildServiceProvider()),
             TestRendering.Fonts,
             TestRendering.Images,
+            new BrowserService(new BrowserOptions(), dataDirectory, TimeProvider.System, NullLogger<BrowserService>.Instance),
+            new SuperUserNotifier(bot, new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             NullLoggerFactory.Instance);
         await runtime.LoadAsync(CancellationToken.None);
 

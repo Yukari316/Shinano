@@ -39,6 +39,12 @@ public interface IPluginInitializationContext
     /// <summary>宿主统一风格的图片绘制（文本长图）。</summary>
     IPluginImages Images { get; }
 
+    /// <summary>宿主浏览器服务，使用插件自己的持久用户目录。</summary>
+    IPluginBrowser Browser { get; }
+
+    /// <summary>经宿主通知全部 Super User。</summary>
+    IPluginNotices Notices { get; }
+
     /// <summary>
     /// 返回插件配置。<typeparamref name="T" /> 的无参构造结果即默认配置；配置存于数据库，切换账号保留。
     /// 同一插件只能使用一个配置类型，且须与 <see cref="IPanelRegistration.UseConfig{TConfig}" /> 声明的类型相同。

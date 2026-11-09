@@ -1,12 +1,12 @@
 using SkiaSharp;
 
-namespace Shinano.Host.Rendering;
+namespace Shinano.Framework.Rendering;
 
 /// <summary>
 /// 消息图片的具名色板，取自 icaruszezen/endfield-ui 的《终末地》色彩令牌（亮色主题）。与管理面板的 daisyUI 主题无关；
-/// 绘制代码只引用这里的名字，不直接写色值。
+/// 宿主与自行绘制宿主风格卡片内容的插件只引用这里的名字，不直接写色值。
 /// </summary>
-internal static class CardPalette
+public static class CardPalette
 {
     // 点阵约 8% 不透明度（255 × 0.084），去掉后图片仍成立，只作底纹。
     private const byte DOT_ALPHA = 21;
