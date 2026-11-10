@@ -51,8 +51,12 @@ public sealed class HostScheduler : IHostedService, IAsyncDisposable
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
         // 不传递登记方的执行上下文：SqlSugarScope 以 AsyncLocal 为每个异步流程分配客户端，继承后任务会与登记方
         // （如插件 InitializeAsync）及同批登记的其他任务共用同一个数据库连接并发执行命令。
+        // 定时器在登记时同步创建，使首个周期从登记时刻起算，而不是从线程池开始执行循环时起算。
         using (ExecutionContext.SuppressFlow())
-            _loops.Add(Task.Run(() => RunLoopAsync(owner, name, interval, job, runImmediately)));
+        {
+            PeriodicTimer timer = new(interval, _time);
+            _loops.Add(Task.Run(() => RunLoopAsync(owner, name, timer, job, runImmediately)));
+        }
     }
 
     /// <summary>启用或停用某个所有者的全部任务，从下一次触发生效。</summary>
@@ -82,12 +86,12 @@ public sealed class HostScheduler : IHostedService, IAsyncDisposable
     private async Task RunLoopAsync(
         string                        owner,
         string                        name,
-        TimeSpan                      interval,
+        PeriodicTimer                 timer,
         Func<CancellationToken, Task> job,
         bool                          runImmediately)
     {
         CancellationToken stopping = _stopping.Token;
-        using PeriodicTimer timer = new(interval, _time);
+        using PeriodicTimer owned = timer;
         try
         {
             if (runImmediately) await RunOnceAsync(owner, name, job, stopping);
