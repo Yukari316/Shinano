@@ -32,6 +32,9 @@ public static class ReplyTexts
     /// <summary>动态推送合并转发的第二条。</summary>
     public const string DYNAMIC_COUNT = "一共{0}条动态喵";
 
+    /// <summary>卡片正文被截断时附加内容的第一条，填入动态 ID。</summary>
+    public const string TEXT_TOO_LONG = "原文太长了喵！要坏掉了喵！\nhttps://t.bilibili.com/{0}";
+
     /// <summary>开播。</summary>
     public const string LIVE_STARTED = "{0} 直播了喵\nhttps://live.bilibili.com/{1}";
 

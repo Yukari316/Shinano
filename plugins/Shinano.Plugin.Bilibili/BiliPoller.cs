@@ -189,7 +189,7 @@ public sealed class BiliPoller
             IReadOnlyList<BiliDynamic> feed = await ReadFeedAsync(oldest, cancellationToken);
             _session.ReportRecovered();
 
-            Dictionary<string, byte[]?> cards = [];
+            Dictionary<string, BiliCard?> cards = [];
             foreach (long uid in uids)
             {
                 List<BiliDynamic> own = [.. feed.Where(dynamic => dynamic.AuthorId == uid)];
@@ -245,12 +245,12 @@ public sealed class BiliPoller
     }
 
     private async Task PushAsync(
-        long                        uid,
-        string                      name,
-        BiliTargetRecord            target,
-        List<BiliDynamic>           own,
-        Dictionary<string, byte[]?> cards,
-        CancellationToken           cancellationToken)
+        long                          uid,
+        string                        name,
+        BiliTargetRecord              target,
+        List<BiliDynamic>             own,
+        Dictionary<string, BiliCard?> cards,
+        CancellationToken             cancellationToken)
     {
         IReadOnlyList<BiliDynamic> pending;
         if (target.PushedAt is not { } pushedAt)
@@ -274,7 +274,7 @@ public sealed class BiliPoller
         }
 
         if (pending.Count == 0) return;
-        List<(BiliDynamic Dynamic, byte[]? Card)> items = [];
+        List<(BiliDynamic Dynamic, BiliCard? Card)> items = [];
         foreach (BiliDynamic dynamic in pending)
             items.Add((dynamic, await CardAsync(dynamic, cards, cancellationToken)));
 
@@ -284,10 +284,10 @@ public sealed class BiliPoller
     }
 
     // 同一条动态推给多个群时只绘制一次；绘制失败时为 null，改发文字。
-    private async Task<byte[]?> CardAsync(BiliDynamic dynamic, Dictionary<string, byte[]?> cards, CancellationToken cancellationToken)
+    private async Task<BiliCard?> CardAsync(BiliDynamic dynamic, Dictionary<string, BiliCard?> cards, CancellationToken cancellationToken)
     {
-        if (cards.TryGetValue(dynamic.Id, out byte[]? cached)) return cached;
-        byte[]? card;
+        if (cards.TryGetValue(dynamic.Id, out BiliCard? cached)) return cached;
+        BiliCard? card;
         try
         {
             card = await _renderer.RenderAsync(dynamic, cancellationToken);

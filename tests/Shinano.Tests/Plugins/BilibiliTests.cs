@@ -94,26 +94,89 @@ public sealed class BilibiliTests
         Assert.Equal(expected, ReplyTexts.Duration(TimeSpan.FromSeconds(seconds)));
 
     [Fact]
-    public void DynamicNodes_SendsCardPicturesAndVideoExtras()
+    public void ExtraNodes_ListTruncationNoticeFlatPicturesAndVideoExtras()
+    {
+        Dictionary<string, BiliDynamic> items = Feed.Items.ToDictionary(item => item.Id[^1..]);
+        BiliCard truncated = new()
+        {
+            Png        = [1],
+            MoreLinkId = items["5"].Id
+        };
+
+        List<ForwardedMessageNode> opus = [.. BiliPusher.ExtraNodes(114514, "虚构研究所", items["5"], truncated)];
+        Assert.Equal(5, opus.Count);
+        Assert.Equal($"原文太长了喵！要坏掉了喵！\nhttps://t.bilibili.com/{items["5"].Id}", opus[0].Segments.GetText());
+        Assert.All(opus[1..], node => Assert.IsType<ImageSegment>(Assert.Single(node.Segments)));
+        Assert.All(opus, node => Assert.Equal("虚构研究所", node.SenderName));
+
+        List<ForwardedMessageNode> video = [.. BiliPusher.ExtraNodes(114514, "晚风电台", items["4"], new BiliCard { Png = [1] })];
+        Assert.Equal(2, video.Count);
+        Assert.IsType<ImageSegment>(Assert.Single(video[0].Segments));
+        Assert.Equal("BV1xx411c7aa", video[1].Segments.GetText());
+
+        Assert.Empty(BiliPusher.ExtraNodes(114514, "虚构研究所", items["8"], null));
+    }
+
+    [Fact]
+    public void DynamicsNodes_PutHeaderThenCardAndNestedExtrasPerDynamic()
     {
         Dictionary<string, BiliDynamic> items = Feed.Items.ToDictionary(item => item.Id[^1..]);
 
-        List<ForwardedMessageNode> opus = [.. BiliPusher.DynamicNodes(114514, "虚构研究所", items["5"], [1, 2, 3])];
-        Assert.Equal(2, opus.Count);
-        Assert.IsType<ImageSegment>(Assert.Single(opus[0].Segments));
-        ForwardSegment nested = Assert.IsType<ForwardSegment>(Assert.Single(opus[1].Segments));
-        Assert.Equal(4, nested.Messages.Count);
-        Assert.All(opus, node => Assert.Equal("虚构研究所", node.SenderName));
+        List<ForwardedMessageNode> nodes = [.. BiliPusher.DynamicsNodes(114514, "虚构研究所", [(items["5"], new BiliCard { Png = [1] }), (items["8"], null)])];
 
-        List<ForwardedMessageNode> article = [.. BiliPusher.DynamicNodes(114514, "虚构研究所", items["2"], null)];
-        Assert.Equal(2, article.Count);
-        Assert.Contains("专栏标题", article[0].Segments.GetText());
-        Assert.IsType<ImageSegment>(Assert.Single(article[1].Segments));
-
-        List<ForwardedMessageNode> video = [.. BiliPusher.DynamicNodes(114514, "晚风电台", items["4"], [1])];
-        Assert.Equal(3, video.Count);
-        Assert.Equal("BV1xx411c7aa", video[2].Segments.GetText());
+        Assert.Equal(5, nodes.Count);
+        Assert.Equal("虚构研究所更新了喵", nodes[0].Segments.GetText());
+        Assert.Equal("一共2条动态喵", nodes[1].Segments.GetText());
+        Assert.IsType<ImageSegment>(Assert.Single(nodes[2].Segments));
+        Assert.Equal(4, Assert.IsType<ForwardSegment>(Assert.Single(nodes[3].Segments)).Messages.Count);
+        // 卡片绘制失败时改发文字；没有附加内容时不加嵌套转发。
+        Assert.Contains("小夜曲", nodes[4].Segments.GetText());
     }
+
+    [Fact]
+    public async Task RenderAsync_ReportsTruncatedTextByConfiguredLines()
+    {
+        using BiliHttp http = new(NullLogger<BiliHttp>.Instance);
+        BiliConfig config = new()
+        {
+            OpusMaxLines    = 2,
+            ForwardMaxLines = 2
+        };
+        BiliCardRenderer renderer = new(new RenderingContext(config), http, NullLogger<BiliCardRenderer>.Instance);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        BiliDynamic longOpus = Dynamic("101", BiliDynamicKind.Opus, string.Join('\n', Enumerable.Repeat("一行虚构的正文", 5)));
+        BiliDynamic shortOpus = Dynamic("102", BiliDynamicKind.Opus, "短");
+
+        Assert.Equal("101", (await renderer.RenderAsync(longOpus, token)).MoreLinkId);
+        Assert.Null((await renderer.RenderAsync(shortOpus, token)).MoreLinkId);
+        // 专栏只有摘要，总是附加链接。
+        Assert.Equal("103", (await renderer.RenderAsync(Dynamic("103", BiliDynamicKind.Article, "短"), token)).MoreLinkId);
+        // 只有原动态被截断时指向原动态；两者都截断时指向转发本身。
+        Assert.Equal("101", (await renderer.RenderAsync(Dynamic("104", BiliDynamicKind.Forward, "短", longOpus), token)).MoreLinkId);
+        Assert.Equal("105", (await renderer.RenderAsync(Dynamic("105", BiliDynamicKind.Forward, longOpus.Text[0].Text, longOpus), token)).MoreLinkId);
+        Assert.Null((await renderer.RenderAsync(Dynamic("106", BiliDynamicKind.Forward, "短", shortOpus), token)).MoreLinkId);
+    }
+
+    private static BiliDynamic Dynamic(string id, BiliDynamicKind kind, string text, BiliDynamic? original = null) =>
+        new()
+        {
+            Id          = id,
+            Kind        = kind,
+            AuthorId    = 1,
+            AuthorName  = "虚构UP",
+            AuthorFace  = "",
+            PublishedAt = DateTimeOffset.FromUnixTimeSeconds(1790000000),
+            Action      = "发布了动态",
+            Text        =
+            [
+                new BiliText
+                {
+                    Kind = BiliTextKind.Plain,
+                    Text = text
+                }
+            ],
+            Original = original
+        };
 
     // .NET 解析 Domain=bilibili.com 后不带前导点，写入浏览器时必须补上，否则子域收不到登录 Cookie。
     [Fact]
@@ -137,11 +200,11 @@ public sealed class BilibiliTests
     public async Task RenderAsync_DrawsEveryKindWithPlaceholders()
     {
         using BiliHttp http = new(NullLogger<BiliHttp>.Instance);
-        BiliCardRenderer renderer = new(new RenderingContext(), http, NullLogger<BiliCardRenderer>.Instance);
+        BiliCardRenderer renderer = new(new RenderingContext(new BiliConfig()), http, NullLogger<BiliCardRenderer>.Instance);
         foreach (BiliDynamic dynamic in Feed.Items)
         {
-            byte[] png = await renderer.RenderAsync(dynamic, TestContext.Current.CancellationToken);
-            using SKBitmap bitmap = SKBitmap.Decode(png);
+            BiliCard card = await renderer.RenderAsync(dynamic, TestContext.Current.CancellationToken);
+            using SKBitmap bitmap = SKBitmap.Decode(card.Png);
             Assert.Equal(TestRendering.WIDTH, bitmap.Width);
             Assert.True(bitmap.Height > bitmap.Width / 3);
         }
@@ -155,6 +218,10 @@ public sealed class BilibiliTests
 
     private sealed class RenderingContext : IPluginInitializationContext
     {
+        private readonly BiliConfig _config;
+
+        public RenderingContext(BiliConfig config) => _config = config;
+
         public string PluginId => "bilibili";
 
         public IPluginEvents Events => throw new NotSupportedException();
@@ -181,8 +248,18 @@ public sealed class BilibiliTests
 
         public IPluginNotices Notices => throw new NotSupportedException();
 
-        public IPluginConfig<T> Config<T>() where T : class, new() => throw new NotSupportedException();
+        public IPluginConfig<T> Config<T>() where T : class, new() =>
+            new FixedConfig<T>
+            {
+                // SAFE: 绘制器只读取 BiliConfig。
+                Value = (T)(object)_config
+            };
 
         public IPluginSecrets<T> Secrets<T>() where T : class, new() => throw new NotSupportedException();
+    }
+
+    private sealed class FixedConfig<T> : IPluginConfig<T> where T : class
+    {
+        public required T Value { get; init; }
     }
 }

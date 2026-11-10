@@ -37,7 +37,8 @@ public sealed class BiliCardRenderer
     private const float  BADGE_MARGIN    = 10;
     private const float  VIDEO_TITLE     = 20;
     private const float  VIDEO_DESC      = 15;
-    private const int    DESC_LINES      = 3;
+    private const int    TITLE_LINES     = 3;
+    private const string ELLIPSIS        = "……";
     private const float  LABEL_SIZE      = 14;
     private const float  LABEL_WIDTH     = 64;
     private const float  ORIGIN_BAR      = 4;
@@ -47,7 +48,6 @@ public sealed class BiliCardRenderer
     private const float  ATTACH_SIZE     = 15;
     private const float  OVERLAY_SIZE    = 30;
     private const byte   OVERLAY_ALPHA   = 140;
-    private const int    MAX_TEXT_LINES  = 40;
     private const int    THUMB_PIXELS    = 480;
     private const int    FULL_PIXELS     = 1080;
     private const int    AVATAR_PIXELS   = 120;
@@ -67,9 +67,9 @@ public sealed class BiliCardRenderer
         _logger  = logger;
     }
 
-    /// <summary>绘制一条动态的卡片。</summary>
-    /// <returns>PNG 字节。</returns>
-    public async Task<byte[]> RenderAsync(BiliDynamic dynamic, CancellationToken cancellationToken)
+    /// <summary>绘制一条动态的卡片。正文按插件配置中该类型的行数上限截断，截断处以「……」结尾。</summary>
+    /// <returns>卡片与截断时原文链接指向的动态。</returns>
+    public async Task<BiliCard> RenderAsync(BiliDynamic dynamic, CancellationToken cancellationToken)
     {
         Dictionary<string, SKImage?> images = [];
         try
@@ -80,7 +80,9 @@ public sealed class BiliCardRenderer
             byte[]? avatar = dynamic.AuthorFace.Length > 0 && images.GetValueOrDefault(Sized(dynamic.AuthorFace, AVATAR_PIXELS, square: true)) is { } face
                 ? face.Encode(SKEncodedImageFormat.Png, 100).ToArray()
                 : null;
-            return _context.Images.RenderFramed(
+            BiliConfig config = _context.Config<BiliConfig>().Value;
+            HashSet<string> truncated = [];
+            byte[] png = _context.Images.RenderFramed(
                 new FramedCard
                 {
                     Label       = LABEL_PREFIX + Label(dynamic.Kind),
@@ -88,16 +90,27 @@ public sealed class BiliCardRenderer
                     Title       = dynamic.AuthorName,
                     Subtitle    = dynamic.Action,
                     Avatar      = avatar,
-                    DrawContent = (canvas, width) => new Layout(canvas, _context.Fonts, images).Card(dynamic, width),
+                    DrawContent = (canvas, width) => new Layout(canvas, _context.Fonts, images, config, truncated).Card(dynamic, width),
                     FooterLeft  = FOOTER_LEFT,
                     FooterRight = $"UID {dynamic.AuthorId}"
                 });
+            return new BiliCard
+            {
+                Png        = png,
+                MoreLinkId = MoreLinkId(dynamic, truncated)
+            };
         }
         finally
         {
             foreach (SKImage? image in images.Values) image?.Dispose();
         }
     }
+
+    // 转发内容与原动态都被截断时只给转发本身的链接，原动态可从转发页面打开。
+    private static string? MoreLinkId(BiliDynamic dynamic, IReadOnlySet<string> truncated) =>
+        truncated.Contains(dynamic.Id) ? dynamic.Id
+        : dynamic.Original is { } original && truncated.Contains(original.Id) ? original.Id
+        : null;
 
     private static string Label(BiliDynamicKind kind) =>
         kind switch
@@ -151,32 +164,50 @@ public sealed class BiliCardRenderer
         private readonly SKCanvas                              _canvas;
         private readonly IPluginFonts                          _fonts;
         private readonly IReadOnlyDictionary<string, SKImage?> _images;
+        private readonly BiliConfig                            _config;
+        private readonly HashSet<string>                       _truncated;
 
-        public Layout(SKCanvas canvas, IPluginFonts fonts, IReadOnlyDictionary<string, SKImage?> images)
+        /// <param name="truncated">绘制时加入正文被截断的动态 ID；专栏总是加入。</param>
+        public Layout(SKCanvas canvas, IPluginFonts fonts, IReadOnlyDictionary<string, SKImage?> images, BiliConfig config, HashSet<string> truncated)
         {
-            _canvas = canvas;
-            _fonts  = fonts;
-            _images = images;
+            _canvas    = canvas;
+            _fonts     = fonts;
+            _images    = images;
+            _config    = config;
+            _truncated = truncated;
         }
 
-        public float Card(BiliDynamic dynamic, float width) => Body(dynamic, 0, width, PAD_Y, BODY_SIZE) + PAD_Y;
+        public float Card(BiliDynamic dynamic, float width) => Body(dynamic, 0, width, PAD_Y, BODY_SIZE, MaxLines(dynamic.Kind)) + PAD_Y;
+
+        private int MaxLines(BiliDynamicKind kind) =>
+            kind switch
+            {
+                BiliDynamicKind.Opus    => _config.OpusMaxLines,
+                BiliDynamicKind.Article => _config.ArticleMaxLines,
+                BiliDynamicKind.Forward => _config.ForwardMaxLines,
+                _                       => _config.GenericMaxLines
+            };
 
         // 依次绘制标题、正文、视频、图片、原动态与附加卡片，返回底边；各部分之间留固定间距。
-        private float Body(BiliDynamic dynamic, float left, float width, float top, float bodySize)
+        private float Body(BiliDynamic dynamic, float left, float width, float top, float bodySize, int maxLines)
         {
             float y = top;
             bool first = true;
             float Next() => first ? y : y + GAP;
 
+            // 关注流中的专栏只有 B站 截断后的摘要，卡片无法显示全文。
+            if (dynamic.Kind == BiliDynamicKind.Article) _truncated.Add(dynamic.Id);
+
             if (dynamic.Title is { } title)
             {
-                y = Paragraph(title, _fonts.Bold, bodySize + TITLE_EXTRA, CardPalette.Ink, left, width, Next(), MAX_TEXT_LINES);
+                y = Paragraph(title, _fonts.Bold, bodySize + TITLE_EXTRA, CardPalette.Ink, left, width, Next(), TITLE_LINES);
                 first = false;
             }
 
             if (dynamic.Text.Count > 0)
             {
-                y = Rich(dynamic.Text, left, width, Next(), bodySize);
+                y = Rich(dynamic.Text, left, width, Next(), bodySize, maxLines, out bool cut);
+                if (cut) _truncated.Add(dynamic.Id);
                 first = false;
             }
 
@@ -218,12 +249,12 @@ public sealed class BiliCardRenderer
             float innerLeft = left + ORIGIN_BAR + ORIGIN_PAD;
             float innerWidth = width - ORIGIN_BAR - ORIGIN_PAD * 2;
             using SKPictureRecorder recorder = new();
-            Layout inner = new(recorder.BeginRecording(new SKRect(0, 0, width, 100_000)), _fonts, _images);
+            Layout inner = new(recorder.BeginRecording(new SKRect(0, 0, width, 100_000)), _fonts, _images, _config, _truncated);
             float nameBaseline = Baseline(ORIGIN_PAD, ORIGIN_NAME);
             inner.Text(original.AuthorName, _fonts.Bold, ORIGIN_NAME, CardPalette.Ink, innerLeft, nameBaseline);
             float nameWidth = _fonts.Painter.Measure(original.AuthorName, _fonts.Bold, ORIGIN_NAME);
             inner.Text(original.Action, _fonts.Regular, ORIGIN_ACTION, CardPalette.InkTertiary, innerLeft + nameWidth + 8, nameBaseline);
-            float bottom = inner.Body(original, innerLeft, innerWidth, ORIGIN_PAD + ORIGIN_NAME * LEADING + GAP / 2, ORIGIN_SIZE) + ORIGIN_PAD;
+            float bottom = inner.Body(original, innerLeft, innerWidth, ORIGIN_PAD + ORIGIN_NAME * LEADING + GAP / 2, ORIGIN_SIZE, _config.ForwardMaxLines) + ORIGIN_PAD;
             using SKPicture picture = recorder.EndRecording();
 
             Fill(new SKRect(left, top, left + width, top + bottom), CardPalette.Sunken);
@@ -248,9 +279,9 @@ public sealed class BiliCardRenderer
                 Text(video.Duration, _fonts.LatinBold, BADGE_SIZE, CardPalette.Signal, badge.Left + BADGE_PAD, badge.MidY + BADGE_SIZE * 0.36f);
             }
 
-            float y = Paragraph(video.Title, _fonts.Bold, VIDEO_TITLE, CardPalette.Ink, left, width, cover.Bottom + GAP, DESC_LINES);
+            float y = Paragraph(video.Title, _fonts.Bold, VIDEO_TITLE, CardPalette.Ink, left, width, cover.Bottom + GAP, TITLE_LINES);
             if (video.Description.Length > 0)
-                y = Paragraph(video.Description, _fonts.Regular, VIDEO_DESC, CardPalette.InkSecondary, left, width, y + GAP / 2, DESC_LINES);
+                y = Paragraph(video.Description, _fonts.Regular, VIDEO_DESC, CardPalette.InkSecondary, left, width, y + GAP / 2, _config.VideoDescLines);
             if (video.Bvid.Length == 0) return y;
 
             y += GAP;
@@ -315,8 +346,9 @@ public sealed class BiliCardRenderer
             _canvas.DrawImage(image, new SKRect(x, y, x + sourceWidth, y + sourceHeight), target, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
         }
 
-        // 富文本：逐字素测量并换行（空白与汉字等之后可断开，单词中间溢出时整词移到下一行），按片段类型着色。
-        private float Rich(IReadOnlyList<BiliText> text, float left, float width, float top, float size)
+        // 富文本：逐字素测量并换行（空白与汉字等之后可断开，单词中间溢出时整词移到下一行），按片段类型着色；
+        // 超过 maxLines 行时只画前 maxLines 行，末行以「……」结尾。
+        private float Rich(IReadOnlyList<BiliText> text, float left, float width, float top, float size, int maxLines, out bool truncated)
         {
             List<List<Glyph>> lines = [[]];
             float lineWidth = 0;
@@ -350,7 +382,13 @@ public sealed class BiliCardRenderer
 
             // 正文末尾的换行（如摘要以 \n 结尾）不占行。
             while (lines.Count > 1 && lines[^1].All(item => string.IsNullOrWhiteSpace(item.Element))) lines.RemoveAt(lines.Count - 1);
-            if (lines.Count > MAX_TEXT_LINES) lines = lines[..MAX_TEXT_LINES];
+            truncated = lines.Count > maxLines;
+            if (truncated)
+            {
+                lines = lines[..maxLines];
+                lines[^1] = Ellipsized(lines[^1], width, size);
+            }
+
             float lineHeight = size * LEADING;
             for (int index = 0; index < lines.Count; index++)
             {
@@ -364,6 +402,22 @@ public sealed class BiliCardRenderer
             }
 
             return top + lines.Count * lineHeight;
+        }
+
+        // 去掉放不下省略号的末尾字素与末尾空白，再接上省略号。
+        private List<Glyph> Ellipsized(List<Glyph> line, float width, float size)
+        {
+            Glyph ellipsis = new()
+            {
+                Element = ELLIPSIS,
+                Color   = CardPalette.Ink,
+                Width   = _fonts.Painter.Measure(ELLIPSIS, _fonts.Regular, size)
+            };
+            List<Glyph> kept = [.. line];
+            while (kept.Count > 0 && (kept.Sum(item => item.Width) + ellipsis.Width > width || string.IsNullOrWhiteSpace(kept[^1].Element)))
+                kept.RemoveAt(kept.Count - 1);
+            kept.Add(ellipsis);
+            return kept;
         }
 
         private IEnumerable<Glyph> Glyphs(IReadOnlyList<BiliText> text, float size)

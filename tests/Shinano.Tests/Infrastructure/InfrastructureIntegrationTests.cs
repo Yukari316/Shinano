@@ -48,11 +48,16 @@ public sealed class InfrastructureIntegrationTests
         Assert.Equal(first, second);
         Assert.Equal(1, await CountObjectsAsync(infrastructure, BucketNames.Media(_fixture.BucketPrefix), first));
 
+        // 回收范围是整个测试 schema，会包含其他测试留下的无引用媒体，因此只核对本测试的媒体，不断言回收数量。
         await store.RemoveReferencesAsync(pluginId, "a");
-        Assert.Equal(0, await store.CollectOrphansAsync(DateTimeOffset.UtcNow.AddDays(2), Token));
+        await store.CollectOrphansAsync(DateTimeOffset.UtcNow.AddDays(2), Token);
+        await using (StoredObject? kept = await store.OpenReadAsync(first, Token))
+            Assert.NotNull(kept);
 
         await store.RemoveReferencesAsync(pluginId, "b");
-        Assert.Equal(0, await store.CollectOrphansAsync(DateTimeOffset.UtcNow, Token));
+        await store.CollectOrphansAsync(DateTimeOffset.UtcNow, Token);
+        await using (StoredObject? kept = await store.OpenReadAsync(first, Token))
+            Assert.NotNull(kept);
         Assert.True(await store.CollectOrphansAsync(DateTimeOffset.UtcNow.AddHours(25), Token) >= 1);
 
         Assert.Null(await store.OpenReadAsync(first, Token));

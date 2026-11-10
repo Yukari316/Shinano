@@ -126,7 +126,10 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
             GapFlushInterval,
             FlushGapsAsync,
             runImmediately: false);
-        Task[] mediaWorkers = [.. Enumerable.Range(0, MEDIA_WORKER_COUNT).Select(_ => RunMediaWorkerAsync(stoppingToken))];
+        // 不传递父流程的执行上下文：SqlSugarScope 以 AsyncLocal 分配客户端，继承后工作任务会与父流程共用同一个数据库连接。
+        Task[] mediaWorkers;
+        using (ExecutionContext.SuppressFlow())
+            mediaWorkers = [.. Enumerable.Range(0, MEDIA_WORKER_COUNT).Select(_ => Task.Run(() => RunMediaWorkerAsync(stoppingToken)))];
 
         // 停止时继续排空缓冲，直到写入端在 StopAsync 中关闭；等待时间受宿主停止超时限制。
         await foreach (MessageRecord record in _records.Reader.ReadAllAsync(CancellationToken.None))
