@@ -17,4 +17,7 @@ public sealed class StagedChangeDetail
 
     /// <summary>新插件包的版本。</summary>
     public string? ToVersion { get; init; }
+
+    /// <summary>删除时是否同时清除插件数据；工具整体重写 <c>pending.json</c>，须保留此项。</summary>
+    public bool PurgeData { get; init; }
 }

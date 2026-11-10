@@ -60,10 +60,12 @@ public sealed class ObjectStorage : IDisposable
     }
 
     /// <summary>清空并删除 bucket；bucket 不存在时直接返回。</summary>
-    public async Task DeleteBucketAsync(string bucket, CancellationToken cancellationToken)
+    /// <returns>删除的对象个数；bucket 不存在时为 null。</returns>
+    public async Task<int?> DeleteBucketAsync(string bucket, CancellationToken cancellationToken)
     {
-        if (!await AmazonS3Util.DoesS3BucketExistV2Async(_client, bucket)) return;
+        if (!await AmazonS3Util.DoesS3BucketExistV2Async(_client, bucket)) return null;
 
+        int deleted = 0;
         ListObjectsV2Request request = new()
         {
             BucketName = bucket,
@@ -75,6 +77,7 @@ public sealed class ObjectStorage : IDisposable
             response = await _client.ListObjectsV2Async(request, cancellationToken);
             List<S3Object> objects = response.S3Objects ?? [];
             if (objects.Count > 0)
+            {
                 await _client.DeleteObjectsAsync(
                     new DeleteObjectsRequest
                     {
@@ -82,11 +85,15 @@ public sealed class ObjectStorage : IDisposable
                         Objects    = [.. objects.Select(item => new KeyVersion { Key = item.Key })]
                     },
                     cancellationToken);
+                deleted += objects.Count;
+            }
+
             request.ContinuationToken = response.NextContinuationToken;
         }
         while (response.IsTruncated == true);
 
         await _client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket }, cancellationToken);
+        return deleted;
     }
 
     /// <summary>上传本地文件。</summary>

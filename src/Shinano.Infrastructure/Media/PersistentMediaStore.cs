@@ -115,10 +115,9 @@ public sealed class PersistentMediaStore
     public async Task RemoveReferencesAsync(string pluginId, string refKey) =>
         await RemoveWhereAsync(reference => reference.PluginId == pluginId && reference.RefKey == refKey);
 
-    /// <summary>删除插件的全部引用，用于管理员清除插件数据。</summary>
-    public async Task RemovePluginReferencesAsync(string pluginId) =>
-        await RemoveWhereAsync(reference => reference.PluginId == pluginId);
-
+    /// <summary>删除插件的全部引用（全部账号），用于管理员清除插件数据；无引用的媒体进入宽限期。</summary>
+    /// <returns>删除的引用条数。</returns>
+    public Task<int> RemovePluginReferencesAsync(string pluginId) => RemoveWhereAsync(reference => reference.PluginId == pluginId);
     /// <summary>读取媒体内容；媒体或对象不存在时返回 null。</summary>
     public async Task<StoredObject?> OpenReadAsync(long mediaId, CancellationToken cancellationToken)
     {
@@ -212,8 +211,8 @@ public sealed class PersistentMediaStore
                 now      = DateTimeOffset.UtcNow
             });
 
-    // 删除引用后，只有确实不再被任何引用指向的媒体进入宽限期。
-    private async Task RemoveWhereAsync(Expression<Func<MediaReferenceRecord, bool>> condition) =>
+    // 删除引用后，只有确实不再被任何引用指向的媒体进入宽限期。返回删除的引用条数。
+    private async Task<int> RemoveWhereAsync(Expression<Func<MediaReferenceRecord, bool>> condition) =>
         await Db.InTransactionAsync(async () =>
         {
             List<long> mediaIds = await Db.Queryable<MediaReferenceRecord>()
@@ -223,16 +222,17 @@ public sealed class PersistentMediaStore
                                           .ToListAsync();
             if (mediaIds.Count == 0) return 0;
 
-            await Db.Deleteable<MediaReferenceRecord>().Where(condition).ExecuteCommandAsync();
+            int removed = await Db.Deleteable<MediaReferenceRecord>().Where(condition).ExecuteCommandAsync();
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            return await Db.Updateable<MediaObjectRecord>()
-                           .SetColumns(item => new MediaObjectRecord { OrphanedAt = now })
-                           .Where(item => mediaIds.Contains(item.Id)
-                                          && item.OrphanedAt == null
-                                          && !SqlFunc.Subqueryable<MediaReferenceRecord>()
-                                                     .Where(reference => reference.MediaId == item.Id)
-                                                     .Any())
-                           .ExecuteCommandAsync();
+            await Db.Updateable<MediaObjectRecord>()
+                    .SetColumns(item => new MediaObjectRecord { OrphanedAt = now })
+                    .Where(item => mediaIds.Contains(item.Id)
+                                   && item.OrphanedAt == null
+                                   && !SqlFunc.Subqueryable<MediaReferenceRecord>()
+                                              .Where(reference => reference.MediaId == item.Id)
+                                              .Any())
+                    .ExecuteCommandAsync();
+            return removed;
         });
 
     private async Task<string?> FindKeyAsync(long mediaId) =>

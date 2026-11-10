@@ -3,5 +3,9 @@
   "name": "B站订阅",
   "version": "1.0.0",
   "description": "推送登录账号关注的 UP 主的动态（卡片图片）与开播、下播提醒；扫码登录由宿主浏览器维护",
-  "entryAssembly": "Shinano.Plugin.Bilibili.dll"
+  "entryAssembly": "Shinano.Plugin.Bilibili.dll",
+  "tables": {
+    "global": ["bilibili_account", "bilibili_follow"],
+    "account": ["bilibili_subscription", "bilibili_target", "bilibili_live"]
+  }
 }

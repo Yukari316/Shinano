@@ -15,4 +15,7 @@ public sealed class PluginPackageOperation
     /// 插件目录下的目标目录：升级与删除为已安装的目录，安装为 <c>&lt;插件目录&gt;/&lt;id&gt;</c>，建立计划时该目录不存在。
     /// </summary>
     public required string TargetDirectory { get; init; }
+
+    /// <summary>删除并清除数据时的清除范围，建立计划时取自已安装插件的清单；其他情况为 null。</summary>
+    public PluginDataScope? Purge { get; init; }
 }

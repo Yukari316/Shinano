@@ -177,6 +177,47 @@ export interface PluginChange {
   name: string
   fromVersion: string | null
   toVersion: string | null
+  purgeData: boolean
+}
+
+export interface PluginTables {
+  global: string[]
+  account: string[]
+}
+
+export interface PluginDataPreview {
+  tables: PluginTables
+  buckets: string[]
+  secretsFile: boolean
+  browserProfile: boolean
+}
+
+export type PluginPurgeState = 'Waiting' | 'Running' | 'Completed' | 'PartiallyFailed' | 'Cancelled'
+export type PluginPurgeStepKind =
+  | 'Tables'
+  | 'SchemaVersions'
+  | 'MediaReferences'
+  | 'Buckets'
+  | 'ConfigAndState'
+  | 'Secrets'
+  | 'BrowserProfile'
+  | 'Leftovers'
+
+export interface PluginPurgeStep {
+  kind: PluginPurgeStepKind
+  done: boolean
+  summary: string | null
+  error: string | null
+}
+
+export interface PluginPurge {
+  pluginId: string
+  name: string
+  createdAt: string
+  state: PluginPurgeState
+  finishedAt: string | null
+  steps: PluginPurgeStep[]
+  possibleLeftovers: string[]
 }
 
 export interface PendingPluginChange {

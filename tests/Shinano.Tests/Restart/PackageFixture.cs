@@ -1,6 +1,18 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
+using Shinano.Host.Bot;
+using Shinano.Host.Browser;
+using Shinano.Host.Browser.Models;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Models;
+using Shinano.Infrastructure.ChatArchive.Models;
+using Shinano.Infrastructure.Database.Models;
+using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Hosting.Models;
+using Shinano.Infrastructure.Media.Models;
+using Shinano.Infrastructure.Storage.Models;
+using Shinano.Tests.Rendering;
 using System.IO.Compression;
 using System.Text.Json;
 
@@ -9,14 +21,14 @@ namespace Shinano.Tests.Restart;
 /// <summary>临时部署数据目录、插件目录与插件包的构造。</summary>
 internal sealed class PackageFixture : IDisposable
 {
-    public PackageFixture()
+    public PackageFixture(string bucketPrefix = "shinano-test")
     {
         DataDirectory = Directory.CreateTempSubdirectory("shinano-restart-").FullName;
         Settings = new PluginRuntimeSettings
         {
             DataDirectory   = DataDirectory,
             PluginDirectory = "plugins",
-            BucketPrefix    = "shinano-test"
+            BucketPrefix    = bucketPrefix
         };
         Directory.CreateDirectory(Settings.PluginRoot);
     }
@@ -27,6 +39,42 @@ internal sealed class PackageFixture : IDisposable
 
     public PluginPackageStaging CreateStaging() =>
         new(Settings, TimeProvider.System, NullLogger<PluginPackageStaging>.Instance);
+
+    /// <summary>
+    /// 插件数据清除服务。<paramref name="infrastructure" /> 为 null 时使用未初始化的基础设施：只建立任务，不会执行。
+    /// </summary>
+    public PluginDataPurger CreatePurger(HostInfrastructure? infrastructure = null, RuntimeHealth? health = null)
+    {
+        RuntimeHealth runtimeHealth = health ?? new RuntimeHealth(TimeProvider.System);
+        return new PluginDataPurger(
+            infrastructure ?? Uninitialized(runtimeHealth),
+            Settings,
+            new BrowserService(new BrowserOptions(), DataDirectory, TimeProvider.System, NullLogger<BrowserService>.Instance),
+            new BotAccessor(),
+            new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
+            runtimeHealth,
+            TimeProvider.System,
+            NullLogger<PluginDataPurger>.Instance);
+    }
+
+    /// <summary>改写已安装插件包的清单，声明数据表。</summary>
+    public void DeclareTables(string directory, string id, string version, string[] global, string[] account, params string[] bucketPurposes) =>
+        File.WriteAllText(
+            Path.Combine(directory, PluginManifest.FILE_NAME),
+            JsonSerializer.Serialize(
+                new
+                {
+                    id,
+                    name          = id,
+                    version,
+                    entryAssembly = "Sample.dll",
+                    bucketPurposes,
+                    tables = new
+                    {
+                        global,
+                        account
+                    }
+                }));
 
     public static Dictionary<string, string> Package(string id, string version, params string[] bucketPurposes) =>
         new()
@@ -66,6 +114,21 @@ internal sealed class PackageFixture : IDisposable
     }
 
     public void Dispose() => Directory.Delete(DataDirectory, recursive: true);
+
+    private static HostInfrastructure Uninitialized(RuntimeHealth health) =>
+        new(
+            new HostInfrastructureSettings
+            {
+                Deployment  = new DeploymentOptions(),
+                Database    = new DatabaseOptions(),
+                RustFs      = new RustFsOptions(),
+                Media       = new MediaOptions(),
+                ChatArchive = new ChatArchiveOptions()
+            },
+            health,
+            new HostScheduler(NullLogger<HostScheduler>.Instance, new FakeTimeProvider()),
+            TimeProvider.System,
+            NullLoggerFactory.Instance);
 
     private static string Manifest(string id, string version, string[] bucketPurposes) =>
         JsonSerializer.Serialize(

@@ -7,7 +7,7 @@ import PluginSecretsCard from '../components/PluginSecretsCard.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { pageTitle } from '../pageTitle'
 import { plugins, refreshPlugins } from '../plugins'
-import { CHANGE_KIND_LABEL, describeChange, refreshRestart, restartStatus } from '../restart'
+import { changeLabel, describeChange, refreshRestart, restartStatus } from '../restart'
 import type { PluginConfigForm } from '../types'
 
 const route = useRoute()
@@ -83,7 +83,7 @@ async function save(): Promise<void> {
             {{ plugin.error ? '加载失败' : plugin.enabled ? '已启用' : '已停用' }}
           </span>
           <span v-if="pending" class="badge badge-warning">
-            待{{ CHANGE_KIND_LABEL[pending.change.kind] }} {{ describeChange(pending.change) }}
+            待{{ changeLabel(pending.change) }} {{ describeChange(pending.change) }}
           </span>
           <RouterLink to="/plugins" class="link ml-auto text-sm">插件管理</RouterLink>
         </div>

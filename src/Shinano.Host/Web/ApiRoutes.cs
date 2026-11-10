@@ -81,6 +81,11 @@ public static class ApiRoutes
                 .WithMetadata(new RequestSizeLimitAttribute(RestartEndpoints.UPLOAD_REQUEST_LIMIT));
         packages.MapDelete("/{id}", RestartEndpoints.Undo);
         packages.MapPost("/{id}/remove", RestartEndpoints.StageRemoval);
+        packages.MapGet("/{id}/data", RestartEndpoints.DataPreview);
+
+        RouteGroupBuilder purges = api.MapGroup("/plugin-purges");
+        purges.MapGet("/", RestartEndpoints.Purges);
+        purges.MapDelete("/{id}", RestartEndpoints.DismissPurge);
 
         RouteGroupBuilder restart = api.MapGroup("/restart");
         restart.MapGet("/", RestartEndpoints.Status);

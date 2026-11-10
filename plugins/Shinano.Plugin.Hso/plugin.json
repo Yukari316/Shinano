@@ -4,5 +4,9 @@
   "version": "1.0.0",
   "description": "群内随机发送本地图库中的图片与作品信息，按群设置屏蔽与 NSFW，统计调用排行",
   "entryAssembly": "Shinano.Plugin.Hso.dll",
-  "bucketPurposes": ["hso"]
+  "bucketPurposes": ["hso"],
+  "tables": {
+    "global": ["hso_image", "hso_review"],
+    "account": ["hso_group_setting", "hso_usage"]
+  }
 }

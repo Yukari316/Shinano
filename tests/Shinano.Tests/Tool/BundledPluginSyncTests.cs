@@ -44,7 +44,7 @@ public sealed class BundledPluginSyncTests : IDisposable
         Bundle("manual", "2.0.0");
         _fixture.Install("same", "same", "1.0.0");
         _fixture.Install("manual", "manual", "1.0.0");
-        _fixture.CreateStaging().StageRemoval("manual");
+        _fixture.CreateStaging().StageRemoval("manual", purgeData: false);
         DeploymentState state = new() { BundledPlugins = ["removed", "same", "manual"] };
 
         BundledPluginSync.Upgrade(

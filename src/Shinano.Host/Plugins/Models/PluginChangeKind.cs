@@ -9,6 +9,6 @@ public enum PluginChangeKind
     /// <summary>以新的插件包替换已安装的同 ID 插件，允许降级。</summary>
     Upgrade,
 
-    /// <summary>删除插件包；插件数据保留。</summary>
+    /// <summary>删除插件包；插件数据保留，除非变更选择了 <see cref="PluginChange.PurgeData" />。</summary>
     Remove
 }

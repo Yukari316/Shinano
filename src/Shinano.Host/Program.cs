@@ -119,6 +119,8 @@ builder.Services.AddSingleton(sp => new BrowserService(
                                   paths.DataDirectory,
                                   sp.GetRequiredService<TimeProvider>(),
                                   sp.GetRequiredService<ILogger<BrowserService>>()));
+builder.Services.AddSingleton<PluginDataPurger>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PluginDataPurger>());
 builder.Services.AddSingleton<ArchiveGapTracker>();
 builder.Services.AddHostedService<HealthReactions>();
 // 归档服务在 BotService 之前登记：托管服务按相反顺序停止，Sora 排空记录队列后归档服务才停止。

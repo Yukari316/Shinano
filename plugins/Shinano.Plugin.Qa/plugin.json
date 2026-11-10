@@ -3,5 +3,9 @@
   "name": "有人问",
   "version": "1.0.0",
   "description": "群内问答：按问题自动回复文字、图片、语音、视频或文件",
-  "entryAssembly": "Shinano.Plugin.Qa.dll"
+  "entryAssembly": "Shinano.Plugin.Qa.dll",
+  "tables": {
+    "global": ["qa_forbidden_question"],
+    "account": ["qa_entry"]
+  }
 }

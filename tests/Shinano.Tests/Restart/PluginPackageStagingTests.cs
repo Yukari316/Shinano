@@ -87,7 +87,7 @@ public sealed class PluginPackageStagingTests : IDisposable
         await using (Stream conflicting = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.0.0", "images")))
             await Assert.ThrowsAsync<InvalidDataException>(() => _staging.StageAsync(conflicting, TestContext.Current.CancellationToken));
 
-        Assert.NotNull(_staging.StageRemoval("gallery"));
+        Assert.NotNull(_staging.StageRemoval("gallery", purgeData: false));
         await using Stream allowed = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.0.0", "images"));
         await _staging.StageAsync(allowed, TestContext.Current.CancellationToken);
         Assert.Equal(2, _staging.Pending().Count);
@@ -111,6 +111,6 @@ public sealed class PluginPackageStagingTests : IDisposable
         _fixture.Install("SampleA", "sample-a", "1.0.0");
         _staging.Freeze();
 
-        Assert.Throws<InvalidOperationException>(() => _staging.StageRemoval("sample-a"));
+        Assert.Throws<InvalidOperationException>(() => _staging.StageRemoval("sample-a", purgeData: false));
     }
 }

@@ -131,6 +131,32 @@ public sealed class ToolContractTests : IDisposable
         Assert.True(File.Exists(Path.Combine(fixture.CreateStaging().PackageDirectory("sample-a"), "plugin.json")));
     }
 
+    // 工具整体重写 pending.json，不能丢掉宿主写入的其他项的字段。
+    [Fact]
+    public void StagedUpgrade_KeepsOtherChangesPurgeFlag()
+    {
+        using PackageFixture fixture = new();
+        fixture.Install("sample-a", "sample-a", "1.0.0");
+        fixture.Install("sample-b", "sample-b", "1.0.0");
+        fixture.CreateStaging().StageRemoval("sample-b", purgeData: true);
+        string bundled = Path.Combine(_directory, "bundled");
+        Directory.CreateDirectory(bundled);
+        using (Stream zip = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.1.0")))
+        using (FileStream file = File.Create(Path.Combine(bundled, "sample-a.zip")))
+            zip.CopyTo(file);
+
+        BundledPluginSync.Upgrade(
+            PluginPackages.ReadBundled(bundled),
+            fixture.Settings.PluginRoot,
+            fixture.DataDirectory,
+            new DeploymentState { BundledPlugins = ["sample-a"] },
+            new ToolLog(Path.Combine(_directory, "tool.log"), null),
+            DateTimeOffset.UtcNow);
+
+        PendingPluginChange removal = Assert.Single(fixture.CreateStaging().Pending(), item => item.Change.PluginId == "sample-b");
+        Assert.True(removal.Change.PurgeData);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private static T Bind<T>(IConfiguration root, string section) where T : new() => root.GetSection(section).Get<T>() ?? new T();

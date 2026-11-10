@@ -52,7 +52,7 @@ export function describeChange(change: PluginChange): string {
     case 'Upgrade':
       return `${change.fromVersion ?? '?'} → ${change.toVersion ?? '?'}`
     default:
-      return `删除 ${change.fromVersion ?? ''}（保留插件数据）`
+      return `删除 ${change.fromVersion ?? ''}（${change.purgeData ? '清除插件数据' : '保留插件数据'}）`
   }
 }
 
@@ -68,8 +68,19 @@ export function describeRollback(change: PluginChange): string {
   }
 }
 
-export const CHANGE_KIND_LABEL: Record<PluginChange['kind'], string> = {
+const CHANGE_KIND_LABEL: Record<PluginChange['kind'], string> = {
   Install: '安装',
   Upgrade: '升级',
   Remove: '删除'
+}
+
+/** 变更类型的显示名称；删除并清除数据单独标出。 */
+export function changeLabel(change: PluginChange): string {
+  return change.kind === 'Remove' && change.purgeData ? '删除并清除数据' : CHANGE_KIND_LABEL[change.kind]
+}
+
+/** 变更类型徽章的颜色：清除数据不可恢复，用错误色。 */
+export function changeBadge(change: PluginChange): string {
+  if (change.kind !== 'Remove') return 'badge-info'
+  return change.purgeData ? 'badge-error' : 'badge-warning'
 }

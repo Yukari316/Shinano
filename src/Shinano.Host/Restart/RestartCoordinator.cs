@@ -41,6 +41,7 @@ public sealed class RestartCoordinator : IDisposable
     private readonly RestartOptions               _options;
     private readonly string                       _pluginRoot;
     private readonly PluginPackageStaging         _staging;
+    private readonly PluginDataPurger             _purger;
     private readonly IHostApplicationLifetime     _lifetime;
     private readonly IHostLifetime?               _hostLifetime;
     private readonly SuperUserNotifier            _notifier;
@@ -60,6 +61,7 @@ public sealed class RestartCoordinator : IDisposable
         RestartOptions              options,
         PluginRuntimeSettings       pluginSettings,
         PluginPackageStaging        staging,
+        PluginDataPurger            purger,
         IHostApplicationLifetime    lifetime,
         IHostLifetime?              hostLifetime,
         SuperUserNotifier           notifier,
@@ -71,6 +73,7 @@ public sealed class RestartCoordinator : IDisposable
         _options      = options;
         _pluginRoot   = pluginSettings.PluginRoot;
         _staging      = staging;
+        _purger       = purger;
         _lifetime     = lifetime;
         _hostLifetime = hostLifetime;
         _notifier     = notifier;
@@ -297,11 +300,16 @@ public sealed class RestartCoordinator : IDisposable
         Record(plan, RestartOutcome.RolledBack, reason);
     }
 
+    // 删除已确定生效（验证通过，或故障模式下未经验证但不回滚），此时才建立数据清除任务；回滚的删除不清除。
     private void Finish(RestartPlan plan, RestartOutcome outcome, string? reason)
     {
         if (!_options.KeepBackup) PluginPackageApplier.DeleteDirectory(PluginPackageApplier.BackupRoot(_pluginRoot));
+        foreach (PluginPackageOperation operation in plan.Operations)
+            if (operation.Purge is { } scope)
+                _purger.Schedule(operation.Change, scope);
         StateFile.Delete(PlanPath);
         Record(plan, outcome, reason);
+        if (plan.Operations.Any(operation => operation.Purge is not null)) _purger.RequestRun();
     }
 
     private void Record(RestartPlan plan, RestartOutcome outcome, string? reason)
@@ -351,7 +359,7 @@ public sealed class RestartCoordinator : IDisposable
         {
             PluginChangeKind.Install => $"未安装 {change.Name}",
             PluginChangeKind.Upgrade => $"{change.Name} 保持 {change.FromVersion}",
-            _                        => $"{change.Name} 未删除"
+            _                        => $"{change.Name} 未删除{(change.PurgeData ? "，数据未清除" : "")}"
         };
 
     // 以插件目录现状确定目标：已安装则替换其目录（暂存后被外部安装的视为升级），未安装则安装到 <插件目录>/<id>。
@@ -364,7 +372,14 @@ public sealed class RestartCoordinator : IDisposable
                 : new PluginPackageOperation
                 {
                     Change          = change,
-                    TargetDirectory = installed.Directory
+                    TargetDirectory = installed.Directory,
+                    Purge           = change.PurgeData && installed.Manifest is { } manifest
+                        ? new PluginDataScope
+                        {
+                            Tables         = manifest.Tables,
+                            BucketPurposes = manifest.BucketPurposes
+                        }
+                        : null
                 };
 
         string staged = _staging.PackageDirectory(change.PluginId);

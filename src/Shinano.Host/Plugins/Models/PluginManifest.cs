@@ -40,6 +40,13 @@ public sealed partial class PluginManifest
     [JsonPropertyName("bucketPurposes")]
     public string[] BucketPurposes { get; set; } = [];
 
+    /// <summary>插件用到的全部数据表；表名须以 <see cref="TablePrefix" /> 开头。没有表时为空。</summary>
+    [JsonPropertyName("tables")]
+    public PluginTables Tables { get; set; } = new();
+
+    /// <summary>插件表名的前缀：插件 ID 中的 <c>-</c> 换成 <c>_</c> 后加 <c>_</c>，如 <c>image-search</c> 为 <c>image_search_</c>。</summary>
+    public static string TablePrefix(string pluginId) => pluginId.Replace('-', '_') + "_";
+
     /// <summary>读取并校验清单。</summary>
     /// <exception cref="InvalidDataException">清单缺少必填项或格式错误。</exception>
     public static PluginManifest Read(string path)
@@ -59,9 +66,28 @@ public sealed partial class PluginManifest
         if (string.IsNullOrWhiteSpace(manifest.EntryAssembly)
             || Path.GetFileName(manifest.EntryAssembly) != manifest.EntryAssembly)
             throw new InvalidDataException($"{path} 的 entryAssembly 必须是插件目录下的文件名");
+        CheckTables(path, manifest);
         return manifest;
+    }
+
+    // 清除插件数据时按声明删除表，表名必须属于本插件，否则会删掉其他插件的数据。
+    private static void CheckTables(string path, PluginManifest manifest)
+    {
+        // JSON 中显式写 null 时反序列化结果为 null。
+        if (manifest.Tables?.Global is null || manifest.Tables.Account is null)
+            throw new InvalidDataException($"{path} 的 tables 及其 global、account 不能为 null");
+        string prefix = TablePrefix(manifest.Id);
+        string[] tables = [.. manifest.Tables.Global, .. manifest.Tables.Account];
+        foreach (string table in tables)
+            if (!TablePattern().IsMatch(table) || !table.StartsWith(prefix, StringComparison.Ordinal) || table.Length == prefix.Length)
+                throw new InvalidDataException($"{path} 的表名 {table} 无效：须以 {prefix} 开头，只含小写字母、数字与下划线，不超过 63 个字符");
+        if (tables.GroupBy(table => table, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1) is { } duplicate)
+            throw new InvalidDataException($"{path} 的表名 {duplicate.Key} 重复声明");
     }
 
     [GeneratedRegex("^[a-z][a-z0-9-]{1,62}$")]
     private static partial Regex IdPattern();
+
+    [GeneratedRegex("^[a-z][a-z0-9_]{0,62}$")]
+    private static partial Regex TablePattern();
 }

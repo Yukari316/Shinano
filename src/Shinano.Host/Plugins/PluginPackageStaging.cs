@@ -116,12 +116,12 @@ public sealed class PluginPackageStaging
     }
 
     /// <summary>
-    /// 暂存删除已安装的插件包，覆盖该插件原有的暂存；插件数据保留。
-    /// 插件未安装但有暂存的安装时，等同撤销该安装。
+    /// 暂存删除已安装的插件包，覆盖该插件原有的暂存。<paramref name="purgeData" /> 为 false 时插件数据保留，
+    /// 为 true 时在重启确认成功后清除。插件未安装但有暂存的安装时，等同撤销该安装。
     /// </summary>
     /// <returns>暂存的删除；插件未安装时为 null。</returns>
     /// <exception cref="InvalidOperationException">正在重启，不再接受变更。</exception>
-    public PendingPluginChange? StageRemoval(string pluginId)
+    public PendingPluginChange? StageRemoval(string pluginId, bool purgeData)
     {
         lock (_lock)
         {
@@ -141,13 +141,14 @@ public sealed class PluginPackageStaging
                     Kind        = PluginChangeKind.Remove,
                     PluginId    = pluginId,
                     Name        = DisplayName(manifest),
-                    FromVersion = manifest.Version
+                    FromVersion = manifest.Version,
+                    PurgeData   = purgeData
                 },
                 StagedAt  = _time.GetUtcNow(),
                 SizeBytes = 0
             };
             Write([.. pending.Where(item => item.Change.PluginId != pluginId), change]);
-            _logger.LogInformation("已暂存删除插件包 {PluginId}，重启后生效", pluginId);
+            _logger.LogInformation("已暂存删除插件包 {PluginId}（清除数据：{PurgeData}），重启后生效", pluginId, purgeData);
             return change;
         }
     }

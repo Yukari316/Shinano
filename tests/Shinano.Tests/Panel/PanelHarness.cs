@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot;
+using Shinano.Host.Browser;
+using Shinano.Host.Browser.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
@@ -92,6 +94,12 @@ public sealed class PanelHarness : IAsyncDisposable
                                           TestRendering.Images,
                                           TimeProvider.System,
                                           sp.GetRequiredService<ILogger<SuperUserNotifier>>()));
+        builder.Services.AddSingleton(sp => new BrowserService(
+                                          new BrowserOptions(),
+                                          dataDirectory,
+                                          TimeProvider.System,
+                                          sp.GetRequiredService<ILogger<BrowserService>>()));
+        builder.Services.AddSingleton<PluginDataPurger>();
         builder.Services.AddSingleton<RestartCoordinator>();
         WebApplication app = builder.Build();
         app.UseAuthentication();

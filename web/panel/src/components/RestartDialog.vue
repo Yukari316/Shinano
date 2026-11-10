@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { describeError } from '../api'
-import { beginRestart, CHANGE_KIND_LABEL, describeChange, restartDialogOpen, restartStatus } from '../restart'
+import { beginRestart, changeBadge, changeLabel, describeChange, restartDialogOpen, restartStatus } from '../restart'
 
 const dialog = ref<HTMLDialogElement | null>(null)
 const error = ref('')
@@ -40,7 +40,7 @@ async function confirm(): Promise<void> {
         <p class="pt-2 text-sm font-semibold">将应用以下插件包变更：</p>
         <ul class="mt-1 flex flex-col gap-1 text-sm">
           <li v-for="item in restartStatus.pending" :key="item.change.pluginId" class="flex gap-2">
-            <span class="badge badge-sm" :class="item.change.kind === 'Remove' ? 'badge-warning' : 'badge-info'">{{ CHANGE_KIND_LABEL[item.change.kind] }}</span>
+            <span class="badge badge-sm" :class="changeBadge(item.change)">{{ changeLabel(item.change) }}</span>
             <span class="font-medium">{{ item.change.name }}</span>
             <span class="opacity-70">{{ describeChange(item.change) }}</span>
           </li>

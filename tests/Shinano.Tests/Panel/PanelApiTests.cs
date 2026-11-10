@@ -297,6 +297,38 @@ public sealed class PanelApiTests
         Assert.Empty(status?["pending"]?.AsArray() ?? []);
     }
 
+    [Fact]
+    public async Task PluginPackageRemoval_WithPurge_PreviewsDataAndIsStagedWithFlag()
+    {
+        await using PanelHarness panel = await StartAsync();
+        using HttpClient client = await LoggedInClientAsync(panel);
+        string installed = Path.Combine(Path.GetDirectoryName(panel.LocalConfigPath) ?? string.Empty, "plugins", "SampleD");
+        Directory.CreateDirectory(installed);
+        await File.WriteAllTextAsync(
+            Path.Combine(installed, "plugin.json"),
+            """{ "id": "sample-d", "version": "1.0.0", "entryAssembly": "Sample.dll", "bucketPurposes": ["sampled"], "tables": { "global": ["sample_d_note"] } }""",
+            Token);
+        await File.WriteAllTextAsync(Path.Combine(installed, "Sample.dll"), "1.0.0", Token);
+
+        JsonObject? preview = await client.GetFromJsonAsync<JsonObject>("/api/packages/sample-d/data", Token);
+        Assert.Equal("sample_d_note", Assert.Single(preview?["tables"]?["global"]?.AsArray() ?? [])?.GetValue<string>());
+        Assert.Empty(preview?["tables"]?["account"]?.AsArray() ?? [""]);
+        Assert.Equal($"{_fixture.BucketPrefix}-sampled", Assert.Single(preview?["buckets"]?.AsArray() ?? [])?.GetValue<string>());
+        Assert.False(preview?["secretsFile"]?.GetValue<bool>());
+
+        HttpResponseMessage removed = await client.PostAsJsonAsync("/api/packages/sample-d/remove", new { purgeData = true }, Token);
+        Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
+        JsonObject? status = await client.GetFromJsonAsync<JsonObject>("/api/restart", Token);
+        JsonNode? change = Assert.Single(status?["pending"]?.AsArray() ?? [])?["change"];
+        Assert.Equal("Remove", change?["kind"]?.GetValue<string>());
+        Assert.True(change?["purgeData"]?.GetValue<bool>());
+
+        // 清除只在重启确认成功后建立，暂存时没有清除结果，也不能关闭不存在的结果。
+        Assert.Empty(await client.GetFromJsonAsync<JsonArray>("/api/plugin-purges", Token) ?? [null]);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.DeleteAsync("/api/plugin-purges/sample-d", Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/packages/missing/data", Token)).StatusCode);
+    }
+
     private Task<PanelHarness> StartAsync() =>
         PanelHarness.StartAsync(_fixture.Ready, _fixture.BucketPrefix, TEST_PLUGINS, PLUGIN_A, PLUGIN_B);
 

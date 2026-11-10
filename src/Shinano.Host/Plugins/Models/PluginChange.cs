@@ -17,4 +17,7 @@ public sealed class PluginChange
 
     /// <summary>新插件包的版本；删除时为 null。</summary>
     public string? ToVersion { get; init; }
+
+    /// <summary>删除时是否同时清除插件数据；清除在重启确认成功后执行。只用于删除。</summary>
+    public bool PurgeData { get; init; }
 }

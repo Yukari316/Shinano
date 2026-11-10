@@ -1,3 +1,4 @@
+using Shinano.Host.Panel.Models;
 using Shinano.Host.Plugins;
 using Shinano.Host.Restart;
 
@@ -16,9 +17,22 @@ internal static class RestartEndpoints
     internal static IResult Undo(string id, PluginPackageStaging staging) =>
         Guard(() => staging.Undo(id) ? Results.NoContent() : PanelResults.Error(StatusCodes.Status404NotFound, "没有该插件的待处理变更"));
 
-    /// <summary>暂存删除插件包；插件数据保留。</summary>
-    internal static IResult StageRemoval(string id, PluginPackageStaging staging) =>
-        Guard(() => Results.Ok(staging.StageRemoval(id)));
+    /// <summary>暂存删除插件包；选择清除数据时在重启确认成功后清除，否则数据保留。</summary>
+    internal static IResult StageRemoval(string id, PackageRemovalRequest request, PluginPackageStaging staging) =>
+        Guard(() => Results.Ok(staging.StageRemoval(id, request.PurgeData)));
+
+    /// <summary>删除前确认清除数据时显示的范围；插件未安装时 404。</summary>
+    internal static IResult DataPreview(string id, PluginPackageStaging staging, PluginDataPurger purger) =>
+        staging.FindInstalled(id)?.Manifest is { } manifest
+            ? Results.Ok(purger.Preview(manifest))
+            : PanelResults.Error(StatusCodes.Status404NotFound, "插件未安装");
+
+    /// <summary>未关闭显示的插件数据清除结果。</summary>
+    internal static IResult Purges(PluginDataPurger purger) => Results.Ok(purger.Visible());
+
+    /// <summary>关闭一项清除结果的显示；仍在等待或执行中时 409。</summary>
+    internal static IResult DismissPurge(string id, PluginDataPurger purger) =>
+        purger.Dismiss(id) ? Results.NoContent() : PanelResults.Error(StatusCodes.Status409Conflict, "清除尚未结束或不存在");
 
     /// <summary>重启状态：实例 ID、启动阶段、是否有守护者、待处理变更与最近一次结果。</summary>
     internal static IResult Status(RestartCoordinator coordinator, PluginPackageStaging staging) =>

@@ -2,6 +2,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
+using Shinano.Host.Plugins;
+using Shinano.Host.Plugins.Models;
 using Shinano.Host.Restart;
 using Shinano.Host.Restart.Models;
 using Shinano.Infrastructure.Health;
@@ -16,7 +18,10 @@ namespace Shinano.Tests.Restart;
 /// </summary>
 public sealed class RestartCoordinatorTests : IDisposable
 {
-    private readonly PackageFixture _fixture = new();
+    private readonly PackageFixture   _fixture = new();
+    private readonly PluginDataPurger _purger;
+
+    public RestartCoordinatorTests() => _purger = _fixture.CreatePurger();
 
     public void Dispose()
     {
@@ -79,7 +84,7 @@ public sealed class RestartCoordinatorTests : IDisposable
     public async Task ProcessExitingBeforeVerification_IsRolledBackOnNextStart()
     {
         string installed = _fixture.Install("SampleA", "sample-a", "1.0.0");
-        _fixture.CreateStaging().StageRemoval("sample-a");
+        _fixture.CreateStaging().StageRemoval("sample-a", purgeData: false);
         await StageAsync("sample-c", "1.0.0");
         RequestRestart(keepBackup: true);
 
@@ -110,6 +115,46 @@ public sealed class RestartCoordinatorTests : IDisposable
         Process(keepBackup: true).PrepareStartup();
         Assert.Equal("1.0.1", Version(installed));
         Assert.True(Directory.Exists(BackupRoot));
+    }
+
+    [Fact]
+    public void RemovalWithPurge_SchedulesPurgeFromManifestOnlyAfterVerification()
+    {
+        string installed = _fixture.Install("SampleA", "sample-a", "1.0.0");
+        _fixture.DeclareTables(installed, "sample-a", "1.0.0", ["sample_a_note"], ["sample_a_entry"], "samplea");
+        Assert.True(_fixture.CreateStaging().StageRemoval("sample-a", purgeData: true)?.Change.PurgeData);
+        RequestRestart(keepBackup: false);
+
+        RestartCoordinator next = Process(keepBackup: false);
+        next.PrepareStartup();
+        Assert.False(Directory.Exists(installed));
+        Assert.Empty(_purger.Visible());
+
+        Assert.True(next.OnPluginsLoaded(new Dictionary<string, string?>()));
+        PluginPurge purge = Assert.Single(_purger.Visible());
+        Assert.Equal("sample-a", purge.PluginId);
+        Assert.Equal(PluginPurgeState.Waiting, purge.State);
+        Assert.Equal(["sample_a_note"], purge.Scope.Tables.Global);
+        Assert.Equal(["sample_a_entry"], purge.Scope.Tables.Account);
+        Assert.Equal(["samplea"], purge.Scope.BucketPurposes);
+        Assert.True(Assert.Single(next.LastResult?.Changes ?? []).PurgeData);
+    }
+
+    [Fact]
+    public void RemovalWithPurge_RolledBack_DoesNotPurge()
+    {
+        string installed = _fixture.Install("SampleA", "sample-a", "1.0.0");
+        _fixture.CreateStaging().StageRemoval("sample-a", purgeData: true);
+        RequestRestart(keepBackup: true);
+
+        Process(keepBackup: true).PrepareStartup();
+        // 新进程未完成验证就退出，下一次启动还原。
+        RestartCoordinator restored = Process(keepBackup: true);
+        restored.PrepareStartup();
+
+        Assert.True(Directory.Exists(installed));
+        Assert.Equal(RestartOutcome.RolledBack, restored.LastResult?.Outcome);
+        Assert.Empty(_purger.Visible());
     }
 
     [Fact]
@@ -152,6 +197,7 @@ public sealed class RestartCoordinatorTests : IDisposable
             new RestartOptions { KeepBackup = keepBackup },
             _fixture.Settings,
             _fixture.CreateStaging(),
+            _purger,
             lifetime ?? new FakeLifetime(),
             null,
             new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
