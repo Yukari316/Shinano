@@ -8,6 +8,7 @@ using Shinano.Host.Plugins.Capabilities;
 using Shinano.Host.Plugins.Entities;
 using Shinano.Host.Plugins.Models;
 using Shinano.Host.Rendering;
+using Shinano.Host.Tools;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
 using Shinano.Infrastructure.Hosting;
@@ -41,6 +42,7 @@ public sealed class PluginRuntime : IDisposable
     private readonly HostFonts              _fonts;
     private readonly CardRenderer           _images;
     private readonly BrowserService         _browser;
+    private readonly FfmpegService          _ffmpeg;
     private readonly PluginNotices          _notices;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
@@ -61,6 +63,7 @@ public sealed class PluginRuntime : IDisposable
         HostFonts                fonts,
         CardRenderer             images,
         BrowserService           browser,
+        FfmpegService            ffmpeg,
         SuperUserNotifier        notifier,
         ILoggerFactory           loggerFactory)
     {
@@ -73,6 +76,7 @@ public sealed class PluginRuntime : IDisposable
         _fonts          = fonts;
         _images         = images;
         _browser        = browser;
+        _ffmpeg         = ffmpeg;
         _notices        = new PluginNotices(notifier);
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
@@ -191,6 +195,8 @@ public sealed class PluginRuntime : IDisposable
             await SaveStateAsync(plugin, cancellationToken);
             PublishDispatchOrder();
             _logger.LogInformation("插件 {PluginId} 已停用", pluginId);
+            // SAFE: 已初始化的插件必有能力集合。
+            if (plugin.Initialized) plugin.Context!.NotifyEnabled(false, _logger);
             return null;
         }
         finally
@@ -497,6 +503,7 @@ public sealed class PluginRuntime : IDisposable
             _fonts,
             _images,
             new PluginBrowser(id, _browser),
+            _ffmpeg,
             _notices,
             _settings.DataDirectory);
     }
@@ -541,6 +548,8 @@ public sealed class PluginRuntime : IDisposable
         if (!_suspended) plugin.Registration?.SetEnabled(true);
         _scheduler.SetOwnerEnabled(plugin.Manifest.Id, true);
         _logger.LogInformation("插件 {PluginId} 已启用", plugin.Manifest.Id);
+        // SAFE: Error 为 null 的插件在加载时已建立能力集合。
+        plugin.Context!.NotifyEnabled(true, _logger);
         return null;
     }
 

@@ -66,6 +66,7 @@ public sealed class CardRenderer : IPluginImages
     private const float  STATUS_VALUE_X    = 150;
     private const float  STATUS_SIZE       = 18;
     private const float  STATUS_DETAIL     = 15;
+    private const float  STATUS_GAP        = 16;
     private const float  LINE_LEADING      = 1.5f;
     private const double PERCENT_MAX       = 100;
 
@@ -342,10 +343,24 @@ public sealed class CardRenderer : IPluginImages
             float top = y + STATUS_PADDING;
             float baseline = CardCanvas.Baseline(top, STATUS_SIZE, LINE_LEADING);
             panel.Diamond(CardCanvas.CONTENT_LEFT + STATUS_DIAMOND / 2 + 2, top + STATUS_SIZE * LINE_LEADING / 2, STATUS_DIAMOND, LevelColor(item.Level));
-            panel.Text(item.Name, panel.Fonts.Regular, STATUS_SIZE, CardPalette.Ink, CardCanvas.CONTENT_LEFT + STATUS_NAME_X, baseline);
-            panel.Text(item.Value, panel.Fonts.Regular, STATUS_SIZE, CardPalette.Ink, CardCanvas.CONTENT_LEFT + STATUS_VALUE_X, baseline);
-            if (item.Detail is { } detail) panel.TextRight(detail, panel.Fonts.Latin, STATUS_DETAIL, CardPalette.InkSecondary, CardCanvas.CONTENT_RIGHT, baseline);
-            y = top + STATUS_SIZE * LINE_LEADING + STATUS_PADDING;
+            float nameLeft = CardCanvas.CONTENT_LEFT + STATUS_NAME_X;
+            panel.Text(item.Name, panel.Fonts.Regular, STATUS_SIZE, CardPalette.Ink, nameLeft, baseline);
+
+            // 名称超出值列时值顺延；值过长时换行；值与详情放不进同一行时，详情从名称列另起一行并换行，避免叠字与超出卡片。
+            float valueLeft = Math.Max(CardCanvas.CONTENT_LEFT + STATUS_VALUE_X, nameLeft + panel.Painter.Measure(item.Name, panel.Fonts.Regular, STATUS_SIZE) + STATUS_GAP);
+            float valueWidth = panel.Painter.Measure(item.Value, panel.Fonts.Regular, STATUS_SIZE);
+            float detailWidth = item.Detail is { } inlineDetail ? panel.Painter.Measure(inlineDetail, panel.Fonts.Latin, STATUS_DETAIL) : 0;
+            bool detailInline = item.Detail is null || valueLeft + valueWidth + STATUS_GAP + detailWidth <= CardCanvas.CONTENT_RIGHT;
+            float bottom = top + panel.Paragraph(item.Value, panel.Fonts.Regular, STATUS_SIZE, LINE_LEADING, CardPalette.Ink, valueLeft, CardCanvas.CONTENT_RIGHT, top);
+            if (item.Detail is { } detail)
+            {
+                if (detailInline)
+                    panel.TextRight(detail, panel.Fonts.Latin, STATUS_DETAIL, CardPalette.InkSecondary, CardCanvas.CONTENT_RIGHT, baseline);
+                else
+                    bottom += panel.Paragraph(detail, panel.Fonts.Latin, STATUS_DETAIL, LINE_LEADING, CardPalette.InkSecondary, nameLeft, CardCanvas.CONTENT_RIGHT, bottom);
+            }
+
+            y = bottom + STATUS_PADDING;
             if (index < items.Count - 1) panel.Rule(CardCanvas.CONTENT_LEFT, CardCanvas.CONTENT_RIGHT, y - 1, CardPalette.Line);
         }
 

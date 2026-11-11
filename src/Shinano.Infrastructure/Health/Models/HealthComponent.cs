@@ -15,9 +15,6 @@ public enum HealthComponent
     /// <summary>LLBot 连接；断线时停止。</summary>
     Bot,
 
-    /// <summary>NB2 服务；异常时降级。</summary>
-    Nb2,
-
     /// <summary>插件；有插件初始化失败时降级。</summary>
     Plugins
 }

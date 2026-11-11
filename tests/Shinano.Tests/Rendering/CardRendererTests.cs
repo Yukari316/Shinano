@@ -55,6 +55,33 @@ public sealed class CardRendererTests
     }
 
     [Fact]
+    public void RenderStatus_MovesOverflowingDetailToItsOwnLines()
+    {
+        using SKBitmap fits = Decode(TestRendering.Images.RenderStatus(Status("nb2ping", "v2.7.2")));
+        using SKBitmap overflows = Decode(TestRendering.Images.RenderStatus(Status("链接分享自动解析插件（视频、图文与直播）", string.Join('/', Enumerable.Repeat("very-long-directory-name", 12)))));
+
+        Assert.Equal(TestRendering.WIDTH, overflows.Width);
+        Assert.True(overflows.Height > fits.Height);
+    }
+
+    private static StatusCard Status(string name, string detail) =>
+        new()
+        {
+            Title = "状态",
+            Time  = DateTimeOffset.UnixEpoch,
+            Items =
+            [
+                new StatusItem
+                {
+                    Level  = CardLevel.Normal,
+                    Name   = name,
+                    Value  = "启用",
+                    Detail = detail
+                }
+            ]
+        };
+
+    [Fact]
     public void RenderInfo_ItemsRowWrapsAcrossLines()
     {
         using SKBitmap few = Decode(TestRendering.Images.RenderInfo(InfoWithItems(2)));

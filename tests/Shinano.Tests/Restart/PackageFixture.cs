@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Models;
 using Shinano.Host.Browser;
 using Shinano.Host.Browser.Models;
 using Shinano.Host.Plugins;
@@ -50,8 +51,8 @@ internal sealed class PackageFixture : IDisposable
             infrastructure ?? Uninitialized(runtimeHealth),
             Settings,
             new BrowserService(new BrowserOptions(), DataDirectory, TimeProvider.System, NullLogger<BrowserService>.Instance),
-            new BotAccessor(),
-            new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
+            new BotAccessor(new LlBotOptions(), new DeploymentOptions()),
+            new SuperUserNotifier(new BotAccessor(new LlBotOptions(), new DeploymentOptions()), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             runtimeHealth,
             TimeProvider.System,
             NullLogger<PluginDataPurger>.Instance);

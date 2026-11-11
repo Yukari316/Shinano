@@ -12,6 +12,8 @@ using Shinano.Host.Rendering;
 using Shinano.Host.Rendering.Models;
 using Shinano.Host.Restart;
 using Shinano.Host.Restart.Models;
+using Shinano.Host.Tools;
+using Shinano.Host.Tools.Models;
 using Shinano.Host.Web;
 using Shinano.Host.Web.Models;
 using Shinano.Infrastructure.ChatArchive;
@@ -119,6 +121,10 @@ builder.Services.AddSingleton(sp => new BrowserService(
                                   paths.DataDirectory,
                                   sp.GetRequiredService<TimeProvider>(),
                                   sp.GetRequiredService<ILogger<BrowserService>>()));
+builder.Services.AddSingleton(sp => new FfmpegService(
+                                  builder.Bind<FfmpegOptions>(FfmpegOptions.SECTION_NAME),
+                                  paths.DataDirectory,
+                                  sp.GetRequiredService<ILogger<FfmpegService>>()));
 builder.Services.AddSingleton<PluginDataPurger>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PluginDataPurger>());
 builder.Services.AddSingleton<ArchiveGapTracker>();

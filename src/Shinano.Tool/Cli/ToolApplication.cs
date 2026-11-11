@@ -21,7 +21,9 @@ public static class ToolApplication
                                               [--secret-key <SecretKey>] [--bucket-prefix <前缀>]
                                                         把目录中的图片导入 Hso 图库（需先在面板启用过一次 Hso 插件）；
                                                         数据库与 RustFS 默认取本部署的本地配置
-                                 通常通过 scripts 下的 init、start、upgrade、service、hso-import 脚本调用。
+                                   nb2-setup [--data-dir <目录>]
+                                                        用 uv 在部署数据目录的 nb2/ 下创建或补全 NB2 运行环境
+                                 通常通过 scripts 下的 init、start、upgrade、service、hso-import、nb2-setup 脚本调用。
                                  """;
 
     /// <summary>运行工具。</summary>
@@ -39,6 +41,7 @@ public static class ToolApplication
                 "upgrade"    => (UpgradeCommand.Options, UpgradeCommand.RunAsync),
                 "service"    => (ServiceCommand.Options, ServiceCommand.RunAsync),
                 "hso-import" => (HsoImportCommand.Options, HsoImportCommand.RunAsync),
+                "nb2-setup"  => (Nb2SetupCommand.Options, Nb2SetupCommand.RunAsync),
                 _            => null
             };
             if (entry is not { } known)

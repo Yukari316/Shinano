@@ -1,0 +1,8 @@
+{
+  "id": "nb2-bridge",
+  "name": "NB2Bridge",
+  "version": "1.0.0",
+  "description": "托管 NoneBot2 服务（含多平台链接解析 nonebot-plugin-parser），转换消息与平台动作，管理 NB2 插件与配置",
+  "entryAssembly": "Shinano.Plugin.NB2Bridge.dll",
+  "bucketPurposes": ["nb2"]
+}

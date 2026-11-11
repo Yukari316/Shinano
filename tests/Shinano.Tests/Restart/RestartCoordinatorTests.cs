@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Models;
@@ -200,7 +201,7 @@ public sealed class RestartCoordinatorTests : IDisposable
             _purger,
             lifetime ?? new FakeLifetime(),
             null,
-            new SuperUserNotifier(new BotAccessor(), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
+            new SuperUserNotifier(new BotAccessor(new LlBotOptions(), new DeploymentOptions()), new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             health,
             TimeProvider.System,
             NullLogger<RestartCoordinator>.Instance);

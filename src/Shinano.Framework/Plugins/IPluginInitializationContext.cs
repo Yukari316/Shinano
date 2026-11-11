@@ -42,6 +42,19 @@ public interface IPluginInitializationContext
     /// <summary>宿主浏览器服务，使用插件自己的持久用户目录。</summary>
     IPluginBrowser Browser { get; }
 
+    /// <summary>部署数据目录（绝对路径）。只供管理外部程序与其数据的插件（如 NB2Bridge 的 NB2 运行环境）使用，插件只使用约定给自己的子目录。</summary>
+    string DataDirectory { get; }
+
+    /// <summary>宿主提供的外部程序（ffmpeg）。</summary>
+    IPluginTools Tools { get; }
+
+    /// <summary>
+    /// 登记插件启停回调：插件被启用（含首次初始化完成后）时以 true 调用，被管理员停用时以 false 调用；数据库离线时的暂停不触发。
+    /// 只供必须随启停管理外部进程的插件使用（如 NB2Bridge）。回调在宿主启停流程中同步执行，须很快返回，耗时工作放到后台；
+    /// 回调抛出的异常只记录日志。只能在 <see cref="IShinanoPlugin.InitializeAsync" /> 中登记。
+    /// </summary>
+    void OnEnabledChanged(Action<bool> handler);
+
     /// <summary>经宿主通知全部 Super User。</summary>
     IPluginNotices Notices { get; }
 

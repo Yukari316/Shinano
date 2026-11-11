@@ -45,6 +45,7 @@ public static class InitCommand
     private const string CERT_PATH_OPTION            = "cert-path";
     private const string STATUS_SAME_CERT_OPTION     = "status-same-cert";
     private const string STATUS_CERT_PATH_OPTION     = "status-cert-path";
+    private const string NB2_SETUP_OPTION            = "nb2-setup";
     private const string DB_PASSWORD_VARIABLE        = "SHINANO_INIT_DB_PASSWORD";
     private const string DB_ADMIN_PASSWORD_VARIABLE  = "SHINANO_INIT_DB_ADMIN_PASSWORD";
     private const string RUSTFS_ACCESS_KEY_VARIABLE  = "SHINANO_INIT_RUSTFS_ACCESS_KEY";
@@ -69,7 +70,7 @@ public static class InitCommand
         RUN_MODE_OPTION, HOST_SERVICE_OPTION, MONITOR_SERVICE_OPTION, SERVICE_USER_OPTION, TIME_ZONE_OPTION, BUCKET_PREFIX_OPTION,
         SUPER_USERS_OPTION, DB_HOST_OPTION, DB_PORT_OPTION, DB_NAME_OPTION, DB_USER_OPTION, DB_ADMIN_USER_OPTION, RUSTFS_ENDPOINT_OPTION,
         RUSTFS_IM_ENDPOINT_OPTION, LLBOT_HOST_OPTION, LLBOT_PORT_OPTION, LLBOT_PREFIX_OPTION, PANEL_LISTEN_OPTION, PANEL_PORT_OPTION,
-        STATUS_LISTEN_OPTION, STATUS_PORT_OPTION, CERT_PATH_OPTION, STATUS_SAME_CERT_OPTION, STATUS_CERT_PATH_OPTION,
+        STATUS_LISTEN_OPTION, STATUS_PORT_OPTION, CERT_PATH_OPTION, STATUS_SAME_CERT_OPTION, STATUS_CERT_PATH_OPTION, NB2_SETUP_OPTION,
         ToolContext.ACCEPT_DEFAULTS_SWITCH, NO_START_SWITCH
     ];
 
@@ -112,6 +113,19 @@ public static class InitCommand
                 config.GetString(ConfigKeys.PLUGIN_DIRECTORY) ?? ConfigKeys.DEFAULT_PLUGIN_DIRECTORY,
                 layout.DataDirectory);
             BundledPluginSync.InstallInitial(PluginPackages.ReadBundled(layout.BundledPluginsDirectory), pluginRoot, state, log);
+        }
+
+        if (ask.Confirm("是否现在创建 NB2 运行环境（需要已安装 uv，会下载 Python 与依赖）", NB2_SETUP_OPTION, fallback: false))
+        {
+            try
+            {
+                Nb2SetupCommand.Setup(Path.Combine(layout.DataDirectory, Nb2SetupCommand.DIRECTORY_NAME), log);
+            }
+            catch (ToolException exception)
+            {
+                // NB2 是可选功能，失败不影响其余初始化。
+                log.Error($"创建 NB2 运行环境失败：{exception.Message}；稍后可运行 scripts 下的 nb2-setup 重试");
+            }
         }
 
         DeploymentStateStore.Write(layout, state);

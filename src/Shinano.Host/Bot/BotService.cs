@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Host.Bot.Models;
 using Shinano.Host.Plugins;
+using Shinano.Host.Rendering;
 using Shinano.Host.Restart;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Health.Models;
@@ -35,6 +36,8 @@ public sealed class BotService : BackgroundService
     private readonly LoggingOptions      _loggingOptions;
     private readonly ILoggerFactory      _loggerFactory;
     private readonly RestartCoordinator  _restart;
+    private readonly CardRenderer        _images;
+    private readonly TimeProvider        _time;
     private readonly ILogger<BotService> _logger;
     private          SoraService?        _service;
 
@@ -50,9 +53,13 @@ public sealed class BotService : BackgroundService
         LogFileLayout      logLayout,
         LoggingOptions     loggingOptions,
         RestartCoordinator restart,
+        CardRenderer       images,
+        TimeProvider       time,
         ILoggerFactory     loggerFactory)
     {
         _restart        = restart;
+        _images         = images;
+        _time           = time;
         _infrastructure = infrastructure;
         _plugins        = plugins;
         _archive        = archive;
@@ -96,7 +103,16 @@ public sealed class BotService : BackgroundService
             int.MaxValue,
             enabled: true);
         hostCommands.RegisterCommandInstance(
-            new HostCommands(_infrastructure, _health, _plugins, _logLayout, _loggingOptions.MaxTotalSizeMiB));
+            new HostCommands(
+                _infrastructure,
+                _health,
+                _plugins,
+                _logLayout,
+                _loggingOptions.MaxTotalSizeMiB,
+                _images,
+                _time,
+                TimeZoneInfo.TryFindSystemTimeZoneById(_deployment.TimeZone, out TimeZoneInfo? zone) ? zone : TimeZoneInfo.Local,
+                _loggerFactory.CreateLogger<HostCommands>()));
         hostCommands.ScanCommandGroups();
         _plugins.Attach(_service);
         _service.UseMessageRecorder(_archive);

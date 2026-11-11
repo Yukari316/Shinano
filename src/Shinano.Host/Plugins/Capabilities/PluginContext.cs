@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
 
 namespace Shinano.Host.Plugins.Capabilities;
@@ -15,6 +16,7 @@ internal sealed class PluginContext : IPluginInitializationContext
     private readonly Lock                 _lock = new();
     private          IPluginConfigHolder?  _config;
     private          IPluginSecretsHolder? _secrets;
+    private readonly List<Action<bool>>    _enabledHandlers = [];
 
     /// <summary>创建能力集合。</summary>
     public PluginContext(
@@ -31,6 +33,7 @@ internal sealed class PluginContext : IPluginInitializationContext
         IPluginFonts      fonts,
         IPluginImages     images,
         IPluginBrowser    browser,
+        IPluginTools      tools,
         IPluginNotices    notices,
         string            dataDirectory)
     {
@@ -47,6 +50,8 @@ internal sealed class PluginContext : IPluginInitializationContext
         Fonts         = fonts;
         Images        = images;
         Browser       = browser;
+        Tools         = tools;
+        DataDirectory = dataDirectory;
         Notices       = notices;
         _secretsPath  = Path.Combine(dataDirectory, SECRETS_DIRECTORY_NAME, pluginId + ".json");
     }
@@ -95,6 +100,31 @@ internal sealed class PluginContext : IPluginInitializationContext
 
     /// <inheritdoc />
     public IPluginBrowser Browser { get; }
+
+    /// <inheritdoc />
+    public IPluginTools Tools { get; }
+
+    /// <inheritdoc />
+    public string DataDirectory { get; }
+
+    /// <inheritdoc />
+    public void OnEnabledChanged(Action<bool> handler) => _enabledHandlers.Add(handler);
+
+    /// <summary>依次调用登记的启停回调；回调异常只记录日志。</summary>
+    public void NotifyEnabled(bool enabled, ILogger logger)
+    {
+        foreach (Action<bool> handler in _enabledHandlers)
+        {
+            try
+            {
+                handler(enabled);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "插件 {PluginId} 的启停回调失败", PluginId);
+            }
+        }
+    }
 
     /// <inheritdoc />
     public IPluginNotices Notices { get; }

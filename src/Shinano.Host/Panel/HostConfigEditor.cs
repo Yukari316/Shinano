@@ -3,6 +3,7 @@ using Shinano.Host.Browser.Models;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel.Models;
 using Shinano.Host.Rendering.Models;
+using Shinano.Host.Tools.Models;
 using Shinano.Infrastructure.Storage.Models;
 using System.Text.Json.Nodes;
 
@@ -33,6 +34,8 @@ public sealed class HostConfigEditor
     private static readonly string[] LogLevels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
 
     private static readonly string[] BrowserVersionModes = Enum.GetNames<BrowserVersionMode>();
+
+    private static readonly string[] FfmpegModes = Enum.GetNames<FfmpegMode>();
 
     /// <summary>面板显示的全部宿主配置项，按显示顺序排列。</summary>
     public static readonly IReadOnlyList<HostConfigField> Fields =
@@ -67,6 +70,8 @@ public sealed class HostConfigEditor
         Choice("Browser", "VersionMode", "浏览器版本", BrowserVersionModes, "Latest：最新稳定版，每天最多检查一次；Pinned：PuppeteerSharp 固定版本；Specific：下方指定的主版本"),
         Integer("Browser", "Version", "浏览器主版本号", 0, MAX_BROWSER_VERSION, "版本为 Specific 时使用，如 157"),
         Text("Browser", "ExecutablePath", "浏览器路径", "本机 Chrome 可执行文件，相对路径基于部署数据目录；留空时自动下载 Chrome for Testing", optional: true),
+        Choice("Ffmpeg", "Mode", "ffmpeg 来源", FfmpegModes, "Download：自动下载到部署数据目录的 ffmpeg/；SystemPath：使用系统 PATH 中的 ffmpeg；Directory：使用下方目录"),
+        Text("Ffmpeg", "Directory", "ffmpeg 目录", "含 ffmpeg、ffprobe、ffplay 的目录，相对路径基于部署数据目录；来源为 Directory 时使用", optional: true),
         Text("Restart", "ServiceName", "服务名", "Windows 服务与 systemd unit 的名称；留空时 Debug 构建为 ShinanoDebug，其余为 Shinano", optional: true),
         Boolean("Restart", "KeepBackup", "保留插件包备份", "升级成功后保留上一套插件包，只保留最近一次"),
         Text("Monitor", "ListenAddress", "状态页监听地址", "具体 IP 或 localhost，不接受全部网卡地址；修改后需重启监控进程"),

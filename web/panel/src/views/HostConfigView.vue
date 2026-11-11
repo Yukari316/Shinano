@@ -19,6 +19,8 @@ const SECTION_TITLES: Record<string, string> = {
   Web: '管理面板',
   Rendering: '消息图片',
   Plugins: '插件',
+  Browser: '浏览器',
+  Ffmpeg: 'ffmpeg',
   Restart: '重启',
   Monitor: '监控与状态页'
 }

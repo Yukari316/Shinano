@@ -112,6 +112,12 @@ public sealed class BilibiliStoreIntegrationTests
 
         public IPluginBrowser Browser => throw new NotSupportedException();
 
+        public IPluginTools Tools => throw new NotSupportedException();
+
+        public string DataDirectory => throw new NotSupportedException();
+
+        public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();
+
         public IPluginNotices Notices => throw new NotSupportedException();
 
         public IPluginConfig<T> Config<T>() where T : class, new() => throw new NotSupportedException();

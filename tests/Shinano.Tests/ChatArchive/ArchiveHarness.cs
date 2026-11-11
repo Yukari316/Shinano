@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Models;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Hosting;
@@ -43,7 +44,7 @@ public sealed class ArchiveHarness : IAsyncDisposable
     public static async Task<ArchiveHarness> StartAsync(HostInfrastructure infrastructure)
     {
         FakeMilkyServer server = await FakeMilkyServer.StartAsync(InfrastructureFixture.SELF_ID);
-        BotAccessor bot = new();
+        BotAccessor bot = new(new LlBotOptions(), new DeploymentOptions());
         ChatArchiveService archive = new(
             infrastructure,
             new ChatArchiveOptions(),

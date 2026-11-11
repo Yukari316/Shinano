@@ -2,12 +2,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Host.Bot;
+using Shinano.Host.Bot.Models;
 using Shinano.Host.Browser;
 using Shinano.Host.Browser.Models;
 using Shinano.Host.Panel;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Entities;
 using Shinano.Host.Plugins.Models;
+using Shinano.Host.Tools;
+using Shinano.Host.Tools.Models;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Hosting.Models;
@@ -91,7 +94,7 @@ public sealed class PluginHarness : IAsyncDisposable
                             .ExecuteCommandAsync();
 
         FakeMilkyServer server = await FakeMilkyServer.StartAsync(InfrastructureFixture.SELF_ID);
-        BotAccessor bot = new();
+        BotAccessor bot = new(new LlBotOptions(), new DeploymentOptions());
         string dataDirectory = Directory.CreateTempSubdirectory("shinano-plugins-").FullName;
         PluginRuntime runtime = new(
             infrastructure,
@@ -108,6 +111,7 @@ public sealed class PluginHarness : IAsyncDisposable
             TestRendering.Fonts,
             TestRendering.Images,
             new BrowserService(new BrowserOptions(), dataDirectory, TimeProvider.System, NullLogger<BrowserService>.Instance),
+            new FfmpegService(new FfmpegOptions(), dataDirectory, NullLogger<FfmpegService>.Instance),
             new SuperUserNotifier(bot, new DeploymentOptions(), TestRendering.Images, TimeProvider.System, NullLogger<SuperUserNotifier>.Instance),
             NullLoggerFactory.Instance);
         await runtime.LoadAsync(CancellationToken.None);

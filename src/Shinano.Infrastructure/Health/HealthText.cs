@@ -23,7 +23,6 @@ public static class HealthText
             HealthComponent.Database      => "数据库",
             HealthComponent.ObjectStorage => "RustFS",
             HealthComponent.Bot           => "LLBot",
-            HealthComponent.Nb2           => "NB2 服务",
             HealthComponent.Plugins       => "插件",
             _                             => component.ToString()
         };
