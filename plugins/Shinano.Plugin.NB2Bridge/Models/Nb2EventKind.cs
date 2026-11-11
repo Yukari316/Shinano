@@ -6,7 +6,7 @@ public enum Nb2EventKind
     /// <summary>群聊消息。</summary>
     GroupMessage,
 
-    /// <summary>私聊消息（好友与临时会话）。</summary>
+    /// <summary>好友私聊消息。临时会话不交付。</summary>
     PrivateMessage,
 
     /// <summary>通知事件。</summary>

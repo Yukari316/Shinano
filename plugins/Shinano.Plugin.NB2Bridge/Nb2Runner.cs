@@ -446,7 +446,7 @@ public sealed class Nb2Runner : IDisposable
                     Title  = "NB2 服务已停止",
                     Code   = "NB2-STOPPED",
                     Cause  = $"NB2 进程 1 分钟内意外退出 {crashes} 次，最后退出码 {exitCode}",
-                    Impact = "NB2 插件（如链接解析）停止响应，需在 NB2Bridge 页面查看日志后手动启动"
+                    Impact = "NB2 插件停止响应，需在 NB2Bridge 页面查看日志后手动启动"
                 });
         }
         catch (Exception exception)

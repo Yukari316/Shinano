@@ -111,6 +111,27 @@ public sealed class Nb2BridgeTests
     }
 
     [Fact]
+    public void Classify_ExcludesTempSessions()
+    {
+        IBotApi api = RecordingBotApi.Create().Api;
+        MessageReceivedEvent message = new()
+        {
+            Api     = api,
+            SelfId  = SELF_ID,
+            Message = new MessageContext
+            {
+                SourceType = MessageSourceType.Temp,
+                SenderId   = SENDER,
+                Body       = new MessageBody("在吗")
+            }
+        };
+
+        Assert.Null(MilkyEvents.Classify(message));
+        Assert.Null(MilkyEvents.Classify(new MessageDeletedEvent { Api = api, SourceType = MessageSourceType.Temp }));
+        Assert.Equal(Nb2EventKind.Notice, MilkyEvents.Classify(new MessageDeletedEvent { Api = api, SourceType = MessageSourceType.Friend }));
+    }
+
+    [Fact]
     public void DotEnv_ReplacesInPlaceRemovesNullAndQuotesJson()
     {
         string path = Path.Combine(Directory.CreateTempSubdirectory("shinano-nb2-env-").FullName, ".env");

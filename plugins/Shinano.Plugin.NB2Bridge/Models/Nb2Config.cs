@@ -9,8 +9,8 @@ public sealed class Nb2Config
     [Display(Name = "交付群聊消息", Order = 1)]
     public bool DeliverGroupMessages { get; set; } = true;
 
-    /// <summary>是否把私聊消息（好友与临时会话）交付给 NB2。</summary>
-    [Display(Name = "交付私聊消息", Order = 2)]
+    /// <summary>是否把好友私聊消息交付给 NB2（临时会话一律不交付）。</summary>
+    [Display(Name = "交付私聊消息", Description = "只交付好友私聊，临时会话不交付", Order = 2)]
     public bool DeliverPrivateMessages { get; set; } = true;
 
     /// <summary>是否把通知事件（撤回、戳一戳、群成员变动等）交付给 NB2。</summary>

@@ -53,8 +53,19 @@ public sealed class MilkyActions
             switch (action)
             {
                 case EVENT_DONE:
-                    _tracker.Complete(parameters["key"]?.GetValue<string>() ?? string.Empty, parameters["handled"]?.GetValue<bool>() ?? false);
+                {
+                    string key = parameters["key"]?.GetValue<string>() ?? string.Empty;
+                    bool handled = parameters["handled"]?.GetValue<bool>() ?? false;
+                    if (!_tracker.Complete(key, handled))
+                    {
+                        _logger.LogWarning(
+                            "NB2 在等待超时后才回报{Verdict}（关联键 {Key}），该事件已按继续交给后续订阅者",
+                            handled ? "开始处理" : "不处理",
+                            key);
+                    }
+
                     return Ok([]);
+                }
                 case SEND_GROUP or SEND_PRIVATE:
                     return await SendAsync(action, parameters, cancellationToken);
                 default:

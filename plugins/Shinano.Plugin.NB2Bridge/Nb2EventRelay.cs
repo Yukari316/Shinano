@@ -8,7 +8,7 @@ namespace Shinano.Plugin.NB2Bridge;
 
 /// <summary>
 /// 作为宿主普通事件订阅链中的一员，把配置选中的事件交付给 NB2 并等待消息处理的继续/终止：NB2 有 matcher 确实开始处理（全部运行前处理器
-/// 已放行）时立即回报终止，不等处理结束；没有 matcher 开始处理、未连接、交付失败或等待超时都继续，超时后的回报忽略，不重新交付。
+/// 已放行）时立即回报终止，不等处理结束；没有 matcher 开始处理、未连接、交付失败或等待超时都继续，超时后的回报只记警告日志，不重新交付。
 /// </summary>
 public sealed class Nb2EventRelay
 {
@@ -65,9 +65,10 @@ public sealed class Nb2EventRelay
         if (handled is null)
         {
             _logger.LogWarning(
-                "NB2 未在 {Seconds} 秒内判定是否处理 {Type}，事件链继续；NB2 之后的发送照常执行与归档",
+                "NB2 未在 {Seconds} 秒内判定是否处理 {Type}（关联键 {Key}），事件链继续；NB2 之后的发送照常执行与归档",
                 timeout.TotalSeconds,
-                Type(payload));
+                Type(payload),
+                key);
             return;
         }
 

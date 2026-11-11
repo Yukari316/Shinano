@@ -18,12 +18,14 @@ public static class MilkyEvents
 
     private const string GROUP  = "group";
     private const string FRIEND = "friend";
-    private const string TEMP   = "temp";
 
-    /// <summary>事件类别；没有对应 Milky 事件的类型为 null。</summary>
+    /// <summary>事件类别；不交付给 NB2 的事件为 null（没有对应 Milky 事件的类型与临时会话的事件）。</summary>
     public static Nb2EventKind? Classify(BotEvent e) =>
         e switch
         {
+            // 临时会话的用户不是服务对象，消息、撤回与置顶都不交付。
+            MessageReceivedEvent { Message.SourceType: MessageSourceType.Temp } or MessageDeletedEvent { SourceType: MessageSourceType.Temp }
+                or PeerPinChangedEvent { SourceType: MessageSourceType.Temp } => null,
             MessageReceivedEvent { Message.SourceType: MessageSourceType.Group } => Nb2EventKind.GroupMessage,
             MessageReceivedEvent => Nb2EventKind.PrivateMessage,
             FriendRequestEvent or GroupJoinRequestEvent or GroupInvitationEvent => Nb2EventKind.Request,
@@ -41,7 +43,8 @@ public static class MilkyEvents
         (string Type, JsonObject Data)? payload = e switch
         {
             MessageReceivedEvent message => ("message_receive", Message(message)),
-            MessageDeletedEvent recall => ("message_recall", new JsonObject
+            MessageDeletedEvent recall => 
+            ("message_recall", new JsonObject
             {
                 ["message_scene"]  = Scene(recall.SourceType),
                 ["peer_id"]        = recall.SourceType == MessageSourceType.Group ? (long)recall.GroupId : PrivatePeer(e, recall.SenderId, recall.OperatorId),
@@ -265,7 +268,6 @@ public static class MilkyEvents
         type switch
         {
             MessageSourceType.Group => GROUP,
-            MessageSourceType.Temp  => TEMP,
             _                       => FRIEND
         };
 
