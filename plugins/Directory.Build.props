@@ -8,6 +8,12 @@
     <OutputPath>$(MSBuildThisFileDirectory)../artifacts/plugins/$(MSBuildProjectName)/</OutputPath>
   </PropertyGroup>
 
+  <!-- 插件的程序集版本取自 plugin.json 的 version，与安装、升级和面板显示的版本一致；没有 version 的插件与共享类库沿用根目录的 Version。 -->
+  <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/plugin.json')">
+    <_PluginVersionField>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/plugin.json')), '"version"\s*:\s*"[^"]+"').Value)</_PluginVersionField>
+    <Version Condition="'$(_PluginVersionField)' != ''">$([System.Text.RegularExpressions.Regex]::Replace($(_PluginVersionField), '^"version"\s*:\s*"|"$', ''))</Version>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- 共享类库（如 Shinano.Plugin.ImageSources）没有 plugin.json，不是插件包。 -->
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('plugin.json')"/>

@@ -27,7 +27,8 @@
 
 - 输出到 `artifacts/plugins/<工程名>/`，目录布局就是插件包的布局；
 - 启用 `EnableDynamicLoading`；
-- 复制 `plugin.json`、`assets/**` 和 `web/**`。
+- 复制 `plugin.json`、`assets/**` 和 `web/**`；
+- 程序集版本取自 `plugin.json` 的 `version`，没有该字段时沿用根目录的版本。
 
 工程文件只需引用 Framework，并且不把它复制到输出目录：
 
