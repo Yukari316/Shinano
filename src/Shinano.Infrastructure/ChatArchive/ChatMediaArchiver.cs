@@ -6,6 +6,7 @@ using Shinano.Infrastructure.Media.Models;
 using Sora.Core.Types;
 using Sora.Entities.Interfaces;
 using Sora.Entities.Message;
+using System.Net.Sockets;
 
 namespace Shinano.Infrastructure.ChatArchive;
 
@@ -142,11 +143,18 @@ public sealed class ChatMediaArchiver
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 _logger.LogWarning(exception, "保存聊天媒体失败（消息 {MessageId}）", entry.Message.MessageId);
-                _ = _storageAvailability.CheckAsync(force: false, CancellationToken.None);
+                // 连接故障是 S3 客户端重试后仍失败，立即标记 RustFS 不可用，不等节流的探测；其他失败（如数据库写入）交给探测确认。
+                if (IsConnectionFault(exception)) _storageAvailability.ReportFailure(exception);
+                else _ = _storageAvailability.CheckAsync(force: false, CancellationToken.None);
                 return null;
             }
         }
     }
+
+    // 保存时只有 RustFS 走 HTTP：拒绝连接与 DNS 失败为 HttpRequestException，连接被重置为内含 SocketException 的 IOException。
+    // Npgsql 的连接故障包装为 NpgsqlException，读取本地临时文件的 IOException 不含 SocketException，都不在此列。
+    private static bool IsConnectionFault(Exception exception) =>
+        exception is HttpRequestException or IOException { InnerException: SocketException };
 
     private async Task<BufferedMedia?> FetchAsync(
         ChatMediaSource   source,
