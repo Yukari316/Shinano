@@ -6,7 +6,7 @@ public sealed class RustFsOptions
     /// <summary>配置节路径。</summary>
     public const string SECTION_NAME = "Shinano:RustFs";
 
-    /// <summary>Bot 访问 RustFS 的地址，如 <c>http://10.7.21.12:9000</c>。</summary>
+    /// <summary>Bot 访问 RustFS 的地址，如 <c>http://192.0.2.10:9000</c>。</summary>
     public string Endpoint { get; set; } = string.Empty;
 
     /// <summary>IM 实现端下载媒体使用的地址，留空时与 <see cref="Endpoint" /> 相同。</summary>

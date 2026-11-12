@@ -102,13 +102,13 @@ public sealed class MonitorTests : IDisposable
     [Fact]
     public void Listen_UsesHttpOnNonLoopback_ButFallsBackWhenCertificateCannotLoad()
     {
-        ListenEndpoint plain = ListenEndpoint.Resolve(new ListenOptions { ListenAddress = "10.7.21.5", Port = 19101 }, MonitorSettings.DEFAULT_PORT, _directory);
-        Assert.Equal("http://10.7.21.5:19101", plain.BaseUrl);
+        ListenEndpoint plain = ListenEndpoint.Resolve(new ListenOptions { ListenAddress = "192.0.2.5", Port = 19101 }, MonitorSettings.DEFAULT_PORT, _directory);
+        Assert.Equal("http://192.0.2.5:19101", plain.BaseUrl);
 
         ListenEndpoint broken = ListenEndpoint.Resolve(
             new ListenOptions
             {
-                ListenAddress   = "10.7.21.5",
+                ListenAddress   = "192.0.2.5",
                 Port            = 19101,
                 CertificatePath = "missing.pfx"
             },
