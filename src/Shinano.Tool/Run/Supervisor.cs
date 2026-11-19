@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Deployment.Models;
-using Shinano.Tool.Run.Models;
 
 namespace Shinano.Tool.Run;
 

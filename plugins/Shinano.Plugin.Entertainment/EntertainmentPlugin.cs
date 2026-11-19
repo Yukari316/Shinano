@@ -1,6 +1,5 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Entertainment.Models;
 
 namespace Shinano.Plugin.Entertainment;
 

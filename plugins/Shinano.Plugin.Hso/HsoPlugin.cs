@@ -1,7 +1,11 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Hso.Models;
+using Shinano.Plugin.Hso.Gallery;
+using Shinano.Plugin.Hso.Info;
+using Shinano.Plugin.Hso.Panel;
+using Shinano.Plugin.Hso.Persistence;
 using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Gateway;
 
 namespace Shinano.Plugin.Hso;
 

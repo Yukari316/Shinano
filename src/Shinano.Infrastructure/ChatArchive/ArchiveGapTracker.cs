@@ -1,5 +1,3 @@
-using Shinano.Infrastructure.ChatArchive.Models;
-
 namespace Shinano.Infrastructure.ChatArchive;
 
 /// <summary>
@@ -75,4 +73,30 @@ public sealed class ArchiveGapTracker
             });
         return true;
     }
+}
+
+/// <summary>一段已结束的归档缺口。</summary>
+public sealed class ArchiveGap
+{
+    /// <summary>原因。</summary>
+    public required ArchiveGapCause Cause { get; init; }
+
+    /// <summary>开始时间，UTC。</summary>
+    public required DateTimeOffset StartedAt { get; init; }
+
+    /// <summary>结束时间，UTC。</summary>
+    public required DateTimeOffset EndedAt { get; init; }
+}
+
+/// <summary>归档缺口的原因，以 smallint 存储，取值不可更改。</summary>
+public enum ArchiveGapCause : short
+{
+    /// <summary>数据库离线，消息无法入库。</summary>
+    DatabaseOffline = 1,
+
+    /// <summary>LLBot 断线，期间未上报的消息无法补回。</summary>
+    BotDisconnected = 2,
+
+    /// <summary>宿主归档缓冲已满，新记录被丢弃。</summary>
+    Backlog = 3
 }

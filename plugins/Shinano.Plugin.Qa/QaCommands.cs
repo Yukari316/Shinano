@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Qa.Models;
+using Shinano.Plugin.Qa.Persistence;
 using Sora.Command.Attributes;
 using Sora.Core.Enums;
 using Sora.Core.Types;

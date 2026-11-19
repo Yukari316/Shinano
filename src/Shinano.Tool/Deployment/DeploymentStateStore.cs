@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Shinano.Tool.Deployment.Models;
 
 namespace Shinano.Tool.Deployment;
 

@@ -1,5 +1,5 @@
 using System.Text.Json.Nodes;
-using Shinano.Infrastructure.ChatArchive.Models;
+using Shinano.Infrastructure.ChatArchive.Persistence;
 using Sora.Core.Enums;
 using Sora.Entities.Recording;
 using Sora.Entities.Segments;

@@ -1,8 +1,6 @@
-using Shinano.Tests.Restart;
+using Shinano.Tests.Host.Restart;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Deployment.Models;
 using Shinano.Tool.Plugins;
-using Shinano.Tool.Plugins.Models;
 
 namespace Shinano.Tests.Tool;
 

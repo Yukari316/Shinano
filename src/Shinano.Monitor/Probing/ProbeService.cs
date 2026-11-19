@@ -1,6 +1,4 @@
-using Shinano.Monitor.Logging;
-using Shinano.Monitor.Probing.Models;
-using Shinano.Monitor.Web.Models;
+using Shinano.Monitor.Web;
 
 namespace Shinano.Monitor.Probing;
 

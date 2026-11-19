@@ -1,8 +1,6 @@
 using System.Globalization;
 using Shinano.Framework.Plugins;
 using Shinano.Framework.Rendering;
-using Shinano.Framework.Rendering.Models;
-using Shinano.Host.Rendering.Models;
 using SkiaSharp;
 
 namespace Shinano.Host.Rendering;

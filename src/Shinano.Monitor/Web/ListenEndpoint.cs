@@ -1,4 +1,3 @@
-using Shinano.Monitor.Web.Models;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;

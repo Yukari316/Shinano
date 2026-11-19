@@ -1,8 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Deployment.Models;
-using Shinano.Tool.Plugins.Models;
 
 namespace Shinano.Tool.Plugins;
 

@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using Shinano.Infrastructure.ChatArchive.Models;
 using Sora.Core.Enums;
 using Sora.Entities.Message;
 using Sora.Entities.Recording;
@@ -312,4 +311,27 @@ public sealed class ChatSegmentEncoder
 
         public required IEnumerable<Segment> Segments { get; init; }
     }
+}
+
+/// <summary>等待归档的媒体：归档成功后在 <see cref="Node" /> 写入聊天媒体 ID <c>m</c>。</summary>
+public sealed class PendingChatMedia
+{
+    /// <summary>段 JSON 中的媒体节点。</summary>
+    public required JsonObject Node { get; init; }
+
+    /// <summary>获取内容的来源。</summary>
+    public required ChatMediaSource Source { get; init; }
+}
+
+/// <summary>只有转发 ID 的合并转发：展开成功后在 <see cref="Node" /> 写入内层消息 <c>msgs</c>。</summary>
+public sealed class PendingChatForward
+{
+    /// <summary>段 JSON 中的转发节点。</summary>
+    public required JsonObject Node { get; init; }
+
+    /// <summary>转发 ID。</summary>
+    public required string ForwardId { get; init; }
+
+    /// <summary>转发节点所在的嵌套层级，消息顶层为 0。</summary>
+    public required int Depth { get; init; }
 }

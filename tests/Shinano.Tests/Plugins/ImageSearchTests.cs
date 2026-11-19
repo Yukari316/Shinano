@@ -1,12 +1,9 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
-using Shinano.Framework.Rendering.Models;
+using Shinano.Framework.Rendering;
 using Shinano.Plugin.ImageSearch;
-using Shinano.Plugin.ImageSearch.Delivery;
-using Shinano.Plugin.ImageSearch.Models;
-using Shinano.Plugin.ImageSearch.Parsing;
 using Shinano.Plugin.ImageSources;
-using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Gateway;
 using Shinano.Plugin.ImageSources.Parsing;
 using SkiaSharp;
 

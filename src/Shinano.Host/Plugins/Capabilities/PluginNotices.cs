@@ -1,8 +1,6 @@
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Models;
-using Shinano.Framework.Rendering.Models;
+using Shinano.Framework.Rendering;
 using Shinano.Host.Bot;
-using Shinano.Host.Bot.Models;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

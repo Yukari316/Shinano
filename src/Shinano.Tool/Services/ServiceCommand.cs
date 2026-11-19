@@ -1,9 +1,7 @@
 using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Deployment.Models;
 using Shinano.Tool.Run;
-using Shinano.Tool.Services.Models;
 using Shinano.Tool.Setup;
 
 namespace Shinano.Tool.Services;

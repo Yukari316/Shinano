@@ -1,5 +1,4 @@
 using Shinano.Framework.Plugins;
-using Shinano.Host.Plugins.Models;
 using Sora.Entities.Events;
 
 namespace Shinano.Host.Plugins.Capabilities;

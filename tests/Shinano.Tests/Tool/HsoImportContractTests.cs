@@ -1,10 +1,8 @@
 using System.Reflection;
 using Shinano.Infrastructure.Database;
-using Shinano.Infrastructure.Hosting.Models;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Storage;
-using Shinano.Plugin.Hso;
-using Shinano.Plugin.Hso.Entities;
-using Shinano.Plugin.Hso.Models;
+using Shinano.Plugin.Hso.Persistence;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.HsoImport;
 using SqlSugar;

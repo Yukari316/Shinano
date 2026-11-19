@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
-using Shinano.Host.Tools.Models;
 
 namespace Shinano.Host.Tools;
 

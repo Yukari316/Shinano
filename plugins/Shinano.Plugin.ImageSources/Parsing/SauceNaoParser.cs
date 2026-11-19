@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Gateway;
 
 namespace Shinano.Plugin.ImageSources.Parsing;
 

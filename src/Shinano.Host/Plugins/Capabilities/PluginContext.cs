@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
+using Shinano.Host.Plugins.Config;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

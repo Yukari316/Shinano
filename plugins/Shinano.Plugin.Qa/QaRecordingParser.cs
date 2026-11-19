@@ -1,5 +1,4 @@
 using System.Text;
-using Shinano.Plugin.Qa.Models;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;
 
@@ -214,4 +213,39 @@ public static class QaRecordingParser
             Source = new TextSegment { Text = text },
             Text   = text
         };
+}
+
+/// <summary>录入消息的解析结果。</summary>
+public sealed class QaParseResult
+{
+    /// <summary>无法解析的原因；成功时为 <see cref="QaParseError.None" />。</summary>
+    public QaParseError Error { get; init; }
+
+    /// <summary>问题文本（已去掉首尾空白）。</summary>
+    public string Question { get; init; } = string.Empty;
+
+    /// <summary>文字录入的回答片段；引用录入时为空，回答来自被引用的消息。</summary>
+    public IReadOnlyList<QaDraftPart> Answer { get; init; } = [];
+
+    /// <summary>引用录入时被引用的消息。</summary>
+    public ReplySegment? Reply { get; init; }
+
+    /// <summary>失败结果。</summary>
+    public static QaParseResult Fail(QaParseError error) => new() { Error = error };
+}
+
+/// <summary>录入消息无法解析的原因。</summary>
+public enum QaParseError
+{
+    /// <summary>解析成功。</summary>
+    None,
+
+    /// <summary>问题或回答为空，或格式不符。</summary>
+    Malformed,
+
+    /// <summary>问题中夹带了文字以外的内容。</summary>
+    QuestionNotText,
+
+    /// <summary>含有不支持的消息段。</summary>
+    Unsupported
 }

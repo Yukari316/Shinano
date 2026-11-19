@@ -1,6 +1,5 @@
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Hso.Models;
-using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Gateway;
 
 namespace Shinano.Plugin.Hso;
 

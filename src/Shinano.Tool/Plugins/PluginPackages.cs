@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
 using Shinano.Tool.Cli;
-using Shinano.Tool.Plugins.Models;
 
 namespace Shinano.Tool.Plugins;
 

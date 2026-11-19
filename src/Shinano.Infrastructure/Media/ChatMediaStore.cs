@@ -1,9 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Infrastructure.Database;
-using Shinano.Infrastructure.Media.Entities;
-using Shinano.Infrastructure.Media.Models;
 using Shinano.Infrastructure.Storage;
-using Shinano.Infrastructure.Storage.Models;
 using SqlSugar;
 
 namespace Shinano.Infrastructure.Media;

@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Rendering.Models;
-using Shinano.Plugin.NB2Bridge.Models;
+using Shinano.Framework.Rendering;
+using Shinano.Plugin.NB2Bridge.PluginPackages;
+using Shinano.Plugin.NB2Bridge.Runtime;
 using Sora.Command.Attributes;
 using Sora.Entities.Events;
 using Sora.Entities.Message;

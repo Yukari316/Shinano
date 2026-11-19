@@ -1,8 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Shinano.Host.Bot.Models;
 using Shinano.Infrastructure.ChatArchive;
-using Shinano.Infrastructure.ChatArchive.Models;
 using Shinano.Infrastructure.Hosting;
 using Sora.Entities.Interfaces;
 using Sora.Entities.Recording;

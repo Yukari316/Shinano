@@ -1,4 +1,4 @@
-using Shinano.Monitor.Status.Endpoints;
+using Shinano.Monitor.Status;
 
 namespace Shinano.Monitor.Web;
 

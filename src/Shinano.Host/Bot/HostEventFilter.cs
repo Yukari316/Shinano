@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Infrastructure;
 using Shinano.Infrastructure.Health;
-using Shinano.Infrastructure.Health.Models;
 using Shinano.Infrastructure.Hosting;
 using Sora.Entities.Events;
 using Sora.Entities.Filters;

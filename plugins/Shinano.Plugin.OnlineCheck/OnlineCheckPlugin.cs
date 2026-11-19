@@ -1,7 +1,6 @@
 using Autofac;
 using Shinano.Framework.Commands;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.OnlineCheck.Models;
 using Sora.Core.Enums;
 using Sora.Entities.Events;
 using Sora.Entities.Message;

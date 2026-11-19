@@ -8,11 +8,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shinano.Monitor.Probing;
-using Shinano.Monitor.Probing.Models;
 using Shinano.Monitor.Status;
-using Shinano.Monitor.Status.Models;
 using Shinano.Monitor.Web;
-using Shinano.Monitor.Web.Models;
 using System.Net;
 
 namespace Shinano.Tests.Monitor;

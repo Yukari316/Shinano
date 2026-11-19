@@ -1,8 +1,7 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.ImageSearch.Delivery;
-using Shinano.Plugin.ImageSearch.Models;
 using Shinano.Plugin.ImageSources;
+using Shinano.Plugin.ImageSources.Gateway;
 
 namespace Shinano.Plugin.ImageSearch;
 

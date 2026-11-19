@@ -1,5 +1,5 @@
 using System.Text.Json.Nodes;
-using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.ImageSources.Gateway;
 using Shinano.Plugin.ImageSources.Parsing;
 
 namespace Shinano.Plugin.ImageSources;

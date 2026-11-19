@@ -1,7 +1,5 @@
-using Shinano.Plugin.Hso;
-using Shinano.Plugin.Hso.Models;
+using Shinano.Plugin.Hso.Gallery;
 using Shinano.Tool.HsoImport;
-using Shinano.Tool.HsoImport.Models;
 using SkiaSharp;
 
 namespace Shinano.Tests.Tool;

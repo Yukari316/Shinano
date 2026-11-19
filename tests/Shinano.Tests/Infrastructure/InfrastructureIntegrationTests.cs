@@ -2,16 +2,12 @@ using System.Text;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Logging.Abstractions;
-using Shinano.Infrastructure.ChatArchive;
-using Shinano.Infrastructure.ChatArchive.Models;
+using Shinano.Infrastructure.ChatArchive.Persistence;
 using Shinano.Infrastructure.Database;
-using Shinano.Infrastructure.Database.Models;
 using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Media;
-using Shinano.Infrastructure.Media.Entities;
-using Shinano.Infrastructure.Media.Models;
 using Shinano.Infrastructure.Storage;
-using Shinano.Infrastructure.Storage.Models;
+using Shinano.Tests.Support;
 using SqlSugar;
 
 namespace Shinano.Tests.Infrastructure;

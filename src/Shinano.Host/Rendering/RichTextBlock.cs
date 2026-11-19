@@ -1,6 +1,5 @@
 using System.Globalization;
 using Shinano.Framework.Rendering;
-using Shinano.Host.Rendering.Models;
 using SkiaSharp;
 
 namespace Shinano.Host.Rendering;
@@ -265,4 +264,75 @@ internal sealed class RichTextBlock
                 IsBreak  = IsBreak
             };
     }
+}
+
+/// <summary>一段同样式的行内文字；文字中的 <c>\n</c> 为强制换行。</summary>
+internal sealed class RichSpan
+{
+    /// <summary>文字。</summary>
+    public required string Text { get; init; }
+
+    /// <summary>样式。</summary>
+    public SpanStyle Style { get; init; }
+}
+
+/// <summary>文档行内文字的样式，可以组合。</summary>
+[Flags]
+internal enum SpanStyle
+{
+    /// <summary>正文。</summary>
+    None = 0,
+
+    /// <summary>粗体。</summary>
+    Strong = 1,
+
+    /// <summary>强调：信号黄荧光笔底（没有斜体字重）。</summary>
+    Emphasis = 2,
+
+    /// <summary>删除线。</summary>
+    Strike = 4,
+
+    /// <summary>行内代码：等宽字体、凹陷底色。</summary>
+    Code = 8,
+
+    /// <summary>链接：信号墨色下划线。</summary>
+    Link = 16,
+
+    /// <summary>次要文字，如附上的链接地址与图片说明。</summary>
+    Secondary = 32,
+
+    /// <summary>单独发送的图片在原位的「图 n」占位：信号黄底。</summary>
+    Placeholder = 64
+}
+
+/// <summary>一块行内文字的基础样式。</summary>
+internal sealed class RichTextStyle
+{
+    /// <summary>正文字体。</summary>
+    public required SKTypeface Typeface { get; init; }
+
+    /// <summary>粗体部分的字体。</summary>
+    public required SKTypeface StrongTypeface { get; init; }
+
+    /// <summary>字号（逻辑像素）。</summary>
+    public required float Size { get; init; }
+
+    /// <summary>行高与字号之比。</summary>
+    public required float Leading { get; init; }
+
+    /// <summary>正文颜色。</summary>
+    public required SKColor Color { get; init; }
+}
+
+/// <summary>行在可用宽度内的对齐方式。</summary>
+internal enum LineAlignment
+{
+    /// <summary>左对齐。</summary>
+    Left,
+
+    /// <summary>居中。</summary>
+    Center,
+
+    /// <summary>右对齐。</summary>
+    Right
 }

@@ -1,8 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Rendering.Models;
-using Shinano.Host.Bot.Models;
-using Shinano.Infrastructure.Hosting.Models;
+using Shinano.Framework.Rendering;
+using Shinano.Infrastructure.Hosting;
 using Sora.Core.Types;
 using Sora.Entities.Interfaces;
 using Sora.Entities.Message;

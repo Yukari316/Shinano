@@ -1,8 +1,8 @@
+using Shinano.Tool.Deployment;
 using Shinano.Tool.HsoImport;
 using Shinano.Tool.Run;
 using Shinano.Tool.Services;
 using Shinano.Tool.Setup;
-using Shinano.Tool.Upgrade;
 
 namespace Shinano.Tool.Cli;
 

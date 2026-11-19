@@ -1,4 +1,4 @@
-using Shinano.Framework.Rendering.Models;
+using Shinano.Framework.Rendering;
 
 namespace Shinano.Framework.Plugins;
 

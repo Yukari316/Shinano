@@ -1,9 +1,7 @@
 using System.Runtime.CompilerServices;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Models;
-using Shinano.Infrastructure.Media.Models;
+using Shinano.Infrastructure.Media;
 using Shinano.Infrastructure.Storage;
-using Shinano.Infrastructure.Storage.Models;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

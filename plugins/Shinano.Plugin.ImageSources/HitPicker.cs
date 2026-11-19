@@ -1,5 +1,3 @@
-using Shinano.Plugin.ImageSources.Models;
-
 namespace Shinano.Plugin.ImageSources;
 
 /// <summary>

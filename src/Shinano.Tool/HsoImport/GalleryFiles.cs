@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using Shinano.Tool.HsoImport.Models;
 
 namespace Shinano.Tool.HsoImport;
 
@@ -59,4 +58,24 @@ public static partial class GalleryFiles
 
     [GeneratedRegex(@"^(?<pid>\d{1,12})_p(?<page>\d{1,4})\.[A-Za-z0-9]+$")]
     private static partial Regex PixivName();
+}
+
+/// <summary>按文件头识别出的图片格式。</summary>
+public sealed class ImageFormat
+{
+    /// <summary>MIME 类型，如 <c>image/png</c>。</summary>
+    public required string MediaType { get; init; }
+
+    /// <summary>对象 key 使用的扩展名，含点，如 <c>.png</c>。</summary>
+    public required string Extension { get; init; }
+}
+
+/// <summary>从文件名解析出的 Pixiv 作品号与页号。</summary>
+public sealed class PixivPage
+{
+    /// <summary>作品号。</summary>
+    public required long Pid { get; init; }
+
+    /// <summary>页号，从 0 开始。</summary>
+    public required int Page { get; init; }
 }

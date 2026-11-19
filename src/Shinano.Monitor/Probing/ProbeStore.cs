@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Shinano.Monitor.Probing.Models;
 
 namespace Shinano.Monitor.Probing;
 

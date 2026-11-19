@@ -1,6 +1,9 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Bilibili.Models;
+using Shinano.Plugin.Bilibili.Feed;
+using Shinano.Plugin.Bilibili.Login;
+using Shinano.Plugin.Bilibili.Panel;
+using Shinano.Plugin.Bilibili.Persistence;
 
 namespace Shinano.Plugin.Bilibili;
 

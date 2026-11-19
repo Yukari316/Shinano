@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Qa.Models;
 using Sora.Core.Types;
 using Sora.Entities.Interfaces;
 using Sora.Entities.Message;

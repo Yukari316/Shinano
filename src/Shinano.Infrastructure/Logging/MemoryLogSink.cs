@@ -1,9 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Serilog.Core;
-using Serilog.Parsing;
 using Serilog.Events;
-using Shinano.Infrastructure.Logging.Models;
+using Serilog.Parsing;
 
 namespace Shinano.Infrastructure.Logging;
 

@@ -5,7 +5,6 @@ using Npgsql;
 using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Deployment.Models;
 using Shinano.Tool.Plugins;
 using Shinano.Tool.Run;
 using Shinano.Tool.Services;

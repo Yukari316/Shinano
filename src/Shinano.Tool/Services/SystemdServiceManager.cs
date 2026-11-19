@@ -1,6 +1,5 @@
 using System.Text;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Services.Models;
 
 namespace Shinano.Tool.Services;
 

@@ -1,6 +1,7 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.Qa.Models;
+using Shinano.Plugin.Qa.Panel;
+using Shinano.Plugin.Qa.Persistence;
 using Sora.Entities.Events;
 
 namespace Shinano.Plugin.Qa;

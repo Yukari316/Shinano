@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.Hso;
-using Shinano.Plugin.Hso.Entities;
-using Shinano.Plugin.Hso.Models;
+using Shinano.Plugin.Hso.Info;
+using Shinano.Plugin.Hso.Persistence;
 using Shinano.Plugin.ImageSources;
-using Shinano.Plugin.ImageSources.Models;
-using Shinano.Tests.Infrastructure;
+using Shinano.Plugin.ImageSources.Gateway;
+using Shinano.Tests.Support;
 
 namespace Shinano.Tests.Plugins;
 

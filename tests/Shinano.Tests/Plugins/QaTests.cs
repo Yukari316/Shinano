@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Plugin.Qa;
-using Shinano.Plugin.Qa.Models;
 using Sora.Core.Types;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;

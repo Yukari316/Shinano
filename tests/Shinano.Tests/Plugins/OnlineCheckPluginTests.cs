@@ -1,5 +1,6 @@
 using Shinano.Plugin.OnlineCheck;
-using Shinano.Tests.Infrastructure;
+using Shinano.Tests.Host.Plugins;
+using Shinano.Tests.Support;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;
 

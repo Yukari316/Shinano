@@ -1,7 +1,6 @@
 using Shinano.Framework.Plugins;
 using Shinano.Infrastructure.Media;
-using Shinano.Infrastructure.Media.Models;
-using Shinano.Infrastructure.Storage.Models;
+using Shinano.Infrastructure.Storage;
 
 namespace Shinano.Host.Plugins.Capabilities;
 

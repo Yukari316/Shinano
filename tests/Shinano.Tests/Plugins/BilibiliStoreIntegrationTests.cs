@@ -1,10 +1,8 @@
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Models;
 using Shinano.Infrastructure.Hosting;
 using Shinano.Plugin.Bilibili;
-using Shinano.Plugin.Bilibili.Entities;
-using Shinano.Plugin.Bilibili.Models;
-using Shinano.Tests.Infrastructure;
+using Shinano.Plugin.Bilibili.Persistence;
+using Shinano.Tests.Support;
 using SqlSugar;
 
 namespace Shinano.Tests.Plugins;

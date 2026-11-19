@@ -1,6 +1,5 @@
 using Shinano.Tool.Cli;
 using Shinano.Tool.Run;
-using Shinano.Tool.Run.Models;
 using Shinano.Tool.Services;
 
 namespace Shinano.Tests.Tool;

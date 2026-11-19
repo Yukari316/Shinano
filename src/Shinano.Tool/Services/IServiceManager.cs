@@ -1,5 +1,3 @@
-using Shinano.Tool.Services.Models;
-
 namespace Shinano.Tool.Services;
 
 /// <summary>
@@ -31,4 +29,17 @@ public interface IServiceManager
     /// <summary>等待服务进入运行或停止状态。</summary>
     /// <returns>是否在时限内达到。</returns>
     Task<bool> WaitAsync(string name, bool running, TimeSpan timeout);
+}
+
+/// <summary>向服务管理器查询到的服务状态。</summary>
+public sealed class ServiceStatus
+{
+    /// <summary>服务是否存在。</summary>
+    public required bool Exists { get; init; }
+
+    /// <summary>服务是否在运行。</summary>
+    public required bool Running { get; init; }
+
+    /// <summary>服务的可执行文件；不存在或无法读取时为 null。</summary>
+    public string? Executable { get; init; }
 }

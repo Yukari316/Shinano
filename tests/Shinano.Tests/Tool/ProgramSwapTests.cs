@@ -1,5 +1,4 @@
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Upgrade;
 
 namespace Shinano.Tests.Tool;
 

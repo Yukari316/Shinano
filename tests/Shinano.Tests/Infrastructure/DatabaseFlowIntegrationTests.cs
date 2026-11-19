@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Infrastructure.Hosting;
+using Shinano.Tests.Support;
 using SqlSugar;
 
 namespace Shinano.Tests.Infrastructure;

@@ -1,5 +1,3 @@
-using Shinano.Infrastructure.Health.Models;
-
 namespace Shinano.Infrastructure.Health;
 
 /// <summary>健康状态的中文名称，健康检查指令与管理面板共用。</summary>

@@ -1,4 +1,5 @@
 using Shinano.Framework.Plugins;
+using Shinano.Host.Plugins.Config;
 using System.Text.Json;
 
 namespace Shinano.Host.Plugins.Capabilities;

@@ -403,7 +403,7 @@ onMounted(async () => {
 ```csharp
 using SqlSugar;
 
-namespace Example.Plugin.Hello.Entities;
+namespace Example.Plugin.Hello;
 
 /// <summary>每个群的问候次数，位于账号 schema。</summary>
 [SugarTable("hello_usage")]
@@ -511,7 +511,7 @@ RustFS 经 S3 协议访问，bucket 名为 `<部署前缀>-<用途>`。插件有
   - Markdown 文档 `RenderDocument`；
   - 只画外框、内容由插件绘制的框架卡片 `RenderFramed`。
 
-  卡片模型在 `Shinano.Framework.Rendering.Models`，色板为 `CardPalette`。宿主字体缺失时抛出 `InvalidOperationException`，调用方应改发文字。
+  卡片模型与色板 `CardPalette` 都在 `Shinano.Framework.Rendering`。宿主字体缺失时抛出 `InvalidOperationException`，调用方应改发文字。
 
   ```csharp
   private const string BASE64_PREFIX = "base64://";

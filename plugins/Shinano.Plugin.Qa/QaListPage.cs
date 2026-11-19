@@ -1,5 +1,4 @@
-using Shinano.Framework.Rendering.Models;
-using Shinano.Plugin.Qa.Models;
+using Shinano.Framework.Rendering;
 
 namespace Shinano.Plugin.Qa;
 

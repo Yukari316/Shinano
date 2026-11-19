@@ -1,8 +1,9 @@
-using Shinano.Framework.Rendering.Models;
+using Shinano.Framework.Rendering;
 using Shinano.Plugin.Hso;
-using Shinano.Plugin.Hso.Entities;
-using Shinano.Plugin.Hso.Models;
-using Shinano.Plugin.ImageSources.Models;
+using Shinano.Plugin.Hso.Gallery;
+using Shinano.Plugin.Hso.Info;
+using Shinano.Plugin.Hso.Persistence;
+using Shinano.Plugin.ImageSources;
 using SkiaSharp;
 
 namespace Shinano.Tests.Plugins;

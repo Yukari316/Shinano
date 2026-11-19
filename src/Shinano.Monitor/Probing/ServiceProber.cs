@@ -1,7 +1,5 @@
 using Npgsql;
-using Shinano.Monitor.Probing.Models;
 using Shinano.Monitor.Web;
-using Shinano.Monitor.Web.Models;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;

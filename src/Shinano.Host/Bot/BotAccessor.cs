@@ -2,9 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 using Shinano.Framework.Plugins;
-using Shinano.Framework.Plugins.Models;
-using Shinano.Host.Bot.Models;
-using Shinano.Infrastructure.Hosting.Models;
+using Shinano.Infrastructure.Hosting;
 using Sora.Entities.Interfaces;
 
 namespace Shinano.Host.Bot;

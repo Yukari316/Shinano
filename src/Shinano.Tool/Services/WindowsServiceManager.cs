@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using System.ServiceProcess;
 using Microsoft.Win32;
 using Shinano.Tool.Deployment;
-using Shinano.Tool.Services.Models;
 
 namespace Shinano.Tool.Services;
 

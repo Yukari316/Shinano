@@ -1,6 +1,9 @@
 using Autofac;
 using Shinano.Framework.Plugins;
-using Shinano.Plugin.NB2Bridge.Models;
+using Shinano.Plugin.NB2Bridge.Milky;
+using Shinano.Plugin.NB2Bridge.Panel;
+using Shinano.Plugin.NB2Bridge.PluginPackages;
+using Shinano.Plugin.NB2Bridge.Runtime;
 using Sora.Entities.Events;
 
 namespace Shinano.Plugin.NB2Bridge;

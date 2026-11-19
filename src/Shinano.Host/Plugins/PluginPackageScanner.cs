@@ -1,5 +1,3 @@
-using Shinano.Host.Plugins.Models;
-
 namespace Shinano.Host.Plugins;
 
 /// <summary>读取插件目录下已安装的插件包清单，不加载程序集。</summary>

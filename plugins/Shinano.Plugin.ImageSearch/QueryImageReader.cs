@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Shinano.Plugin.ImageSearch.Models;
 using Shinano.Plugin.ImageSources;
 using Sora.Core.Enums;
 using Sora.Core.Types;
@@ -107,4 +106,14 @@ public sealed class QueryImageReader : IDisposable
     public void Dispose() => _http.Dispose();
 
     private static ImageSegment? FirstImage(MessageBody body) => body.OfType<ImageSegment>().FirstOrDefault();
+}
+
+/// <summary>要搜索的图片。</summary>
+public sealed class QueryImage
+{
+    /// <summary>图片内容。</summary>
+    public required byte[] Content { get; init; }
+
+    /// <summary>MIME 类型。</summary>
+    public required string MediaType { get; init; }
 }

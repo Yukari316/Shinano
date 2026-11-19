@@ -1,5 +1,4 @@
-using Shinano.Host.Plugins.Models;
-using Shinano.Host.Restart.Models;
+using Shinano.Host.Plugins.Staging;
 
 namespace Shinano.Host.Restart;
 
