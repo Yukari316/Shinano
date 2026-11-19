@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Shinano.Tool.Cli;
 using Shinano.Tool.Deployment;
 
 namespace Shinano.Tool.Plugins;
@@ -53,9 +54,7 @@ public static class BundledPluginSync
         IReadOnlyDictionary<string, InstalledPlugin> installed = PluginPackages.ScanInstalled(pluginRoot);
         string stagingRoot = Path.Combine(dataDirectory, STAGING_DIRECTORY);
         string pendingPath = Path.Combine(stagingRoot, PENDING_FILE);
-        List<StagedPluginChange> pending = File.Exists(pendingPath)
-            ? JsonSerializer.Deserialize<List<StagedPluginChange>>(File.ReadAllText(pendingPath), StagingJson) ?? []
-            : [];
+        List<StagedPluginChange> pending = File.Exists(pendingPath) ? ReadPending(pendingPath) : [];
         bool pendingChanged = false;
 
         foreach (BundledPlugin plugin in bundled)
@@ -115,6 +114,18 @@ public static class BundledPluginSync
         string temporary = pendingPath + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(pending, StagingJson));
         File.Move(temporary, pendingPath, overwrite: true);
+    }
+
+    private static List<StagedPluginChange> ReadPending(string path)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<StagedPluginChange>>(File.ReadAllText(path), StagingJson) ?? [];
+        }
+        catch (JsonException exception)
+        {
+            throw new ToolException($"待处理的插件包变更 {path} 无法解析：{exception.Message}");
+        }
     }
 
     private static bool Install(BundledPlugin plugin, string pluginRoot, ToolLog log)

@@ -47,11 +47,23 @@ public static class UpgradeCommand
             context.Prompter.RequireConfirmation("继续升级");
         }
 
-        if (service) return await UpgradeServiceAsync(context, source, target, state, log, fromVersion, toVersion);
+        // 先读取新包的随包插件：插件包损坏时不停服务、不做任何替换就退出。
+        IReadOnlyList<BundledPlugin> bundled = PluginPackages.ReadBundled(source.BundledPluginsDirectory);
+        Upgrade upgrade = new()
+        {
+            Source      = source,
+            Target      = target,
+            State       = state,
+            Bundled     = bundled,
+            Log         = log,
+            FromVersion = fromVersion,
+            ToVersion   = toVersion
+        };
+        if (service) return await UpgradeServiceAsync(context, upgrade);
 
         if (IsRunning(target.HostExecutable) || IsRunning(target.MonitorExecutable))
             throw new ToolException("目标部署的宿主或监控仍在运行，请先在其控制台按 Ctrl+C 停止，再运行 upgrade");
-        Apply(source, target, state, log);
+        if (Apply(upgrade, chownTo: null) is { } failure) throw new ToolException(failure);
         log.Info($"升级完成：{fromVersion} → {toVersion}");
 
         if (!context.Prompter.Interactive || !context.Prompter.Confirm("是否立即启动", null, fallback: true))
@@ -67,17 +79,12 @@ public static class UpgradeCommand
         return run.ExitCode;
     }
 
-    private static async Task<int> UpgradeServiceAsync(
-        ToolContext      context,
-        DeploymentLayout source,
-        DeploymentLayout target,
-        DeploymentState  state,
-        ToolLog          log,
-        string           fromVersion,
-        string           toVersion)
+    private static async Task<int> UpgradeServiceAsync(ToolContext context, Upgrade upgrade)
     {
+        DeploymentLayout target = upgrade.Target;
+        ToolLog log = upgrade.Log;
         IServiceManager manager = ServiceManagers.ForCurrentPlatform();
-        ServiceSetup setup = ServiceManagers.Setup(target, state);
+        ServiceSetup setup = ServiceManagers.Setup(target, upgrade.State);
         ServiceCommand.Verify(manager, setup);
         if (!Privilege.IsPrivileged)
         {
@@ -86,57 +93,96 @@ public static class UpgradeCommand
                    ?? throw new ToolException("服务模式升级需要管理员权限：请在管理员终端中（Linux 用 sudo）重新运行 upgrade");
         }
 
-        foreach (SystemCommand command in manager.StopCommands(setup))
-            CommandRunner.Run(command, log);
-        foreach (ServiceDefinition service in setup.Services)
-            if (!await manager.WaitAsync(service.Name, running: false, StateTimeout))
-                throw new ToolException($"服务 {service.Name} 未在 {StateTimeout.TotalSeconds} 秒内停止，未做任何替换；请检查后重新运行 upgrade");
-
-        Exception? failure = null;
         try
         {
-            Apply(source, target, state, log);
-            if (OperatingSystem.IsLinux() && state.ServiceUser is { } user)
-                CommandRunner.Run(
-                    new SystemCommand
-                    {
-                        FileName    = "chown",
-                        Arguments   = ["-R", user + ":", target.Root],
-                        Description = $"把部署目录改为 {user} 所有"
-                    },
-                    log);
+            foreach (SystemCommand command in manager.StopCommands(setup))
+                CommandRunner.Run(command, log);
+            foreach (ServiceDefinition service in setup.Services)
+                if (!await manager.WaitAsync(service.Name, running: false, StateTimeout))
+                    throw new ToolException($"服务 {service.Name} 未在 {StateTimeout.TotalSeconds} 秒内停止");
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ToolException)
+        catch (ToolException exception)
         {
-            // 替换失败时已还原旧版；仍然启动服务，不让 Bot 停在半升级状态。
-            failure = exception;
+            // 可能已有服务停下：重新启动，不让 Bot 停在半停止状态。
+            string restart = StartServices(manager, setup, log) is { } error ? $"，重新启动服务也失败：{error}" : "，已重新启动服务";
+            throw new ToolException($"{exception.Message}；未做任何替换{restart}。请检查后重新运行 upgrade");
         }
 
-        foreach (SystemCommand command in manager.StartCommands(setup))
-            CommandRunner.Run(command, log);
+        string? failure = null;
+        string? startFailure;
+        try
+        {
+            failure = Apply(upgrade, chownTo: OperatingSystem.IsLinux() ? upgrade.State.ServiceUser : null);
+        }
+        finally
+        {
+            // 无论替换与同步结果如何都启动服务：替换失败时运行的是已还原的旧版。
+            startFailure = StartServices(manager, setup, log);
+        }
+
+        string outcome = failure ?? $"升级完成：{upgrade.FromVersion} → {upgrade.ToVersion}";
+        if (startFailure is not null) throw new ToolException($"{outcome}；但服务启动失败：{startFailure}");
+
         LocalConfig config = LocalConfig.Load(target.LocalConfigPath);
         using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, target.DataDirectory));
         bool ready = await probe.WaitReadyAsync(null, CancellationToken.None);
 
-        if (failure is not null) throw new ToolException($"升级失败，已还原并重新启动 {fromVersion}：{failure.Message}");
-        if (ready) log.Info($"升级完成：{fromVersion} → {toVersion}，宿主已就绪");
-        else log.Warning($"升级完成：{fromVersion} → {toVersion}，但宿主未在 {ReadinessProbe.ReadyTimeout.TotalSeconds} 秒内就绪，请查看 host/Logs");
+        if (failure is not null) throw new ToolException($"{failure}；服务已重新启动{(ready ? "，宿主已就绪" : "，但宿主未就绪，请查看 host/Logs")}");
+        if (ready) log.Info($"{outcome}，宿主已就绪");
+        else log.Warning($"{outcome}，但宿主未在 {ReadinessProbe.ReadyTimeout.TotalSeconds} 秒内就绪，请查看 host/Logs");
         return ready ? 0 : 1;
     }
 
-    private static void Apply(DeploymentLayout source, DeploymentLayout target, DeploymentState state, ToolLog log)
+    // 返回失败说明，成功时为 null。替换失败时 ProgramSwap 已还原旧版；替换成功后的失败发生在新版本装好之后，必须如实报告。
+    private static string? Apply(Upgrade upgrade, string? chownTo)
     {
-        ProgramSwap.Replace(source, target, log);
-        LocalConfig config = LocalConfig.Load(target.LocalConfigPath);
-        string pluginRoot = Path.GetFullPath(config.GetString(ConfigKeys.PLUGIN_DIRECTORY) ?? ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, target.DataDirectory);
-        BundledPluginSync.Upgrade(
-            PluginPackages.ReadBundled(source.BundledPluginsDirectory),
-            pluginRoot,
-            target.DataDirectory,
-            state,
-            log,
-            DateTimeOffset.UtcNow);
-        DeploymentStateStore.Write(target, state);
+        DeploymentLayout target = upgrade.Target;
+        try
+        {
+            ProgramSwap.Replace(upgrade.Source, target, upgrade.Log);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ToolException)
+        {
+            return $"升级失败，已还原 {upgrade.FromVersion}：{exception.Message}";
+        }
+
+        try
+        {
+            LocalConfig config = LocalConfig.Load(target.LocalConfigPath);
+            string pluginRoot = Path.GetFullPath(config.GetString(ConfigKeys.PLUGIN_DIRECTORY) ?? ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, target.DataDirectory);
+            BundledPluginSync.Upgrade(upgrade.Bundled, pluginRoot, target.DataDirectory, upgrade.State, upgrade.Log, DateTimeOffset.UtcNow);
+            DeploymentStateStore.Write(target, upgrade.State);
+            if (chownTo is not null)
+                CommandRunner.Run(
+                    new SystemCommand
+                    {
+                        FileName    = "chown",
+                        Arguments   = ["-R", chownTo + ":", target.Root],
+                        Description = $"把部署目录改为 {chownTo} 所有"
+                    },
+                    upgrade.Log);
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ToolException)
+        {
+            return $"新版本 {upgrade.ToVersion} 已安装，后续步骤失败：{exception.Message}";
+        }
+    }
+
+    // 返回失败说明，成功时为 null。
+    private static string? StartServices(IServiceManager manager, ServiceSetup setup, ToolLog log)
+    {
+        try
+        {
+            foreach (SystemCommand command in manager.StartCommands(setup))
+                CommandRunner.Run(command, log);
+            return null;
+        }
+        catch (ToolException exception)
+        {
+            log.Error($"启动服务失败：{exception.Message}");
+            return exception.Message;
+        }
     }
 
     private static string VersionOf(string assembly)
@@ -168,4 +214,16 @@ public static class UpgradeCommand
             Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar),
             Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary>一次升级的输入。</summary>
+    private sealed class Upgrade
+    {
+        public required DeploymentLayout             Source      { get; init; }
+        public required DeploymentLayout             Target      { get; init; }
+        public required DeploymentState              State       { get; init; }
+        public required IReadOnlyList<BundledPlugin> Bundled     { get; init; }
+        public required ToolLog                      Log         { get; init; }
+        public required string                       FromVersion { get; init; }
+        public required string                       ToVersion   { get; init; }
+    }
 }
