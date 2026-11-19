@@ -132,7 +132,11 @@ public sealed partial class Nb2Packages
             return $"模块 {module} 已属于插件 {existing.Package}";
 
         _logger.LogInformation("安装 NB2 插件 {Requirement}（模块 {Module}）", requirement, module);
-        (int exitCode, string output) = await RunAsync(UV, ["pip", "install", "--python", _layout.Python, requirement], cancellationToken);
+        // 禁止预发布版：uv 0.13 起会为满足新版间接依赖选中预发布版，装出不能导入的组合；因此面板不能安装预发布版插件。
+        (int exitCode, string output) = await RunAsync(
+            UV,
+            ["pip", "install", "--python", _layout.Python, "--prerelease", "disallow", requirement],
+            cancellationToken);
         if (exitCode != 0)
         {
             await RestoreAsync(cancellationToken);

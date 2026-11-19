@@ -29,7 +29,7 @@ public static class Nb2SetupCommand
     private const string PYTHON_VERSION  = "3.12";
     private const string PARSER_PACKAGE  = "nonebot-plugin-parser";
     private const string PARSER_MODULE   = "nonebot_plugin_parser";
-    private const string PARSER_VERSION  = "2.7.2";
+    private const string PARSER_VERSION  = "2.7.3";
 
     // 版本写死：升级需随工具版本一并核实 parser、适配器与 NoneBot 的兼容性。
     private static readonly string[] BasePackages =
@@ -89,7 +89,8 @@ public static class Nb2SetupCommand
             new SystemCommand
             {
                 FileName    = UV,
-                Arguments   = ["pip", "install", "--python", python, .. BasePackages],
+                // 间接依赖不固定，禁止预发布版：uv 0.13 起会为满足新版间接依赖选中预发布版（如 arclet-alconna 2.0.0a1），导致导入失败。
+                Arguments   = ["pip", "install", "--python", python, "--prerelease", "disallow", .. BasePackages],
                 Description = "安装 NoneBot2、Milky 适配器与 nonebot-plugin-parser"
             },
             log);
