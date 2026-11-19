@@ -8,9 +8,13 @@ using SkiaSharp;
 
 namespace Shinano.Tests.Plugins;
 
-/// <summary>Hso 图库的文件识别、作品信息、信息卡与缩略图。</summary>
+/// <summary>Hso 的发图冷却，以及图库的文件识别、作品信息、信息卡与缩略图。</summary>
 public sealed class HsoTests
 {
+    // 发图冷却是插件 AGENTS.md 规定的业务常量，曾被误改为 1 秒。
+    [Fact]
+    public void DrawCooldown_Is20Seconds() => Assert.Equal(TimeSpan.FromSeconds(20), HsoCommands.Cooldown);
+
     [Theory]
     [InlineData("127307417_p0.jpg", 127307417L, 0)]
     [InlineData("zip/目录/98765_p12.png", 98765L, 12)]

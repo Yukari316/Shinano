@@ -18,7 +18,7 @@ using MatchType = Sora.Core.Enums.MatchType;
 namespace Shinano.Plugin.Hso;
 
 /// <summary>
-/// 发图与排行只在群聊，屏蔽的群中静默不响应（也不计冷却）。发图冷却按群与发送者 60 秒，从触发时开始计时；
+/// 发图与排行只在群聊，屏蔽的群中静默不响应（也不计冷却）。发图冷却按群与发送者 20 秒，从触发时开始计时；
 /// 图片发出后才计入排行，图库为空、冷却中与发送失败都不计数。<c>AD</c> 导入仅 Super User，群聊与私聊可用。
 /// </summary>
 [CommandGroup(Name = "hso")]
@@ -27,9 +27,11 @@ public sealed partial class HsoCommands
     private const int    RANKING_SIZE  = 10;
     private const string BASE64_PREFIX = "base64://";
 
-    private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(1);
+    /// <summary>发图冷却：按群与发送者，从触发时开始计时。</summary>
+    public static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(20);
 
-    private readonly CooldownTracker              _cooldown = new(TimeProvider.System);
+    private readonly CooldownTracker              _cooldown     = new(TimeProvider.System);
+    private readonly Lock                         _cooldownLock = new();
     private readonly IPluginInitializationContext _context;
     private readonly HsoGallery                   _gallery;
     private readonly HsoGroups                    _groups;
@@ -68,13 +70,12 @@ public sealed partial class HsoCommands
         GroupId groupId = e.Message.GroupId;
         HsoGroupSettingRecord setting = await _groups.SettingAsync(groupId);
         if (setting.Blocked) return;
-        if (_cooldown.IsCooling(groupId, e.Message.SenderId, Cooldown))
+        if (!TryStartCooldown(groupId, e.Message.SenderId))
         {
             await e.ReplyAsync(new MessageBody(ReplyTexts.COOLDOWN));
             return;
         }
 
-        _cooldown.Record(groupId, e.Message.SenderId);
         if (await DrawAllowedAsync(groupId, setting.AllowNsfw) is not { } record)
         {
             await e.ReplyAsync(new MessageBody(ReplyTexts.EMPTY));
@@ -170,6 +171,17 @@ public sealed partial class HsoCommands
 
     // 抽一张本群允许的图片；没有可发的图片时返回 null。不允许 NSFW 的群只从未标为 NSFW 的图片中抽；作品信息补全在后台进行，
     // 抽到待补全的图片时还不能确定它是否 NSFW：配置不允许发送时在后台补全它，改抽一张已确定不是 NSFW 的图（已确认、查无信息或待审核）。
+    // 检查与记录在同一把锁内：同一人并发的两条消息只放行一条。不用 CooldownTracker.Trigger，它在冷却中也会重新计时。
+    private bool TryStartCooldown(GroupId groupId, UserId senderId)
+    {
+        lock (_cooldownLock)
+        {
+            if (_cooldown.IsCooling(groupId, senderId, Cooldown)) return false;
+            _cooldown.Record(groupId, senderId);
+            return true;
+        }
+    }
+
     private async Task<HsoImageRecord?> DrawAllowedAsync(GroupId groupId, bool allowNsfw)
     {
         HsoImageRecord? record = await _gallery.PickAsync(allowNsfw, resolvedOnly: false);
