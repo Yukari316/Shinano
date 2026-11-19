@@ -44,8 +44,8 @@ internal static class StatusEndpoints
                 plugins = new
                 {
                     total   = snapshot.Count,
-                    enabled = snapshot.Count(plugin => plugin.Enabled),
-                    failed  = snapshot.Count(plugin => plugin.Error is not null)
+                    enabled = snapshot.Count(plugin => plugin.Status == PluginStatus.Active),
+                    failed  = snapshot.Count(plugin => plugin.Status is PluginStatus.InitFailed or PluginStatus.LoadFailed)
                 },
                 logs = new
                 {

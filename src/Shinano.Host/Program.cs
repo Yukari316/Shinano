@@ -95,6 +95,7 @@ builder.Services.AddSingleton(new PluginRuntimeSettings
     BucketPrefix    = deployment.BucketPrefix
 });
 builder.Services.AddSingleton<PluginRuntime>();
+builder.Services.AddSingleton<AccountActivation>();
 builder.Services.AddSingleton<PluginPackageStaging>();
 builder.Services.AddSingleton<RestartCoordinator>();
 HostFonts fonts = new(AppContext.BaseDirectory);

@@ -37,7 +37,7 @@ internal sealed class LoadedPlugin
     /// <summary>Sora 程序集登记；首次启用后存在。</summary>
     public AssemblyRegistration? Registration { get; set; }
 
-    /// <summary>是否已完成首次初始化。</summary>
+    /// <summary>是否已成功初始化。</summary>
     public bool Initialized { get; set; }
 
     /// <summary>持久化的启用状态。</summary>
@@ -46,6 +46,9 @@ internal sealed class LoadedPlugin
     /// <summary>持久化的顺序。</summary>
     public int SortOrder { get; set; }
 
-    /// <summary>加载或初始化失败的原因；失败的插件在进程重启前不能启用。</summary>
+    /// <summary>加载失败的原因（清单、程序集或容器）；失败的插件在进程重启前不能启用。</summary>
     public string? Error { get; set; }
+
+    /// <summary>最近一次初始化失败的原因；在依赖恢复或重新启用时重试，成功后清除。</summary>
+    public string? InitError { get; set; }
 }

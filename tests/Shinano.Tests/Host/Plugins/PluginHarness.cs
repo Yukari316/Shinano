@@ -38,15 +38,13 @@ public sealed class PluginHarness : IAsyncDisposable
     private static readonly TimeSpan ReplyTimeout   = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan SilenceTimeout = TimeSpan.FromMilliseconds(600);
 
-    private readonly string _dataDirectory;
-
     private PluginHarness(FakeMilkyServer server, SoraService service, PluginRuntime runtime, BotAccessor bot, string dataDirectory)
     {
-        Server         = server;
-        Service        = service;
-        Runtime        = runtime;
-        Bot            = bot;
-        _dataDirectory = dataDirectory;
+        Server        = server;
+        Service       = service;
+        Runtime       = runtime;
+        Bot           = bot;
+        DataDirectory = dataDirectory;
     }
 
     /// <summary>协议端。</summary>
@@ -61,6 +59,9 @@ public sealed class PluginHarness : IAsyncDisposable
     /// <summary>当前连接。</summary>
     public BotAccessor Bot { get; }
 
+    /// <summary>插件运行时使用的部署数据目录（临时目录，结束时删除）。</summary>
+    public string DataDirectory { get; }
+
     /// <summary>
     /// 创建并连接。<paramref name="pluginDirectory" /> 为相对仓库根目录的插件目录；本次涉及插件的持久化状态先被清除。
     /// </summary>
@@ -73,13 +74,32 @@ public sealed class PluginHarness : IAsyncDisposable
 
     /// <summary>
     /// 创建并连接，插件管理 API 登记到 <paramref name="endpoints" />；为 null 时使用不对外提供的独立端点来源。
+    /// 与宿主一样，连接后视为机器人账号已就绪（测试夹具已初始化账号数据）。
     /// </summary>
-    public static async Task<PluginHarness> StartAsync(
+    public static Task<PluginHarness> StartAsync(
         HostInfrastructure        infrastructure,
         string                    bucketPrefix,
         string                    pluginDirectory,
         PluginEndpointDataSource? endpoints,
-        params string[]           pluginIds)
+        params string[]           pluginIds) =>
+        CreateAsync(infrastructure, bucketPrefix, pluginDirectory, endpoints, accountReady: true, pluginIds);
+
+    /// <summary>创建并连接，但不通知运行时机器人账号已就绪；由测试自行调用 <see cref="PluginRuntime.EnablePersistedAsync" />。</summary>
+    public static Task<PluginHarness> StartBeforeAccountReadyAsync(
+        HostInfrastructure        infrastructure,
+        string                    bucketPrefix,
+        string                    pluginDirectory,
+        PluginEndpointDataSource? endpoints,
+        params string[]           pluginIds) =>
+        CreateAsync(infrastructure, bucketPrefix, pluginDirectory, endpoints, accountReady: false, pluginIds);
+
+    private static async Task<PluginHarness> CreateAsync(
+        HostInfrastructure        infrastructure,
+        string                    bucketPrefix,
+        string                    pluginDirectory,
+        PluginEndpointDataSource? endpoints,
+        bool                      accountReady,
+        string[]                  pluginIds)
     {
         infrastructure.Database.Global.CodeFirst.InitTables<PluginStateRecord, PluginConfigRecord>();
         await infrastructure.Database.Global.Deleteable<PluginStateRecord>()
@@ -129,6 +149,7 @@ public sealed class PluginHarness : IAsyncDisposable
         };
         await service.StartAsync();
         await connected.Task.WaitAsync(ReplyTimeout);
+        if (accountReady) await runtime.EnablePersistedAsync(CancellationToken.None);
         return new PluginHarness(server, service, runtime, bot, dataDirectory);
     }
 
@@ -155,7 +176,7 @@ public sealed class PluginHarness : IAsyncDisposable
         await Service.DisposeAsync();
         await Server.DisposeAsync();
         Runtime.Dispose();
-        Directory.Delete(_dataDirectory, recursive: true);
+        Directory.Delete(DataDirectory, recursive: true);
     }
 
     private static string RepositoryRoot()

@@ -15,8 +15,11 @@ public sealed class PluginSnapshot
     /// <summary>描述。</summary>
     public required string Description { get; init; }
 
-    /// <summary>是否处于启用状态（已启用且初始化成功）。</summary>
+    /// <summary>持久化的启用状态；是否已在响应见 <see cref="Status" />。</summary>
     public required bool Enabled { get; init; }
+
+    /// <summary>运行状态。</summary>
+    public required PluginStatus Status { get; init; }
 
     /// <summary>顺序。</summary>
     public required int SortOrder { get; init; }
@@ -51,4 +54,23 @@ public sealed class PluginCommandTypeSnapshot
 
     /// <summary>指令数量。</summary>
     public required int CommandCount { get; init; }
+}
+
+/// <summary>插件当前的运行状态，供管理面板显示。</summary>
+public enum PluginStatus
+{
+    /// <summary>未启用。</summary>
+    Disabled,
+
+    /// <summary>已启用并在响应。</summary>
+    Active,
+
+    /// <summary>已启用，等待机器人账号就绪后激活。</summary>
+    Pending,
+
+    /// <summary>已启用但初始化失败；在依赖恢复或重新启用时重试。</summary>
+    InitFailed,
+
+    /// <summary>加载失败，进程重启前不能启用。</summary>
+    LoadFailed
 }

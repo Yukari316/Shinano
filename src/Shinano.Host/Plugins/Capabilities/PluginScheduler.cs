@@ -28,7 +28,10 @@ internal sealed class PluginScheduler : IPluginScheduler
         _pending.Add(() => _scheduler.Register(_pluginId, name, interval, job, runImmediately));
     }
 
-    /// <summary>把登记的任务交给宿主调度器。只在首次启用时调用一次。</summary>
+    /// <summary>清空初始化失败时留下的登记，重试初始化前调用。</summary>
+    public void Reset() => _pending.Clear();
+
+    /// <summary>把登记的任务交给宿主调度器。只在初始化成功后调用一次。</summary>
     public void Activate()
     {
         _activated = true;

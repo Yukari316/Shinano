@@ -17,7 +17,7 @@ internal sealed class HostEventFilter : IEventPreFilter
     private readonly HostInfrastructure       _infrastructure;
     private readonly RuntimeHealth            _health;
     private readonly BotAccessor              _bot;
-    private readonly Func<long, Task>         _onFirstConnected;
+    private readonly Func<Task>               _onConnected;
     private readonly ILogger<HostEventFilter> _logger;
     private          long                     _accountSelfId;
 
@@ -25,20 +25,20 @@ internal sealed class HostEventFilter : IEventPreFilter
     /// <param name="infrastructure">基础设施，已就绪。</param>
     /// <param name="health">运行健康状态。</param>
     /// <param name="bot">当前连接。</param>
-    /// <param name="onFirstConnected">首次连接得到账号后在后台执行一次。</param>
+    /// <param name="onConnected">每次连接到本进程的账号后在后台执行。</param>
     /// <param name="logger">日志。</param>
     public HostEventFilter(
         HostInfrastructure       infrastructure,
         RuntimeHealth            health,
         BotAccessor              bot,
-        Func<long, Task>         onFirstConnected,
+        Func<Task>               onConnected,
         ILogger<HostEventFilter> logger)
     {
-        _infrastructure   = infrastructure;
-        _health           = health;
-        _bot              = bot;
-        _onFirstConnected = onFirstConnected;
-        _logger           = logger;
+        _infrastructure = infrastructure;
+        _health         = health;
+        _bot            = bot;
+        _onConnected    = onConnected;
+        _logger         = logger;
     }
 
     /// <summary>先于其他过滤器执行。</summary>
@@ -79,19 +79,8 @@ internal sealed class HostEventFilter : IEventPreFilter
 
         _bot.SetConnected(e.Api, selfId);
         _health.Set(HealthComponent.Bot, HealthLevel.Normal, string.Empty);
-        if (first == 0) _ = RunFirstConnectedAsync(selfId);
-    }
-
-    private async Task RunFirstConnectedAsync(long selfId)
-    {
-        try
-        {
-            await _onFirstConnected(selfId);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "机器人账号 {SelfId} 初始化失败", selfId);
-        }
+        // 每次连接都执行：上次账号或插件初始化失败时借此重试，已就绪时只检查有无待激活的插件。
+        _ = _onConnected();
     }
 
     private async Task ProbeAsync(DependencyAvailability availability)

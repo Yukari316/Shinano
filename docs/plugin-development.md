@@ -112,9 +112,9 @@ dotnet build Shinano.slnx
 |---|---|---|
 | `ConfigureServices(ContainerBuilder)` | 加载时一次 | 向插件的 Autofac 容器注册服务 |
 | `ConfigurePanel(IPanelRegistration)` | 加载时一次 | 声明配置表单与机密表单，与启停无关 |
-| `InitializeAsync(IPluginInitializationContext, CancellationToken)` | 首次启用时一次 | 建表与迁移、订阅事件、登记后台任务、登记专有面板 |
+| `InitializeAsync(IPluginInitializationContext, CancellationToken)` | 首次启用时一次；失败后重试时再次调用 | 建表与迁移、订阅事件、登记后台任务、登记专有面板 |
 
-`InitializeAsync` 抛出异常时，插件保持停用，面板显示失败原因，健康状态降级。进程重启之前，不会再次尝试初始化。
+`InitializeAsync` 抛出异常时，插件暂不响应，面板显示失败原因，已启用插件的失败使健康状态降级。宿主在 LLBot 重新连接、数据库或 RustFS 恢复，以及管理员在面板上重新启用时重试初始化；重试前丢弃上次登记的事件订阅、后台任务、页面、API 与启停回调，所以 `InitializeAsync` 可以按首次调用的方式重新登记。初始化中做的建表、建 bucket 等操作应当可以重复执行。
 
 插件容器中已经注册了以下服务，可以由构造函数注入：
 
@@ -562,7 +562,7 @@ RustFS 经 S3 协议访问，bucket 名为 `<部署前缀>-<用途>`。插件有
 **回滚**：在 `Shinano.Tool run` 或服务管理器托管的部署中，有两种情况会还原上一套插件包：
 
 - 新进程 60 秒内没有就绪，或本次变更的插件包加载失败；
-- 插件初始化失败不算在内，只会让该插件保持停用。
+- 插件初始化失败不算在内，只会让该插件暂不响应，并在之后重试。
 
 **删除**：
 

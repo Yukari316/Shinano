@@ -103,12 +103,17 @@ public sealed class HostCommands
 
         IReadOnlyList<PluginSnapshot> plugins = await _plugins.SnapshotAsync(CancellationToken.None);
         items.AddRange(
-            plugins.Where(plugin => plugin.Enabled || plugin.Error is not null)
+            plugins.Where(plugin => plugin.Status != PluginStatus.Disabled)
                    .Select(plugin => new StatusItem
                    {
-                       Level  = plugin.Error is null ? CardLevel.Normal : CardLevel.Warning,
+                       Level  = plugin.Status == PluginStatus.Active ? CardLevel.Normal : CardLevel.Warning,
                        Name   = plugin.Name,
-                       Value  = plugin.Error is null ? "已启用" : "失败",
+                       Value = plugin.Status switch
+                       {
+                           PluginStatus.Active  => "已启用",
+                           PluginStatus.Pending => "等待激活",
+                           _                    => "失败"
+                       },
                        Detail = plugin.Error is null ? $"v{plugin.Version}" : $"v{plugin.Version}，{plugin.Error}"
                    }));
         return items;

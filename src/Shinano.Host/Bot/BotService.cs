@@ -14,7 +14,7 @@ namespace Shinano.Host.Bot;
 
 /// <summary>
 /// Bot 的生命周期：基础设施就绪后加载插件、创建并启动 Sora 服务并登记宿主唯一的消息记录器；
-/// 首次连接得到机器人账号后初始化账号数据并按持久化状态启用插件。
+/// 连接得到机器人账号后由 <see cref="AccountActivation" /> 初始化账号数据并按持久化状态启用插件，失败时在下次连接重试。
 /// 基础设施进入故障模式时不连接 LLBot。
 /// </summary>
 public sealed class BotService : BackgroundService
@@ -34,6 +34,7 @@ public sealed class BotService : BackgroundService
     private readonly RestartCoordinator  _restart;
     private readonly CardRenderer        _images;
     private readonly TimeProvider        _time;
+    private readonly AccountActivation   _activation;
     private readonly ILogger<BotService> _logger;
     private          SoraService?        _service;
 
@@ -49,11 +50,13 @@ public sealed class BotService : BackgroundService
         LogFileLayout      logLayout,
         LoggingOptions     loggingOptions,
         RestartCoordinator restart,
+        AccountActivation  activation,
         CardRenderer       images,
         TimeProvider       time,
         ILoggerFactory     loggerFactory)
     {
         _restart        = restart;
+        _activation     = activation;
         _images         = images;
         _time           = time;
         _infrastructure = infrastructure;
@@ -117,7 +120,7 @@ public sealed class BotService : BackgroundService
                 _infrastructure,
                 _health,
                 _bot,
-                selfId => InitializeAccountAsync(selfId, stoppingToken),
+                () => _activation.RunAsync(stoppingToken),
                 _loggerFactory.CreateLogger<HostEventFilter>()));
 
         await _service.StartAsync(stoppingToken);
@@ -133,11 +136,5 @@ public sealed class BotService : BackgroundService
             await _service.StopAsync(cancellationToken);
             await _service.DisposeAsync();
         }
-    }
-
-    private async Task InitializeAccountAsync(long selfId, CancellationToken cancellationToken)
-    {
-        await _infrastructure.InitializeAccountAsync(selfId, cancellationToken);
-        await _plugins.EnablePersistedAsync(cancellationToken);
     }
 }

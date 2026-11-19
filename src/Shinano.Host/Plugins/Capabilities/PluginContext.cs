@@ -111,6 +111,15 @@ internal sealed class PluginContext : IPluginInitializationContext
     /// <inheritdoc />
     public void OnEnabledChanged(Action<bool> handler) => _enabledHandlers.Add(handler);
 
+    /// <summary>清空上次初始化失败时留下的事件订阅、后台任务、页面与 API、启停回调，重试初始化前调用。</summary>
+    public void ResetInitialization()
+    {
+        EventsHost.Reset();
+        SchedulerHost.Reset();
+        PanelHost.Reset();
+        _enabledHandlers.Clear();
+    }
+
     /// <summary>依次调用登记的启停回调；回调异常只记录日志。</summary>
     public void NotifyEnabled(bool enabled, ILogger logger)
     {

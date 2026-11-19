@@ -6,7 +6,7 @@ import { api, describeError, redirectToLogin } from '../api'
 import PluginSecretsCard from '../components/PluginSecretsCard.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { pageTitle } from '../pageTitle'
-import { plugins, refreshPlugins } from '../plugins'
+import { pluginStatusBadges, plugins, refreshPlugins } from '../plugins'
 import { changeLabel, describeChange, refreshRestart, restartStatus } from '../restart'
 import type { PluginConfigForm } from '../types'
 
@@ -79,8 +79,8 @@ async function save(): Promise<void> {
       <div class="card-body gap-3">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="card-title">插件信息</h2>
-          <span class="badge" :class="plugin.error ? 'badge-error' : plugin.enabled ? 'badge-success' : 'badge-ghost'">
-            {{ plugin.error ? '加载失败' : plugin.enabled ? '已启用' : '已停用' }}
+          <span class="badge" :class="pluginStatusBadges[plugin.status].cls">
+            {{ pluginStatusBadges[plugin.status].label }}
           </span>
           <span v-if="pending" class="badge badge-warning">
             待{{ changeLabel(pending.change) }} {{ describeChange(pending.change) }}

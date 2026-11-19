@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, describeError, request } from '../api'
 import PageToolbar from '../components/PageToolbar.vue'
 import { formatBytes, formatTime } from '../format'
-import { plugins, refreshPlugins } from '../plugins'
+import { pluginStatusBadges, plugins, refreshPlugins } from '../plugins'
 import { changeBadge, changeLabel, describeChange, describeRollback, openRestartDialog, refreshRestart, restartStatus } from '../restart'
 import type {
   PendingPluginChange,
@@ -101,6 +101,14 @@ async function run(action: () => Promise<void>): Promise<void> {
 function toggle(plugin: PluginSnapshot): Promise<void> {
   return run(async () => {
     await api.post(`/api/plugins/${plugin.id}/${plugin.enabled ? 'disable' : 'enable'}`)
+    await refreshPlugins()
+  })
+}
+
+// 对已启用但初始化失败的插件再次启用即重试初始化。
+function retry(plugin: PluginSnapshot): Promise<void> {
+  return run(async () => {
+    await api.post(`/api/plugins/${plugin.id}/enable`)
     await refreshPlugins()
   })
 }
@@ -292,6 +300,11 @@ function dismissResult(): Promise<void> {
               </div>
               <div class="text-sm opacity-70">{{ plugin.description }}</div>
               <div v-if="plugin.error" class="text-error-strong text-sm">{{ plugin.error }}</div>
+              <div v-if="plugin.status === 'Pending'" class="text-sm opacity-70">已启用，LLBot 连接且账号初始化完成后激活</div>
+              <div v-if="plugin.status === 'InitFailed'" class="mt-1 flex items-center gap-2 text-sm">
+                <span class="opacity-70">数据库或 RustFS 恢复、LLBot 重新连接时会自动重试</span>
+                <button class="btn btn-xs" :disabled="busy" @click="retry(plugin)">立即重试</button>
+              </div>
             </td>
             <td>
               <span v-if="plugin.commandTypes.length === 0" class="text-sm opacity-60">首次启用后显示</span>
@@ -303,7 +316,7 @@ function dismissResult(): Promise<void> {
               </div>
             </td>
             <td>
-              <input type="checkbox" class="toggle toggle-success" :checked="plugin.enabled" :disabled="busy || plugin.error !== null" @change="toggle(plugin)" />
+              <input type="checkbox" class="toggle toggle-success" :checked="plugin.enabled" :disabled="busy || plugin.status === 'LoadFailed'" @change="toggle(plugin)" />
             </td>
             <td class="text-right">
               <button

@@ -41,12 +41,17 @@ export interface PluginCommandType {
   commandCount: number
 }
 
+/** 插件运行状态：Pending 为已启用、等待机器人账号就绪；InitFailed 为已启用但初始化失败，可重试。 */
+export type PluginStatus = 'Disabled' | 'Active' | 'Pending' | 'InitFailed' | 'LoadFailed'
+
 export interface PluginSnapshot {
   id: string
   name: string
   version: string
   description: string
+  /** 持久化的启用状态；是否已在响应见 status。 */
   enabled: boolean
+  status: PluginStatus
   sortOrder: number
   error: string | null
   hasConfig: boolean

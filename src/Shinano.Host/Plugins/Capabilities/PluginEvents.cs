@@ -26,4 +26,7 @@ internal sealed class PluginEvents : IPluginEvents
 
     /// <summary>结束登记。</summary>
     public void Seal() => _sealed = true;
+
+    /// <summary>清空初始化失败时留下的订阅，重试初始化前调用；结束登记后不再调用。</summary>
+    public void Reset() => _subscriptions.Clear();
 }

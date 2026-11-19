@@ -5,7 +5,7 @@ import { api, describeError } from '../api'
 import BarChart from '../components/BarChart.vue'
 import { formatBytes, formatNumber, HEALTH_BADGE, HEALTH_TEXT, recentDates, shortDate } from '../format'
 import { pageSubtitle } from '../pageTitle'
-import { plugins } from '../plugins'
+import { pluginStatusBadges, plugins } from '../plugins'
 import { restartStatus } from '../restart'
 import { overview, overviewUpdatedAt, refreshOverview } from '../status'
 import type { ArchiveGap, ConversationStat, DailyStat } from '../types'
@@ -145,13 +145,13 @@ const chartSummary = computed(() => {
           :to="`/plugins/${plugin.id}`"
           class="tile flex items-center gap-3 p-3 hover:bg-[var(--raise-strong)]"
         >
-          <PhCube class="size-7 shrink-0" :class="plugin.enabled ? 'text-[var(--chart)]' : 'opacity-50'" aria-hidden="true" />
+          <PhCube class="size-7 shrink-0" :class="plugin.status === 'Active' ? 'text-[var(--chart)]' : 'opacity-50'" aria-hidden="true" />
           <span class="flex min-w-0 grow flex-col">
             <span class="truncate font-medium">{{ plugin.name || plugin.id }}</span>
             <span class="text-xs opacity-70">{{ plugin.error ?? (plugin.commandTypes.reduce((sum, type) => sum + type.commandCount, 0) + ' 条指令') }}</span>
           </span>
-          <span class="badge badge-sm" :class="plugin.error ? 'badge-error' : plugin.enabled ? 'badge-success' : 'badge-ghost'">
-            {{ plugin.error ? '失败' : plugin.enabled ? '启用' : '停用' }}
+          <span class="badge badge-sm" :class="pluginStatusBadges[plugin.status].cls">
+            {{ pluginStatusBadges[plugin.status].label }}
           </span>
         </RouterLink>
         <RouterLink to="/gaps" class="tile flex items-center gap-3 p-3 hover:bg-[var(--raise-strong)]">

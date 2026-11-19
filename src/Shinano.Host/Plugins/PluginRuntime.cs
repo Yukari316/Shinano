@@ -52,6 +52,7 @@ public sealed class PluginRuntime : IDisposable
     private          LoadedPlugin[]         _dispatchOrder = [];
     private          SoraService?           _service;
     private volatile bool                   _suspended;
+    private          bool                   _accountReady;
 
     /// <summary>创建运行时。</summary>
     public PluginRuntime(
@@ -141,13 +142,20 @@ public sealed class PluginRuntime : IDisposable
         service.Events.OnEvent += DispatchAsync;
     }
 
-    /// <summary>按持久化状态启用插件。在机器人账号初始化完成后调用。</summary>
+    /// <summary>
+    /// 激活已持久化为启用、但尚未初始化或上次初始化失败的插件；已激活的插件不受影响。
+    /// 在机器人账号初始化完成后调用，之后在重新连接与数据库、RustFS 恢复时再次调用以重试失败的插件。
+    /// 数据库暂停期间不做任何事。
+    /// </summary>
     public async Task EnablePersistedAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            foreach (LoadedPlugin plugin in _plugins.Where(item => item.Enabled))
+            _accountReady = true;
+            if (_suspended) return;
+
+            foreach (LoadedPlugin plugin in _plugins.Where(item => item is { Enabled: true, Initialized: false, Error: null }))
                 await ActivateAsync(plugin, cancellationToken);
             PublishDispatchOrder();
         }
@@ -157,7 +165,10 @@ public sealed class PluginRuntime : IDisposable
         }
     }
 
-    /// <summary>启用插件并持久化。首次启用时登记指令并初始化。</summary>
+    /// <summary>
+    /// 启用插件并持久化。首次启用时登记指令并初始化；初始化失败的插件再次启用时重试初始化。
+    /// 机器人账号就绪前只持久化启用状态，由 <see cref="EnablePersistedAsync" /> 在账号就绪后激活。
+    /// </summary>
     /// <returns>失败原因；成功时为 null。</returns>
     public async Task<string?> EnableAsync(string pluginId, CancellationToken cancellationToken)
     {
@@ -166,6 +177,13 @@ public sealed class PluginRuntime : IDisposable
         {
             if (Find(pluginId) is not { } plugin) return $"插件 {pluginId} 不存在";
             if (_suspended) return SUSPENDED_ERROR;
+            if (plugin.Error is not null) return plugin.Error;
+            if (!_accountReady)
+            {
+                await SaveStatesAsync([StateOf(plugin, enabled: true, plugin.SortOrder)], cancellationToken);
+                plugin.Enabled = true;
+                return null;
+            }
 
             // 先激活才知道能否启用；写库失败时撤销本次激活，内存与数据库保持一致。
             string? error = await ActivateAsync(plugin, cancellationToken);
@@ -204,6 +222,8 @@ public sealed class PluginRuntime : IDisposable
             plugin.Enabled = false;
             Deactivate(plugin);
             PublishDispatchOrder();
+            // 停用后不再重试初始化，它的初始化失败不再计入健康状态。
+            UpdatePluginHealth();
             _logger.LogInformation("插件 {PluginId} 已停用", pluginId);
             return null;
         }
@@ -285,9 +305,10 @@ public sealed class PluginRuntime : IDisposable
                     Name        = plugin.Manifest.Name,
                     Version     = plugin.Manifest.Version,
                     Description = plugin.Manifest.Description,
-                    Enabled     = IsActive(plugin),
+                    Enabled     = plugin.Enabled,
+                    Status      = StatusOf(plugin),
                     SortOrder   = plugin.SortOrder,
-                    Error       = plugin.Error,
+                    Error       = plugin.Error ?? plugin.InitError,
                     HasConfig   = plugin.ConfigSchema is not null,
                     HasSecrets  = plugin.Context?.SecretsType is not null,
                     PageTitle   = IsActive(plugin) ? plugin.Context?.PanelHost.Title : null,
@@ -524,6 +545,7 @@ public sealed class PluginRuntime : IDisposable
     }
 
     // 调用方持有 _gate。首次启用：关闭状态下登记程序集并注入指令实例、扫描、初始化，最后开启。
+    // 初始化失败时程序集登记保留（处于关闭状态），重试只清空插件在初始化中登记的内容后重新初始化。
     private async Task<string?> ActivateAsync(LoadedPlugin plugin, CancellationToken cancellationToken)
     {
         if (plugin.Error is not null) return plugin.Error;
@@ -533,30 +555,43 @@ public sealed class PluginRuntime : IDisposable
         {
             try
             {
-                // SAFE: Error 为 null 表示 Load 已成功设置以下成员。
-                AssemblyRegistration registration = _service.Commands.RegisterAssembly(
-                    plugin.Assembly!,
-                    PriorityOf(_plugins.IndexOf(plugin)),
-                    enabled: false);
-                plugin.Registration = registration;
-                foreach (Type commandType in plugin.CommandTypes)
-                    RegisterInstance(registration, commandType, plugin.Container!.Resolve(commandType));
-                registration.ScanCommandGroups();
+                if (plugin.Registration is null)
+                {
+                    // SAFE: Error 为 null 表示 Load 已成功设置以下成员。
+                    AssemblyRegistration registration = _service.Commands.RegisterAssembly(
+                        plugin.Assembly!,
+                        PriorityOf(_plugins.IndexOf(plugin)),
+                        enabled: false);
+                    foreach (Type commandType in plugin.CommandTypes)
+                        RegisterInstance(registration, commandType, plugin.Container!.Resolve(commandType));
+                    registration.ScanCommandGroups();
+                    plugin.Registration = registration;
+                }
 
                 _scheduler.SetOwnerEnabled(plugin.Manifest.Id, false);
-                await plugin.Instance!.InitializeAsync(plugin.Context!, cancellationToken);
-                plugin.Context!.EventsHost.Seal();
+                // SAFE: Error 为 null 的插件在加载时已建立能力集合与实例。
+                PluginContext context = plugin.Context!;
+                context.ResetInitialization();
+                await plugin.Instance!.InitializeAsync(context, cancellationToken);
+                context.EventsHost.Seal();
+                context.PanelHost.Activate();
                 plugin.Initialized = true;
+                if (plugin.InitError is not null)
+                {
+                    plugin.InitError = null;
+                    UpdatePluginHealth();
+                }
+
                 _scheduler.SetOwnerEnabled(plugin.Manifest.Id, true);
-                plugin.Context.SchedulerHost.Activate();
+                context.SchedulerHost.Activate();
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                plugin.Error = exception.Message;
+                plugin.InitError = exception.Message;
                 _scheduler.SetOwnerEnabled(plugin.Manifest.Id, false);
                 UpdatePluginHealth();
-                _logger.LogError(exception, "插件 {PluginId} 初始化失败，保持停用", plugin.Manifest.Id);
-                return plugin.Error;
+                _logger.LogError(exception, "插件 {PluginId} 初始化失败，暂不启用；依赖恢复或重新启用时重试", plugin.Manifest.Id);
+                return plugin.InitError;
             }
         }
 
@@ -629,7 +664,7 @@ public sealed class PluginRuntime : IDisposable
 
     private void UpdatePluginHealth()
     {
-        string[] failed = [.. _plugins.Where(plugin => plugin.Error is not null).Select(plugin => plugin.Manifest.Id)];
+        string[] failed = [.. _plugins.Where(plugin => plugin.Error is not null || plugin is { Enabled: true, InitError: not null }).Select(plugin => plugin.Manifest.Id)];
         _health.Set(
             HealthComponent.Plugins,
             failed.Length == 0 ? HealthLevel.Normal : HealthLevel.Degraded,
@@ -645,6 +680,16 @@ public sealed class PluginRuntime : IDisposable
 
     // 专有面板与插件 API 只在插件处于启用状态时可用。
     private static bool IsActive(LoadedPlugin plugin) => plugin is { Enabled: true, Initialized: true, Error: null };
+
+    private static PluginStatus StatusOf(LoadedPlugin plugin) =>
+        plugin switch
+        {
+            { Error: not null }     => PluginStatus.LoadFailed,
+            { Enabled: false }      => PluginStatus.Disabled,
+            { Initialized: true }   => PluginStatus.Active,
+            { InitError: not null } => PluginStatus.InitFailed,
+            _                       => PluginStatus.Pending
+        };
 
     // 顺序靠前的插件优先级更高；宿主自身的运维指令使用更高的固定优先级。
     private int PriorityOf(int index) => _plugins.Count - index;

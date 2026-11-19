@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shinano.Host.Panel;
+using Shinano.Host.Plugins;
 using Shinano.Tests.Support;
 
 namespace Shinano.Tests.Host.Plugins;
@@ -8,6 +11,9 @@ public sealed class PluginRuntimeTests
     private const string TEST_PLUGINS = "artifacts/test-plugins";
     private const string PLUGIN_A     = "sample-a";
     private const string PLUGIN_B     = "sample-b";
+
+    // 与测试插件 B 的 SamplePlugin.FAIL_ONCE_FILE 一致：数据目录中存在时，B 的下一次初始化失败。
+    private const string FAIL_ONCE_FILE = "sample-b-fail-once";
 
     private readonly InfrastructureFixture _fixture;
 
@@ -132,6 +138,46 @@ public sealed class PluginRuntimeTests
         await harness.ExpectReplyAsync("a");
         await harness.ExpectSilenceAsync();
     }
+
+    [Fact]
+    public async Task EnableBeforeAccountReady_IsPersistedOnly_AndFailedInitializationRetriesWithoutDuplicates()
+    {
+        PluginEndpointDataSource endpoints = new(new ServiceCollection().BuildServiceProvider());
+        await using PluginHarness harness = await PluginHarness.StartBeforeAccountReadyAsync(
+            _fixture.Ready,
+            _fixture.BucketPrefix,
+            TEST_PLUGINS,
+            endpoints,
+            PLUGIN_A,
+            PLUGIN_B);
+
+        // 账号就绪前启用只持久化，插件不响应。
+        Assert.Null(await harness.Runtime.EnableAsync(PLUGIN_B, Token));
+        Assert.Equal(PluginStatus.Pending, (await SnapshotAsync(harness, PLUGIN_B)).Status);
+        await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "hello");
+        await harness.ExpectSilenceAsync();
+
+        // 账号就绪时初始化失败：保持已启用并记录原因，不响应。
+        await File.WriteAllTextAsync(Path.Combine(harness.DataDirectory, FAIL_ONCE_FILE), string.Empty, Token);
+        await harness.Runtime.EnablePersistedAsync(Token);
+        PluginSnapshot failed = await SnapshotAsync(harness, PLUGIN_B);
+        Assert.Equal(PluginStatus.InitFailed, failed.Status);
+        Assert.True(failed.Enabled);
+        Assert.NotNull(failed.Error);
+
+        // 依赖恢复时重试成功：事件订阅与插件 API 各只登记一份。
+        await harness.Runtime.EnablePersistedAsync(Token);
+        PluginSnapshot active = await SnapshotAsync(harness, PLUGIN_B);
+        Assert.Equal(PluginStatus.Active, active.Status);
+        Assert.Null(active.Error);
+        await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "hello");
+        await harness.ExpectReplyAsync("world-b");
+        await harness.ExpectSilenceAsync();
+        Assert.Single(endpoints.Endpoints);
+    }
+
+    private static async Task<PluginSnapshot> SnapshotAsync(PluginHarness harness, string pluginId) =>
+        (await harness.Runtime.SnapshotAsync(Token)).Single(plugin => plugin.Id == pluginId);
 
     private Task<PluginHarness> StartAsync() =>
         PluginHarness.StartAsync(_fixture.Ready, _fixture.BucketPrefix, TEST_PLUGINS, PLUGIN_A, PLUGIN_B);

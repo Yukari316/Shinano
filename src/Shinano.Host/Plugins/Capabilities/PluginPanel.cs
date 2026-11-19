@@ -9,10 +9,11 @@ internal sealed class PluginPanel : IPluginPanel
     /// <summary>插件前端资源目录名。</summary>
     public const string WEB_DIRECTORY_NAME = "web";
 
-    private readonly string                   _pluginId;
-    private readonly string                   _webRoot;
-    private readonly PluginEndpointDataSource _endpoints;
-    private readonly Func<bool>               _isActive;
+    private readonly string                              _pluginId;
+    private readonly string                              _webRoot;
+    private readonly PluginEndpointDataSource            _endpoints;
+    private readonly Func<bool>                          _isActive;
+    private readonly List<Action<IEndpointRouteBuilder>> _pendingApis = [];
 
     /// <summary>创建专有面板。</summary>
     /// <param name="pluginId">插件 ID。</param>
@@ -45,7 +46,24 @@ internal sealed class PluginPanel : IPluginPanel
     }
 
     /// <inheritdoc />
-    public void MapApi(Action<IEndpointRouteBuilder> map) => _endpoints.Map(_pluginId, _isActive, map);
+    /// <remarks>初始化成功后才登记到路由表，初始化失败重试时不会重复登记。</remarks>
+    public void MapApi(Action<IEndpointRouteBuilder> map) => _pendingApis.Add(map);
+
+    /// <summary>清空初始化失败时留下的页面与 API 登记，重试初始化前调用。</summary>
+    public void Reset()
+    {
+        Title = null;
+        Entry = null;
+        _pendingApis.Clear();
+    }
+
+    /// <summary>把初始化期间登记的 API 加入路由表。只在初始化成功后调用一次。</summary>
+    public void Activate()
+    {
+        foreach (Action<IEndpointRouteBuilder> map in _pendingApis)
+            _endpoints.Map(_pluginId, _isActive, map);
+        _pendingApis.Clear();
+    }
 
     /// <summary>返回 <c>web/</c> 下的文件完整路径；路径越界或文件不存在时返回 null。</summary>
     public string? ResolveWebFile(string relativePath)
