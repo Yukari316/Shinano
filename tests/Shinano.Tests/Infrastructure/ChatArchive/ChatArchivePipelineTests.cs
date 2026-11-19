@@ -1,7 +1,11 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Media;
 using Shinano.Tests.Support;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;
@@ -105,6 +109,47 @@ public sealed class ChatArchivePipelineTests
         Assert.Equal(1, stats[OUTBOUND_ID].MessageCount);
         Assert.Equal(2, stats[OUTBOUND_ID].CharCount);
         Assert.Equal(1, stats[OUTBOUND_ID].ImageCount);
+    }
+
+    [Fact]
+    public async Task MediaArchiver_RequestTimeout_MarksMediaMissingInsteadOfCancelling()
+    {
+        HostInfrastructure infrastructure = _fixture.Ready;
+        // 只监听不接受连接：请求一直等不到响应，由 HttpClient 自身超时抛出 TaskCanceledException。
+        using TcpListener stalled = new(IPAddress.Loopback, 0);
+        stalled.Start();
+        using HttpClient http = new() { Timeout = TimeSpan.FromMilliseconds(200) };
+        ChatMediaArchiver archiver = new(
+            infrastructure.ChatMedia,
+            new MediaDownloader(http, new MediaOptions()),
+            infrastructure.StorageAvailability,
+            NullLogger<ChatMediaArchiver>.Instance);
+        ChatSegmentEncoder encoder = new();
+        int port = ((IPEndPoint)stalled.LocalEndpoint).Port;
+        JsonArray segments = encoder.Encode([new ImageSegment { FileUri = $"http://127.0.0.1:{port}/a.png" }], depth: 0);
+        ChatArchiveEntry entry = new()
+        {
+            SelfId     = InfrastructureFixture.SELF_ID,
+            IsOutbound = false,
+            Encoder    = encoder,
+            Message = new ArchivedChatMessage
+            {
+                SentAt           = DateTimeOffset.UtcNow,
+                StatDate         = DateOnly.FromDateTime(DateTime.UtcNow),
+                ConversationType = ChatConversationType.Group,
+                ConversationId   = 1,
+                SenderId         = MEMBER_ID,
+                MessageId        = 1,
+                Text             = null,
+                Segments         = segments,
+                Flags            = ChatArchiveFlags.MediaPending,
+                Counts           = new ChatMessageCounts()
+            }
+        };
+
+        ChatArchiveFlags flags = await archiver.ArchiveAsync(entry, api: null, Token);
+
+        Assert.True(flags.HasFlag(ChatArchiveFlags.ContentMissing));
     }
 
     private async Task<List<ArchivedRow>> WaitForArchivedAsync(HostInfrastructure infrastructure, long groupId, int expectedRows)

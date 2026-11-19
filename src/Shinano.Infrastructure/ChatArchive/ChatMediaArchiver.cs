@@ -18,6 +18,9 @@ public sealed class ChatMediaArchiver
     private const int    BASE64_BLOCK_CHARS = 4;
     private const int    BASE64_BLOCK_BYTES = 3;
 
+    // 单个媒体从获取到保存的总时限：默认上限 100 MiB 时约需 340 KB/s。
+    private static readonly TimeSpan MediaTimeout = TimeSpan.FromMinutes(5);
+
     private readonly ChatMediaStore             _store;
     private readonly MediaDownloader            _downloader;
     private readonly DependencyAvailability     _storageAvailability;
@@ -91,7 +94,7 @@ public sealed class ChatMediaArchiver
                 result.Code,
                 result.Message);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(exception, "展开合并转发 {ForwardId} 失败（消息 {MessageId}）", forward.ForwardId, entry.Message.MessageId);
         }
@@ -107,17 +110,20 @@ public sealed class ChatMediaArchiver
     {
         if (!_storageAvailability.IsAvailable) return null;
 
+        // 下载正文没有超时，连接卡住时会一直占用工作者；超时与 HttpClient 自身的超时一样按该媒体缺失处理。
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(MediaTimeout);
         BufferedMedia? media;
         try
         {
-            media = await FetchAsync(source, entry, api, cancellationToken);
+            media = await FetchAsync(source, entry, api, timeout.Token);
         }
         catch (MediaTooLargeException exception)
         {
             _logger.LogWarning("聊天媒体超过大小上限 {Limit} 字节，未归档（消息 {MessageId}）", exception.LimitBytes, entry.Message.MessageId);
             return null;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(exception, "下载聊天媒体失败（消息 {MessageId}）", entry.Message.MessageId);
             return null;
@@ -135,10 +141,10 @@ public sealed class ChatMediaArchiver
             {
                 string mediaType = source.Kind == ChatMediaKind.File
                     ? MediaTypeSniffer.OCTET_STREAM
-                    : await MediaTypeSniffer.DetectAsync(media.FilePath, cancellationToken);
-                return await _store.StoreAsync(media, mediaType, cancellationToken);
+                    : await MediaTypeSniffer.DetectAsync(media.FilePath, timeout.Token);
+                return await _store.StoreAsync(media, mediaType, timeout.Token);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(exception, "保存聊天媒体失败（消息 {MessageId}）", entry.Message.MessageId);
                 // 连接故障是 S3 客户端重试后仍失败，立即标记 RustFS 不可用，不等节流的探测；其他失败（如数据库写入）交给探测确认。

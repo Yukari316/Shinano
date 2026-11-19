@@ -188,7 +188,7 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
             await foreach (ChatArchiveEntry entry in _mediaJobs.Reader.ReadAllAsync(stoppingToken))
                 await ArchiveMediaAsync(entry, stoppingToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // 停止时放弃剩余任务，它们保持待处理标记，下次启动时标记为缺失。
         }
@@ -210,7 +210,8 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
                 flags,
                 stoppingToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        // 未在停机时出现的取消（如请求超时）也只影响这一条，工作者继续处理后续任务。
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
             _logger.LogError(exception, "归档消息 {MessageId} 的媒体失败", entry.Message.MessageId);
             await ProbeDatabaseAsync(exception);
