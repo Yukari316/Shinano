@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Shinano.Infrastructure.Storage;
 
 namespace Shinano.Host.Plugins;
 
@@ -62,24 +63,40 @@ public sealed partial class PluginManifest
         }
 
         if (manifest is null) throw new InvalidDataException($"{path} 为空");
-        if (!IdPattern().IsMatch(manifest.Id)) throw new InvalidDataException($"{path} 的 id 无效：{manifest.Id}");
+        // JSON 中显式写 null 时反序列化结果为 null，不受属性默认值保护。
+        if (manifest.Name is null || manifest.Version is null || manifest.Description is null)
+            throw new InvalidDataException($"{path} 的 name、version、description 不能为 null");
+        if (manifest.Id is null || !IdPattern().IsMatch(manifest.Id)) throw new InvalidDataException($"{path} 的 id 无效：{manifest.Id}");
         if (string.IsNullOrWhiteSpace(manifest.EntryAssembly)
             || Path.GetFileName(manifest.EntryAssembly) != manifest.EntryAssembly)
             throw new InvalidDataException($"{path} 的 entryAssembly 必须是插件目录下的文件名");
+        CheckBucketPurposes(path, manifest);
         CheckTables(path, manifest);
         return manifest;
+    }
+
+    // 拼接部署前缀后的总长度要到使用时才知道，由 BucketNames 检查；这里先拒绝格式错误与宿主保留的用途。
+    private static void CheckBucketPurposes(string path, PluginManifest manifest)
+    {
+        if (manifest.BucketPurposes is null) throw new InvalidDataException($"{path} 的 bucketPurposes 不能为 null");
+        foreach (string purpose in manifest.BucketPurposes)
+        {
+            if (purpose is null || !PurposePattern().IsMatch(purpose))
+                throw new InvalidDataException($"{path} 的 bucket 用途 {purpose} 无效：只含小写字母、数字与连字符，以字母或数字开头和结尾");
+            if (purpose is BucketNames.CHAT_PURPOSE or BucketNames.MEDIA_PURPOSE)
+                throw new InvalidDataException($"{path} 的 bucket 用途 {purpose} 由宿主保留");
+        }
     }
 
     // 清除插件数据时按声明删除表，表名必须属于本插件，否则会删掉其他插件的数据。
     private static void CheckTables(string path, PluginManifest manifest)
     {
-        // JSON 中显式写 null 时反序列化结果为 null。
         if (manifest.Tables?.Global is null || manifest.Tables.Account is null)
             throw new InvalidDataException($"{path} 的 tables 及其 global、account 不能为 null");
         string prefix = TablePrefix(manifest.Id);
         string[] tables = [.. manifest.Tables.Global, .. manifest.Tables.Account];
         foreach (string table in tables)
-            if (!TablePattern().IsMatch(table) || !table.StartsWith(prefix, StringComparison.Ordinal) || table.Length == prefix.Length)
+            if (table is null || !TablePattern().IsMatch(table) || !table.StartsWith(prefix, StringComparison.Ordinal) || table.Length == prefix.Length)
                 throw new InvalidDataException($"{path} 的表名 {table} 无效：须以 {prefix} 开头，只含小写字母、数字与下划线，不超过 63 个字符");
         if (tables.GroupBy(table => table, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1) is { } duplicate)
             throw new InvalidDataException($"{path} 的表名 {duplicate.Key} 重复声明");
@@ -90,6 +107,10 @@ public sealed partial class PluginManifest
 
     [GeneratedRegex("^[a-z][a-z0-9_]{0,62}$")]
     private static partial Regex TablePattern();
+
+    // bucket 名为 <prefix>-<用途>，不超过 63 个字符，前缀至少 1 个字符，所以用途最长 61 个字符。
+    [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{0,59}[a-z0-9])?$")]
+    private static partial Regex PurposePattern();
 }
 
 /// <summary>

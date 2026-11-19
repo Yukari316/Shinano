@@ -30,6 +30,22 @@ public sealed class PluginDataPurgeTests : IDisposable
     public void Tables_OutsidePluginPrefixOrInvalid_AreRejected(string table) =>
         Assert.Throws<InvalidDataException>(() => Read("image-search", new { global = new[] { table }, account = Array.Empty<string>() }));
 
+    [Theory]
+    [InlineData("""{ "id": null, "entryAssembly": "Sample.dll" }""")]
+    [InlineData("""{ "id": "sample", "name": null, "entryAssembly": "Sample.dll" }""")]
+    [InlineData("""{ "id": "sample", "entryAssembly": "Sample.dll", "bucketPurposes": null }""")]
+    [InlineData("""{ "id": "sample", "entryAssembly": "Sample.dll", "bucketPurposes": [null] }""")]
+    [InlineData("""{ "id": "sample", "entryAssembly": "Sample.dll", "bucketPurposes": ["chat"] }""")]
+    [InlineData("""{ "id": "sample", "entryAssembly": "Sample.dll", "bucketPurposes": ["-gallery"] }""")]
+    [InlineData("""{ "id": "sample", "entryAssembly": "Sample.dll", "tables": { "global": [null], "account": [] } }""")]
+    public void Manifest_NullFieldsAndInvalidBucketPurposes_AreRejected(string json)
+    {
+        string path = Path.Combine(_directory, PluginManifest.FILE_NAME);
+        File.WriteAllText(path, json);
+
+        Assert.Throws<InvalidDataException>(() => PluginManifest.Read(path));
+    }
+
     [Fact]
     public void Tables_DeclaredTwice_AreRejected() =>
         Assert.Throws<InvalidDataException>(() => Read("qa", new { global = new[] { "qa_entry" }, account = new[] { "qa_entry" } }));

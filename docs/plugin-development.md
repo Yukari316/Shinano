@@ -100,6 +100,8 @@ dotnet build Shinano.slnx
 
 - `id` 的格式；
 - `entryAssembly` 是否为文件名；
+- 各字段不能显式写为 `null`；
+- `bucketPurposes` 的用途名格式（小写字母、数字与连字符，以字母或数字开头和结尾），以及是否使用了宿主保留的 `chat`、`media`；
 - 表名的前缀、字符集与长度（不超过 63 个字符），以及是否重复声明。
 
 ## 4. 入口与 IPluginInitializationContext
