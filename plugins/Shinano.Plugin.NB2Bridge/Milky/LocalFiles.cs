@@ -35,6 +35,16 @@ public sealed class LocalFiles
         [".amr"]  = "audio/amr"
     };
 
+    // 动作顶层中引用文件的字段（与 nonebot-adapter-milky 的调用参数一致）；发消息的消息段另由 RewriteSegmentsAsync 处理。
+    private static readonly Dictionary<string, string> ActionFileFields = new(StringComparer.Ordinal)
+    {
+        ["set_avatar"]              = "uri",
+        ["set_group_avatar"]        = "image_uri",
+        ["send_group_announcement"] = "image_uri",
+        ["upload_private_file"]     = "file_uri",
+        ["upload_group_file"]       = "file_uri"
+    };
+
     private readonly IPluginInitializationContext _context;
     private readonly TimeProvider                 _time;
     private readonly ILogger<LocalFiles>          _logger;
@@ -48,29 +58,45 @@ public sealed class LocalFiles
         _logger  = logger;
     }
 
-    /// <summary>把 JSON 中所有 <c>file://</c> 字符串替换为上传后的预签名链接（就地修改）。</summary>
+    /// <summary>
+    /// 把消息段中媒体地址字段的 <c>file://</c> 替换为上传后的预签名链接（就地修改），包括合并转发内嵌的消息段。
+    /// 其余字段原样保留：文本等内容可能由群友输入复读而来，不能当作本地文件读取。
+    /// </summary>
     /// <exception cref="FileNotFoundException">引用的本地文件不存在。</exception>
-    public async Task RewriteAsync(JsonNode? node, CancellationToken cancellationToken)
+    public async Task RewriteSegmentsAsync(JsonArray segments, CancellationToken cancellationToken)
     {
-        switch (node)
+        foreach (JsonObject segment in segments.OfType<JsonObject>())
         {
-            case JsonObject obj:
-                foreach (string key in obj.Select(pair => pair.Key).ToArray())
-                {
-                    if (FileUri(obj[key]) is { } uri) obj[key] = await UploadAsync(uri, cancellationToken);
-                    else await RewriteAsync(obj[key], cancellationToken);
-                }
+            if (segment["data"] is not JsonObject data) continue;
 
-                break;
-            case JsonArray array:
-                for (int index = 0; index < array.Count; index++)
-                {
-                    if (FileUri(array[index]) is { } uri) array[index] = await UploadAsync(uri, cancellationToken);
-                    else await RewriteAsync(array[index], cancellationToken);
-                }
+            switch (Text(segment["type"]))
+            {
+                case "image" or "record":
+                    await RewriteFieldAsync(data, "uri", cancellationToken);
+                    break;
+                case "video":
+                    await RewriteFieldAsync(data, "uri", cancellationToken);
+                    await RewriteFieldAsync(data, "thumb_uri", cancellationToken);
+                    break;
+                case "forward":
+                    foreach (JsonObject message in (data["messages"] as JsonArray ?? []).OfType<JsonObject>())
+                    {
+                        if (message["segments"] is JsonArray nested) await RewriteSegmentsAsync(nested, cancellationToken);
+                    }
 
-                break;
+                    break;
+            }
         }
+    }
+
+    /// <summary>
+    /// 把动作参数中文件地址字段的 <c>file://</c> 替换为上传后的预签名链接（就地修改）。
+    /// 只处理 <see cref="ActionFileFields" /> 列出的动作与字段，其余参数原样保留。
+    /// </summary>
+    /// <exception cref="FileNotFoundException">引用的本地文件不存在。</exception>
+    public async Task RewriteActionAsync(string action, JsonObject parameters, CancellationToken cancellationToken)
+    {
+        if (ActionFileFields.TryGetValue(action, out string? field)) await RewriteFieldAsync(parameters, field, cancellationToken);
     }
 
     /// <summary>删除超过保留时间的对象。</summary>
@@ -89,8 +115,13 @@ public sealed class LocalFiles
         _logger.LogInformation("清理 NB2 发送的临时文件：删除 {Count} 个", deleted);
     }
 
-    private static string? FileUri(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue(out string? text) && text.StartsWith(FILE_SCHEME, StringComparison.OrdinalIgnoreCase) ? text : null;
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
+
+    private async Task RewriteFieldAsync(JsonObject obj, string key, CancellationToken cancellationToken)
+    {
+        if (Text(obj[key]) is { } uri && uri.StartsWith(FILE_SCHEME, StringComparison.OrdinalIgnoreCase))
+            obj[key] = await UploadAsync(uri, cancellationToken);
+    }
 
     private async Task<string> UploadAsync(string uri, CancellationToken cancellationToken)
     {

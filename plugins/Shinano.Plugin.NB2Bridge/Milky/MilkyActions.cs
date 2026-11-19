@@ -68,7 +68,7 @@ public sealed class MilkyActions
                 case SEND_GROUP or SEND_PRIVATE:
                     return await SendAsync(action, parameters, cancellationToken);
                 default:
-                    await _files.RewriteAsync(parameters, cancellationToken);
+                    await _files.RewriteActionAsync(action, parameters, cancellationToken);
                     return await _context.Bot.CallMilkyAsync(action, parameters, cancellationToken);
             }
         }
@@ -84,7 +84,7 @@ public sealed class MilkyActions
         if (_context.Bot.Api is not { } api) return Failed("LLBot 未连接");
 
         JsonArray segments = parameters[MESSAGE] as JsonArray ?? [];
-        await _files.RewriteAsync(segments, cancellationToken);
+        await _files.RewriteSegmentsAsync(segments, cancellationToken);
         List<string> dropped = [];
         MessageBody body = MilkySegments.FromMilky(segments, dropped);
         if (dropped.Count > 0) _logger.LogWarning("NB2 发送的消息含无法转换的消息段，已丢弃：{Types}", string.Join("、", dropped));

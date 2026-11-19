@@ -69,6 +69,76 @@ public sealed class Nb2BridgeTests
     }
 
     [Fact]
+    public async Task RewriteSegments_UploadsOnlyMediaUris()
+    {
+        string file = new Uri(CreateTempFile()).AbsoluteUri;
+        JsonArray segments = new()
+        {
+            Segment("text", new JsonObject { ["text"] = file }),
+            Segment("image", new JsonObject { ["uri"] = file, ["summary"] = file }),
+            Segment(
+                "forward",
+                new JsonObject
+                {
+                    ["messages"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["segments"] = new JsonArray { Segment("video", new JsonObject { ["uri"] = file, ["thumb_uri"] = file }) }
+                        }
+                    }
+                })
+        };
+        UploadBucket bucket = new();
+
+        await NewLocalFiles(bucket).RewriteSegmentsAsync(segments, TestContext.Current.CancellationToken);
+
+        // 文本与摘要可能复读自群友输入，不能当作本地文件读取。
+        Assert.Equal(file, segments[0]!["data"]!["text"]!.GetValue<string>());
+        Assert.Equal(file, segments[1]!["data"]!["summary"]!.GetValue<string>());
+        Assert.StartsWith(UploadBucket.URL_PREFIX, segments[1]!["data"]!["uri"]!.GetValue<string>());
+        JsonNode video = segments[2]!["data"]!["messages"]![0]!["segments"]![0]!["data"]!;
+        Assert.StartsWith(UploadBucket.URL_PREFIX, video["uri"]!.GetValue<string>());
+        Assert.StartsWith(UploadBucket.URL_PREFIX, video["thumb_uri"]!.GetValue<string>());
+        Assert.Equal(3, bucket.Keys.Count);
+    }
+
+    [Fact]
+    public async Task RewriteAction_UploadsOnlyFileFieldsOfKnownActions()
+    {
+        string file = new Uri(CreateTempFile()).AbsoluteUri;
+        JsonObject announcement = new() { ["content"] = file, ["image_uri"] = file };
+        JsonObject other = new() { ["uri"] = file };
+        UploadBucket bucket = new();
+        LocalFiles files = NewLocalFiles(bucket);
+
+        await files.RewriteActionAsync("send_group_announcement", announcement, TestContext.Current.CancellationToken);
+        await files.RewriteActionAsync("get_group_info", other, TestContext.Current.CancellationToken);
+
+        Assert.Equal(file, announcement["content"]!.GetValue<string>());
+        Assert.StartsWith(UploadBucket.URL_PREFIX, announcement["image_uri"]!.GetValue<string>());
+        Assert.Equal(file, other["uri"]!.GetValue<string>());
+        Assert.Single(bucket.Keys);
+    }
+
+    private static LocalFiles NewLocalFiles(UploadBucket bucket) =>
+        new(new BridgeContext(new TestAccessor(RecordingBotApi.Create().Api), bucket), TimeProvider.System, NullLogger<LocalFiles>.Instance);
+
+    private static JsonObject Segment(string type, JsonObject data) =>
+        new()
+        {
+            ["type"] = type,
+            ["data"] = data
+        };
+
+    private static string CreateTempFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"shinano-nb2-{Guid.NewGuid():N}.png");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        return path;
+    }
+
+    [Fact]
     public void Build_GroupMessageCarriesKeyAndMemberWithNeutralDefaults()
     {
         JsonObject payload = MilkyEvents.Build(GroupMessage(RecordingBotApi.Create().Api), "k1")!;
@@ -404,9 +474,48 @@ public sealed class Nb2BridgeTests
         }
     }
 
+    /// <summary>只记录上传的 bucket：预签名链接为固定前缀加对象 key。</summary>
+    private sealed class UploadBucket : IPluginBuckets, IPluginBucket
+    {
+        public const string URL_PREFIX = "https://im.example.invalid/";
+
+        public List<string> Keys { get; } = [];
+
+        public string Name => "shinano-test-nb2";
+
+        public IPluginBucket Get(string purpose) => this;
+
+        public Task EnsureCreatedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task<long> PutAsync(string key, Stream content, string mediaType, long? limitBytes, CancellationToken cancellationToken)
+        {
+            Keys.Add(key);
+            await content.CopyToAsync(Stream.Null, cancellationToken);
+            return content.Length;
+        }
+
+        public Task<string> CreateImUrlAsync(string key) => Task.FromResult(URL_PREFIX + key);
+
+        public Task DeleteAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PluginBucketObject?> GetInfoAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<PluginBucketObject> ListAsync(string? prefix, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task DeleteObjectAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
     private sealed class BridgeContext : IPluginInitializationContext
     {
-        public BridgeContext(IBotAccessor bot) => Bot = bot;
+        private readonly IPluginBuckets? _buckets;
+
+        public BridgeContext(IBotAccessor bot, IPluginBuckets? buckets = null)
+        {
+            Bot      = bot;
+            _buckets = buckets;
+        }
 
         public string PluginId => "nb2-bridge";
 
@@ -418,7 +527,7 @@ public sealed class Nb2BridgeTests
 
         public IPluginMedia Media => throw new NotSupportedException();
 
-        public IPluginBuckets Buckets => throw new NotSupportedException();
+        public IPluginBuckets Buckets => _buckets ?? throw new NotSupportedException();
 
         public IBotAccessor Bot { get; }
 
