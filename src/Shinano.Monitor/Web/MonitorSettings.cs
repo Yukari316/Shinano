@@ -2,7 +2,8 @@ namespace Shinano.Monitor.Web;
 
 /// <summary>
 /// 从主部署的本地配置文件读取的监控设置与探测目标。监控只读该文件，不写入；缺少的项使用与主进程相同的默认值。
-/// 修改后重启监控进程生效。
+/// 探测目标（主进程、数据库、RustFS、LLBot 的地址与凭据）在文件变化后的下一轮探测生效；
+/// 监控自身的监听地址、探测间隔、时区等其余设置修改后重启监控进程生效。
 /// </summary>
 public sealed class MonitorSettings
 {
@@ -85,7 +86,16 @@ public sealed class MonitorSettings
             ? Path.Combine(Path.GetFullPath(dataDirectory, baseDirectory), CONFIG_FILE_NAME)
             : string.IsNullOrWhiteSpace(configuredPath) ? null : Path.GetFullPath(configuredPath, baseDirectory);
         if (path is not null && !File.Exists(path)) path = null;
+        return Read(path, baseDirectory);
+    }
 
+    /// <summary>重新读取同一个部署配置文件；没有找到部署配置时返回自身。</summary>
+    /// <exception cref="InvalidDataException">文件不是有效的 JSON。</exception>
+    /// <exception cref="IOException">文件无法读取。</exception>
+    public MonitorSettings Reload() => ConfigPath is null ? this : Read(ConfigPath, DataDirectory);
+
+    private static MonitorSettings Read(string? path, string baseDirectory)
+    {
         IConfiguration configuration = path is null
             ? new ConfigurationBuilder().Build()
             : new ConfigurationBuilder().AddJsonFile(path, optional: false, reloadOnChange: false).Build();

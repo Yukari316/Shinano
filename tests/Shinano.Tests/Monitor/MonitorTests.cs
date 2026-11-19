@@ -11,6 +11,7 @@ using Shinano.Monitor.Probing;
 using Shinano.Monitor.Status;
 using Shinano.Monitor.Web;
 using System.Net;
+using System.Net.Sockets;
 
 namespace Shinano.Tests.Monitor;
 
@@ -139,6 +140,58 @@ public sealed class MonitorTests : IDisposable
 
         ProbeRecord database = await prober.ProbeAsync(MonitoredService.Database, token);
         Assert.Equal(ProbeFailure.NotConfigured, database.Failure);
+    }
+
+    [Fact]
+    public async Task ProbeService_ProbesNewHostAddress_AfterDeploymentConfigChanges()
+    {
+        await using WebApplication fake = await StartFakeServicesAsync();
+        // SAFE: Kestrel 启动后总会提供监听地址特性。
+        int hostPort = new Uri(fake.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First()).Port;
+        using TcpListener closed = new(IPAddress.Loopback, 0);
+        closed.Start();
+        int closedPort = ((IPEndPoint)closed.LocalEndpoint).Port;
+        closed.Stop();
+        string configPath = Path.Combine(_directory, MonitorSettings.CONFIG_FILE_NAME);
+        await File.WriteAllTextAsync(configPath, $$"""{ "Shinano": { "Web": { "Port": {{closedPort}} } } }""", TestContext.Current.CancellationToken);
+        MonitorSettings settings = MonitorSettings.Load(configPath, _directory);
+        FakeTimeProvider time = new(Now);
+        ProbeStore store = new(Path.Combine(_directory, "probes"), TimeZoneInfo.Utc, NullLogger<ProbeStore>.Instance);
+        using ProbeService service = new(
+            store,
+            settings,
+            new LogRetention(Path.Combine(_directory, "logs"), "run", 1, NullLogger<LogRetention>.Instance),
+            time,
+            NullLogger<ProbeService>.Instance);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            Assert.True(await WaitForHostAsync(store, record => record.Failure != ProbeFailure.FaultMode, time, advance: false));
+            // 面板改了监听端口：宿主以临时文件替换写入部署配置。
+            string temporary = configPath + ".tmp";
+            await File.WriteAllTextAsync(temporary, $$"""{ "Shinano": { "Web": { "Port": {{hostPort}} } } }""", TestContext.Current.CancellationToken);
+            File.Move(temporary, configPath, overwrite: true);
+
+            Assert.True(await WaitForHostAsync(store, record => record.Failure == ProbeFailure.FaultMode, time, advance: true));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    // 等待出现满足条件的主进程探测记录；advance 为 true 时每次推进一个探测间隔以触发下一轮。
+    private static async Task<bool> WaitForHostAsync(ProbeStore store, Func<ProbeRecord, bool> match, FakeTimeProvider time, bool advance)
+    {
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            if (store.Snapshot().Any(record => record.Service == MonitoredService.Host && match(record))) return true;
+            if (advance) time.Advance(TimeSpan.FromSeconds(30));
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        return false;
     }
 
     private static async Task<WebApplication> StartFakeServicesAsync()

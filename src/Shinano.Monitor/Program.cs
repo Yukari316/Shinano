@@ -39,7 +39,6 @@ builder.Services.AddSingleton(sp => new ProbeStore(
                                   Path.Combine(baseDirectory, DATA_DIRECTORY),
                                   settings.TimeZone,
                                   sp.GetRequiredService<ILogger<ProbeStore>>()));
-builder.Services.AddSingleton<ServiceProber>();
 builder.Services.AddSingleton(sp => new LogRetention(
                                   logging.Directory,
                                   logging.RunPrefix,

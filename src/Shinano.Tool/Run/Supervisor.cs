@@ -30,8 +30,6 @@ public static class Supervisor
         if (!File.Exists(layout.HostExecutable)) throw new ToolException($"找不到宿主程序 {layout.HostExecutable}");
 
         using CancellationTokenSource stop = new();
-        LocalConfig config = LocalConfig.Load(layout.LocalConfigPath);
-        using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, layout.DataDirectory));
         using Process? monitor = StartMonitor(layout, log);
         Process? current = null;
 
@@ -56,6 +54,9 @@ public static class Supervisor
         int restartsWithoutReady = 0;
         while (true)
         {
+            // 每次拉起前重新读取：面板可能改了监听地址、端口或证书，重启后的宿主监听在新地址上。
+            LocalConfig config = LocalConfig.Load(layout.LocalConfigPath);
+            using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, layout.DataDirectory));
             using Process host = StartHost(layout, log);
             current = host;
             using CancellationTokenSource watching = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
