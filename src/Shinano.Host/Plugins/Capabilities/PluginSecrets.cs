@@ -1,4 +1,5 @@
 using Shinano.Framework.Plugins;
+using Shinano.Host.Configuration;
 using Shinano.Host.Plugins.Config;
 using System.Text.Json;
 
@@ -44,9 +45,7 @@ internal sealed class PluginSecrets<T> : IPluginSecrets<T>, IPluginSecretsHolder
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path) ?? ".");
-            string temporary = _path + ".tmp";
-            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(value, JsonOptions), cancellationToken);
-            File.Move(temporary, _path, overwrite: true);
+            PrivateFile.Write(_path, JsonSerializer.Serialize(value, JsonOptions));
             _value = value;
         }
         finally

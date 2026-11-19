@@ -41,9 +41,7 @@ public sealed class LocalConfigFile
         {
             JsonObject root = ReadRoot();
             change(root);
-            string temporary = _path + ".tmp";
-            File.WriteAllText(temporary, root.ToJsonString(WriteOptions));
-            File.Move(temporary, _path, overwrite: true);
+            PrivateFile.Write(_path, root.ToJsonString(WriteOptions));
         }
     }
 

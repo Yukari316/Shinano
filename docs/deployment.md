@@ -67,7 +67,7 @@ shinano-<版本>-<平台>/
 | `nb2/` | NB2 运行环境、插件配置与日志 |
 | `service/` | Linux 上生成的 systemd unit 文件 |
 
-`shinano.local.json`、`secrets/`、`keys/` 与 `browser/` 都包含机密，不要让其他用户读取，也不要提交到版本库或发到聊天中。
+`shinano.local.json`、`secrets/`、`keys/` 与 `browser/` 都包含机密，不要让其他用户读取，也不要提交到版本库或发到聊天中。Linux 上本地配置、插件机密与 NB2 的 `.env` 以 0600 创建，`keys/` 与 `browser/` 由框架和浏览器创建，请确认部署数据目录只有运行用户可以访问；Windows 依靠部署目录的 ACL 限制访问。
 
 ## 3. 数据库准备
 

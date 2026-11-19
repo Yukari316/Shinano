@@ -29,8 +29,21 @@ public static class Nb2DotEnv
             else lines.Insert(index, line);
         }
 
+        // .env 可能含第三方插件的密钥：非 Windows 上以 0600 创建；残留的临时文件先删除，才会套用新权限。
         string temporary = path + ".tmp";
-        File.WriteAllLines(temporary, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.Delete(temporary);
+        FileStreamOptions options = new()
+        {
+            Mode   = FileMode.CreateNew,
+            Access = FileAccess.Write
+        };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using (StreamWriter writer = new(temporary, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), options))
+        {
+            foreach (string line in lines)
+                writer.WriteLine(line);
+        }
+
         File.Move(temporary, path, overwrite: true);
     }
 

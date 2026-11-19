@@ -90,9 +90,7 @@ public sealed class LocalConfig
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path) ?? ".");
-        string temporary = _path + ".tmp";
-        File.WriteAllText(temporary, _root.ToJsonString(WriteOptions));
-        File.Move(temporary, _path, overwrite: true);
+        PrivateFile.Write(_path, _root.ToJsonString(WriteOptions));
     }
 
     private JsonNode? Find(string path)

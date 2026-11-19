@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Shinano.Tool.Cli;
+using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
 using Shinano.Tool.Services;
 
@@ -96,7 +97,7 @@ public static class Nb2SetupCommand
         string envPath = Path.Combine(root, ENV_FILE);
         if (!File.Exists(envPath))
         {
-            File.WriteAllText(envPath, INITIAL_ENV);
+            PrivateFile.Write(envPath, INITIAL_ENV);
             log.Info($"已写入初始插件配置 {envPath}");
         }
 
