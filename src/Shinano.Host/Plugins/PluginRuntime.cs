@@ -7,12 +7,14 @@ using Shinano.Host.Plugins.Capabilities;
 using Shinano.Host.Plugins.Config;
 using Shinano.Host.Rendering;
 using Shinano.Host.Tools;
+using Shinano.Infrastructure.Database;
 using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
 using Sora;
 using Sora.Command;
 using Sora.Command.Attributes;
 using Sora.Entities.Events;
+using SqlSugar;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
@@ -29,6 +31,8 @@ public sealed class PluginRuntime : IDisposable
     private static readonly MethodInfo RegisterInstanceMethod =
         typeof(AssemblyRegistration).GetMethod(nameof(AssemblyRegistration.RegisterCommandInstance))
         ?? throw new MissingMethodException(nameof(AssemblyRegistration), nameof(AssemblyRegistration.RegisterCommandInstance));
+
+    private const string SUSPENDED_ERROR = "数据库离线期间不能修改插件状态";
 
     private readonly HostInfrastructure     _infrastructure;
     private readonly HostScheduler          _scheduler;
@@ -161,12 +165,22 @@ public sealed class PluginRuntime : IDisposable
         try
         {
             if (Find(pluginId) is not { } plugin) return $"插件 {pluginId} 不存在";
-            if (_suspended) return "数据库离线期间不能修改插件状态";
+            if (_suspended) return SUSPENDED_ERROR;
 
+            // 先激活才知道能否启用；写库失败时撤销本次激活，内存与数据库保持一致。
             string? error = await ActivateAsync(plugin, cancellationToken);
             if (error is not null) return error;
+            try
+            {
+                await SaveStatesAsync([StateOf(plugin, enabled: true, plugin.SortOrder)], cancellationToken);
+            }
+            catch (Exception) when (!plugin.Enabled)
+            {
+                Deactivate(plugin);
+                throw;
+            }
+
             plugin.Enabled = true;
-            await SaveStateAsync(plugin, cancellationToken);
             PublishDispatchOrder();
             return null;
         }
@@ -184,16 +198,13 @@ public sealed class PluginRuntime : IDisposable
         try
         {
             if (Find(pluginId) is not { } plugin) return $"插件 {pluginId} 不存在";
-            if (_suspended) return "数据库离线期间不能修改插件状态";
+            if (_suspended) return SUSPENDED_ERROR;
 
+            await SaveStatesAsync([StateOf(plugin, enabled: false, plugin.SortOrder)], cancellationToken);
             plugin.Enabled = false;
-            plugin.Registration?.SetEnabled(false);
-            _scheduler.SetOwnerEnabled(pluginId, false);
-            await SaveStateAsync(plugin, cancellationToken);
+            Deactivate(plugin);
             PublishDispatchOrder();
             _logger.LogInformation("插件 {PluginId} 已停用", pluginId);
-            // SAFE: 已初始化的插件必有能力集合。
-            if (plugin.Initialized) plugin.Context!.NotifyEnabled(false, _logger);
             return null;
         }
         finally
@@ -203,28 +214,35 @@ public sealed class PluginRuntime : IDisposable
     }
 
     /// <summary>
-    /// 设置插件顺序并持久化：同时决定跨插件的指令先后与普通事件订阅链顺序。未列出的插件排在最后。
+    /// 设置插件顺序并持久化：同时决定跨插件的指令先后与普通事件订阅链顺序。未列出的插件排在最后，未知 ID 被忽略。
+    /// 写库成功后才替换内存中的顺序。
     /// </summary>
-    public async Task SetOrderAsync(IReadOnlyList<string> orderedIds, CancellationToken cancellationToken)
+    /// <param name="orderedIds">插件 ID，不得重复；由调用方在边界校验。</param>
+    /// <returns>失败原因；成功时为 null。</returns>
+    public async Task<string?> SetOrderAsync(IReadOnlyList<string> orderedIds, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (_suspended) return SUSPENDED_ERROR;
+
             List<LoadedPlugin> ordered =
             [
                 .. orderedIds.Select(Find).OfType<LoadedPlugin>(),
                 .. _plugins.Where(plugin => !orderedIds.Contains(plugin.Manifest.Id))
             ];
+            await SaveStatesAsync(ordered.Select((plugin, index) => StateOf(plugin, plugin.Enabled, index)), cancellationToken);
+
             _plugins.Clear();
             _plugins.AddRange(ordered);
             for (int i = 0; i < _plugins.Count; i++)
             {
                 _plugins[i].SortOrder = i;
                 _plugins[i].Registration?.SetPriority(PriorityOf(i));
-                await SaveStateAsync(_plugins[i], cancellationToken);
             }
 
             PublishDispatchOrder();
+            return null;
         }
         finally
         {
@@ -583,16 +601,31 @@ public sealed class PluginRuntime : IDisposable
     private void PublishDispatchOrder() =>
         Volatile.Write(ref _dispatchOrder, [.. _plugins.Where(plugin => plugin is { Enabled: true, Initialized: true })]);
 
-    private async Task SaveStateAsync(LoadedPlugin plugin, CancellationToken cancellationToken) =>
-        await _infrastructure.Database.Global.Storageable(
-                                 new PluginStateRecord
-                                 {
-                                     PluginId  = plugin.Manifest.Id,
-                                     Enabled   = plugin.Enabled,
-                                     SortOrder = plugin.SortOrder,
-                                     UpdatedAt = DateTimeOffset.UtcNow
-                                 })
-                             .ExecuteCommandAsync(cancellationToken);
+    // 排序一次写多行，放在同一事务中，失败时不留下一半新顺序。
+    private async Task SaveStatesAsync(IEnumerable<PluginStateRecord> states, CancellationToken cancellationToken)
+    {
+        SqlSugarScope db = _infrastructure.Database.Global;
+        List<PluginStateRecord> records = [.. states];
+        await db.InTransactionAsync(() => db.Storageable(records).ExecuteCommandAsync(cancellationToken));
+    }
+
+    private static PluginStateRecord StateOf(LoadedPlugin plugin, bool enabled, int sortOrder) =>
+        new()
+        {
+            PluginId  = plugin.Manifest.Id,
+            Enabled   = enabled,
+            SortOrder = sortOrder,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+    // 调用方持有 _gate。关闭指令、后台任务并通知插件；不改持久化状态与分发顺序。
+    private void Deactivate(LoadedPlugin plugin)
+    {
+        plugin.Registration?.SetEnabled(false);
+        _scheduler.SetOwnerEnabled(plugin.Manifest.Id, false);
+        // SAFE: 已初始化的插件必有能力集合。
+        if (plugin.Initialized) plugin.Context!.NotifyEnabled(false, _logger);
+    }
 
     private void UpdatePluginHealth()
     {

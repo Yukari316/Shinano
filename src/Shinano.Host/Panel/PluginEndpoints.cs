@@ -24,11 +24,10 @@ internal static class PluginEndpoints
             ? PanelResults.Error(StatusCodes.Status409Conflict, error)
             : Results.NoContent();
 
-    internal static async Task<IResult> OrderAsync(string[] ids, PluginRuntime plugins, CancellationToken cancellationToken)
-    {
-        await plugins.SetOrderAsync(ids, cancellationToken);
-        return Results.NoContent();
-    }
+    internal static async Task<IResult> OrderAsync(string[] ids, PluginRuntime plugins, CancellationToken cancellationToken) =>
+        await plugins.SetOrderAsync(ids, cancellationToken) is { } error
+            ? PanelResults.Error(StatusCodes.Status409Conflict, error)
+            : Results.NoContent();
 
     internal static async Task<IResult> GetConfigAsync(string id, PluginRuntime plugins, CancellationToken cancellationToken) =>
         await plugins.GetConfigAsync(id, cancellationToken) is { } view

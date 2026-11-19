@@ -45,7 +45,7 @@ public sealed class PluginRuntimeTests
         await server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "init-count-a");
         await harness.ExpectReplyAsync("init-a=1");
 
-        await harness.Runtime.SetOrderAsync([PLUGIN_B, PLUGIN_A], Token);
+        Assert.Null(await harness.Runtime.SetOrderAsync([PLUGIN_B, PLUGIN_A], Token));
         await server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "order");
         await harness.ExpectReplyAsync("b");
     }
@@ -61,7 +61,7 @@ public sealed class PluginRuntimeTests
         await harness.ExpectReplyAsync("world-a");
         await harness.ExpectSilenceAsync();
 
-        await harness.Runtime.SetOrderAsync([PLUGIN_B, PLUGIN_A], Token);
+        Assert.Null(await harness.Runtime.SetOrderAsync([PLUGIN_B, PLUGIN_A], Token));
         await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "hello");
         await harness.ExpectReplyAsync("world-b");
         await harness.ExpectReplyAsync("world-a");
@@ -120,10 +120,17 @@ public sealed class PluginRuntimeTests
         await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "hello");
         await harness.ExpectSilenceAsync();
         Assert.NotNull(await harness.Runtime.EnableAsync(PLUGIN_B, Token));
+        Assert.NotNull(await harness.Runtime.SetOrderAsync([PLUGIN_B, PLUGIN_A], Token));
 
         harness.Runtime.Resume();
         await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "order");
         await harness.ExpectReplyAsync("a");
+
+        // 暂停期间的排序被拒绝，顺序不变：A 仍在 B 之前。
+        Assert.Null(await harness.Runtime.EnableAsync(PLUGIN_B, Token));
+        await harness.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "order");
+        await harness.ExpectReplyAsync("a");
+        await harness.ExpectSilenceAsync();
     }
 
     private Task<PluginHarness> StartAsync() =>
