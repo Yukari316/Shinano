@@ -133,13 +133,14 @@ public sealed class HostInfrastructure : IDisposable
             int interrupted = await components.ChatArchive.MarkInterruptedAsync(selfId, cancellationToken);
             if (interrupted > 0)
                 _logger.LogWarning("上次运行有 {Count} 条消息的媒体未归档完成，已标记为缺失", interrupted);
+            await MaintainAccountAsync(components, selfId, cancellationToken);
+            // 调度器不去重：初始化成功后才登记，失败重试时不会多登记一个维护任务。
             _scheduler.Register(
                 SCHEDULER_OWNER,
                 $"chat-archive-{selfId}",
                 MaintenanceInterval,
                 token => MaintainAccountAsync(components, selfId, token),
                 runImmediately: false);
-            await MaintainAccountAsync(components, selfId, cancellationToken);
             _initializedAccounts.Add(selfId);
             _logger.LogInformation("机器人账号 {SelfId} 的数据结构已就绪", selfId);
         }
