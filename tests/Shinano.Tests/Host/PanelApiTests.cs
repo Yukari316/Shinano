@@ -273,6 +273,26 @@ public sealed class PanelApiTests
                 Token));
 
     [Fact]
+    public async Task PluginOrder_WithDuplicateOrNullIds_IsRejectedAndKeepsOrder()
+    {
+        await using PanelHarness panel = await StartAsync();
+        using HttpClient client = await LoggedInClientAsync(panel);
+        string[] before = await PluginIdsAsync(client);
+
+        HttpResponseMessage duplicate = await client.PutAsJsonAsync("/api/plugins/order", new[] { PLUGIN_B, PLUGIN_A, PLUGIN_B }, Token);
+        HttpResponseMessage withNull = await client.PutAsJsonAsync("/api/plugins/order", new[] { PLUGIN_B, null }, Token);
+
+        Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, withNull.StatusCode);
+        Assert.Equal(before, await PluginIdsAsync(client));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync("/api/plugins/order", before.Reverse(), Token)).StatusCode);
+        Assert.Equal(before.Reverse(), await PluginIdsAsync(client));
+    }
+
+    private static async Task<string[]> PluginIdsAsync(HttpClient client) =>
+        [.. (await client.GetFromJsonAsync<JsonArray>("/api/plugins", Token) ?? []).Select(plugin => plugin?["id"]?.GetValue<string>() ?? string.Empty)];
+
+    [Fact]
     public async Task PluginPackage_IsUploadedListedAndUndone()
     {
         await using PanelHarness panel = await StartAsync();

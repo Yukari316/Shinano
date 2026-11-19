@@ -24,10 +24,17 @@ internal static class PluginEndpoints
             ? PanelResults.Error(StatusCodes.Status409Conflict, error)
             : Results.NoContent();
 
-    internal static async Task<IResult> OrderAsync(string[] ids, PluginRuntime plugins, CancellationToken cancellationToken) =>
-        await plugins.SetOrderAsync(ids, cancellationToken) is { } error
+    internal static async Task<IResult> OrderAsync(string?[] ids, PluginRuntime plugins, CancellationToken cancellationToken)
+    {
+        // 面板总是发送去重后的完整列表；重复会让同一插件在事件链中出现两次，直接拒绝。
+        string[] valid = [.. ids.OfType<string>()];
+        if (valid.Length != ids.Length || valid.Distinct(StringComparer.Ordinal).Count() != valid.Length)
+            return PanelResults.Error(StatusCodes.Status400BadRequest, "插件顺序中的 ID 不能为空或重复");
+
+        return await plugins.SetOrderAsync(valid, cancellationToken) is { } error
             ? PanelResults.Error(StatusCodes.Status409Conflict, error)
             : Results.NoContent();
+    }
 
     internal static async Task<IResult> GetConfigAsync(string id, PluginRuntime plugins, CancellationToken cancellationToken) =>
         await plugins.GetConfigAsync(id, cancellationToken) is { } view
