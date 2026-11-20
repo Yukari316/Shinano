@@ -48,21 +48,30 @@ public sealed class StatusReport
         {
             List<ProbeRecord> history = [.. records.Where(record => record.Service == service)];
             ProbeRecord? latest = history.Count > 0 ? history[^1] : null;
-            List<StatusBar> bars = [];
-            for (int index = 0; index < BAR_COUNT; index++)
+            // 状态页无需登录即可请求，每条记录只遍历一次，按时间直接算出所在的格。
+            int[] totals = new int[BAR_COUNT];
+            int[] stopped = new int[BAR_COUNT];
+            HealthLevel?[] worst = new HealthLevel?[BAR_COUNT];
+            foreach (ProbeRecord record in history)
             {
-                DateTimeOffset start = firstBarStart + BarLength * index;
-                DateTimeOffset end = start + BarLength;
-                List<ProbeRecord> inBar = [.. history.Where(record => record.Time >= start && record.Time < end)];
-                bars.Add(
-                    new StatusBar
-                    {
-                        Start   = start,
-                        Level   = inBar.Count > 0 ? inBar.Max(record => record.Level) : null,
-                        Total   = inBar.Count,
-                        Stopped = inBar.Count(record => record.Level == HealthLevel.Stopped)
-                    });
+                long offset = record.Time.UtcTicks - firstBarStart.UtcTicks;
+                if (offset < 0 || offset / barTicks >= BAR_COUNT) continue;
+                int index = (int)(offset / barTicks);
+                totals[index]++;
+                if (record.Level == HealthLevel.Stopped) stopped[index]++;
+                if (worst[index] is not { } level || record.Level > level) worst[index] = record.Level;
             }
+
+            List<StatusBar> bars =
+            [
+                .. Enumerable.Range(0, BAR_COUNT).Select(index => new StatusBar
+                {
+                    Start   = firstBarStart + BarLength * index,
+                    Level   = worst[index],
+                    Total   = totals[index],
+                    Stopped = stopped[index]
+                })
+            ];
 
             services.Add(
                 new ServiceStatus

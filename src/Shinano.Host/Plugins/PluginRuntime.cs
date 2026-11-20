@@ -44,7 +44,7 @@ public sealed class PluginRuntime : IDisposable
     private readonly CardRenderer           _images;
     private readonly BrowserService         _browser;
     private readonly FfmpegService          _ffmpeg;
-    private readonly PluginNotices          _notices;
+    private readonly SuperUserNotifier      _notices;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -79,13 +79,10 @@ public sealed class PluginRuntime : IDisposable
         _images         = images;
         _browser        = browser;
         _ffmpeg         = ffmpeg;
-        _notices        = new PluginNotices(notifier);
+        _notices        = notifier;
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }
-
-    /// <summary>是否因数据库离线而暂停全部插件。</summary>
-    public bool IsSuspended => _suspended;
 
     /// <summary>
     /// 发现插件目录下的插件包，加载程序集并构建插件容器，读取持久化的启用状态与顺序。
@@ -400,11 +397,12 @@ public sealed class PluginRuntime : IDisposable
         {
             if (Find(pluginId) is not { Context: { SecretsType: { } type } context }) return null;
 
-            IPluginSecretsHolder holder = context.SecretsHolder(type);
-            object? secrets = PluginSecretsSchema.Apply(type, holder.Current, changes, out IReadOnlyList<string> errors);
-            if (secrets is null) return errors;
+            IReadOnlyList<string> errors = [];
+            bool saved = await context.SecretsHolder(type).UpdateAsync(
+                current => PluginSecretsSchema.Apply(type, current, changes, out errors),
+                cancellationToken);
+            if (!saved) return errors;
 
-            await holder.SaveAsync(secrets, cancellationToken);
             _logger.LogInformation("插件 {PluginId} 的机密已更新：{Keys}", pluginId, string.Join("、", changes.Select(change => change.Key)));
             return [];
         }
@@ -541,7 +539,8 @@ public sealed class PluginRuntime : IDisposable
             new PluginBrowser(id, _browser),
             _ffmpeg,
             _notices,
-            _settings.DataDirectory);
+            _settings.DataDirectory,
+            _infrastructure.TimeZone);
     }
 
     // 调用方持有 _gate。首次启用：关闭状态下登记程序集并注入指令实例、扫描、初始化，最后开启。

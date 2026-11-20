@@ -87,12 +87,14 @@ internal sealed class ChatStatsQuery
         long selfId   = filter.SelfId;
         short group   = (short)ChatConversationType.Group;
         long conversation = filter.ConversationId ?? 0;
+        short type = (short)(filter.ConversationType ?? default);
         return _infrastructure.Database.Account(filter.SelfId)
                               .Queryable<ChatStatDailyRecord>()
                               .Where(stat => stat.StatDate >= from && stat.StatDate <= to)
                               .WhereIF(!filter.IncludeBot, stat => stat.SenderId != selfId)
                               .WhereIF(filter.Scope == ChatStatScope.Group, stat => stat.ConversationType == group)
                               .WhereIF(filter.Scope == ChatStatScope.Private, stat => stat.ConversationType != group)
-                              .WhereIF(filter.ConversationId is not null, stat => stat.ConversationId == conversation);
+                              .WhereIF(filter.ConversationId is not null, stat => stat.ConversationId == conversation)
+                              .WhereIF(filter.ConversationType is not null, stat => stat.ConversationType == type);
     }
 }

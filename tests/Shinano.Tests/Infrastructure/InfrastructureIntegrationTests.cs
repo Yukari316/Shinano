@@ -95,13 +95,56 @@ public sealed class InfrastructureIntegrationTests
             second = await store.StoreAsync(media, "text/plain", Token);
         Assert.Equal(first, second);
 
+        string bucket = BucketNames.Chat(_fixture.BucketPrefix);
+        string key = await ChatMediaKeyAsync(infrastructure, first) ?? throw new InvalidOperationException("聊天媒体记录不存在");
         await store.ExpireAsync(DateTimeOffset.UtcNow.AddDays(-1), Token);
-        await using (StoredObject? kept = await store.OpenReadAsync(first, Token))
+        await using (StoredObject? kept = await infrastructure.Storage.OpenReadAsync(bucket, key, Token))
             Assert.NotNull(kept);
 
         await store.ExpireAsync(DateTimeOffset.UtcNow.AddMinutes(1), Token);
-        Assert.Null(await store.OpenReadAsync(first, Token));
+        Assert.Null(await ChatMediaKeyAsync(infrastructure, first));
+        Assert.Null(await infrastructure.Storage.OpenReadAsync(bucket, key, Token));
     }
+
+    // RustFS 不可达时对象删除失败，记录必须保留：曾先删记录再删对象，失败的对象从此没有记录，永远留在 bucket 中。
+    [Fact]
+    public async Task ChatMediaExpiry_KeepsRecordWhenObjectDeletionFails()
+    {
+        HostInfrastructure infrastructure = _fixture.Ready;
+        DateTimeOffset longAgo = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        ChatMediaObjectRecord record = new()
+        {
+            Sha256           = Guid.NewGuid().ToString("N"),
+            Size             = 1,
+            MediaType        = "text/plain",
+            ObjectKey        = "expiry-test-" + Guid.NewGuid().ToString("N"),
+            LastReferencedAt = longAgo,
+            CreatedAt        = longAgo
+        };
+        long id = await infrastructure.Database.Global.Insertable(record).ExecuteReturnBigIdentityAsync(Token);
+        using ObjectStorage offline = new(
+            new RustFsOptions
+            {
+                Endpoint  = "http://127.0.0.1:1",
+                AccessKey = "offline",
+                SecretKey = "offline"
+            });
+        ChatMediaStore unreachable = new(infrastructure.Database, offline, BucketNames.Chat(_fixture.BucketPrefix), NullLogger<ChatMediaStore>.Instance);
+        DateTimeOffset cutoff = longAgo.AddDays(1);
+
+        Assert.Equal(0, await unreachable.ExpireAsync(cutoff, Token));
+        Assert.NotNull(await ChatMediaKeyAsync(infrastructure, id));
+
+        // 恢复后删除对象（不存在的对象删除视为成功）与记录。
+        await infrastructure.ChatMedia.ExpireAsync(cutoff, Token);
+        Assert.Null(await ChatMediaKeyAsync(infrastructure, id));
+    }
+
+    private static async Task<string?> ChatMediaKeyAsync(HostInfrastructure infrastructure, long chatMediaId) =>
+        await infrastructure.Database.Global.Queryable<ChatMediaObjectRecord>()
+                            .Where(item => item.Id == chatMediaId)
+                            .Select(item => item.ObjectKey)
+                            .FirstAsync();
 
     [Fact]
     public async Task BufferedMedia_OverLimit_IsRejected()

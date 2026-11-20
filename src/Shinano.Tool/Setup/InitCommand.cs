@@ -56,7 +56,6 @@ public static class InitCommand
     private const string SERVICE                     = "service";
     private const string DEDICATED_USER              = "shinano";
     private const string DEFAULT_TIME_ZONE           = "Asia/Shanghai";
-    private const string DEFAULT_BUCKET_PREFIX       = "shinano";
     private const string DEFAULT_LOOPBACK            = "127.0.0.1";
     private const string DEFAULT_DATABASE            = "shinano";
     private const string DEFAULT_ROLE                = "shinano";
@@ -85,13 +84,10 @@ public static class InitCommand
         LocalConfig config = LocalConfig.Load(layout.LocalConfigPath);
         DeploymentState? previous = DeploymentStateStore.Read(layout);
         DeploymentState state = previous ?? new DeploymentState();
-        RunMode previousMode = state.RunMode;
-        string previousHostService = state.HostServiceName;
-        string previousMonitorService = state.MonitorServiceName;
-        bool previouslyInstalled = state.ServicesInstalled;
+        InstalledServices installed = InstalledServices.Of(state);
 
         log.Say(previous is null ? "Shinano 初始化。直接回车使用方括号中的默认值。" : "重新配置 Shinano。直接回车保持方括号中的现有值。");
-        AskRunMode(ask, state);
+        AskRunMode(ask, state, firstRun: previous is null);
         AskDeployment(ask, config);
         await AskDatabaseAsync(context, config);
         AskRustFs(ask, config);
@@ -128,7 +124,7 @@ public static class InitCommand
         }
 
         DeploymentStateStore.Write(layout, state);
-        await ApplyRunModeAsync(context, state, previousMode, previousHostService, previousMonitorService, previouslyInstalled);
+        await ApplyRunModeAsync(context, state, installed);
 
         if (token is not null)
         {
@@ -145,7 +141,7 @@ public static class InitCommand
         return 0;
     }
 
-    private static void AskRunMode(Prompter ask, DeploymentState state)
+    private static void AskRunMode(Prompter ask, DeploymentState state, bool firstRun)
     {
         string mode = ask.Text(
             "运行方式（direct：直接运行；service：作为系统服务）",
@@ -161,7 +157,11 @@ public static class InitCommand
             throw new ToolException("宿主与状态页的服务名不能相同");
         if (!OperatingSystem.IsLinux()) return;
 
-        bool dedicated = ask.Confirm($"是否以专用用户 {DEDICATED_USER} 运行服务（不存在时创建，实现账户隔离）", SERVICE_USER_OPTION, fallback: true);
+        // 首次初始化默认使用专用用户；重新配置时默认保持现有选择。
+        bool dedicated = ask.Confirm(
+            $"是否以专用用户 {DEDICATED_USER} 运行服务（不存在时创建，实现账户隔离）",
+            SERVICE_USER_OPTION,
+            fallback: firstRun || state.ServiceUser is not null);
         if (dedicated) state.ServiceUser = DEDICATED_USER;
         else
         {
@@ -177,7 +177,7 @@ public static class InitCommand
             ask.Text("时区", TIME_ZONE_OPTION, config.GetString(ConfigKeys.TIME_ZONE) ?? DEFAULT_TIME_ZONE, InputRules.TimeZone));
         config.Set(
             ConfigKeys.BUCKET_PREFIX,
-            ask.Text("bucket 前缀（每个部署唯一）", BUCKET_PREFIX_OPTION, config.GetString(ConfigKeys.BUCKET_PREFIX) ?? DEFAULT_BUCKET_PREFIX, InputRules.BucketPrefix));
+            ask.Text("bucket 前缀（每个部署唯一）", BUCKET_PREFIX_OPTION, config.GetString(ConfigKeys.BUCKET_PREFIX) ?? ConfigKeys.DEFAULT_BUCKET_PREFIX, InputRules.BucketPrefix));
 
         long[] current = config.GetLongArray(ConfigKeys.SUPER_USERS);
         string superUsers = ask.Text(
@@ -323,28 +323,20 @@ public static class InitCommand
         if (ask.Secret(label, variable, config.GetString(key) is not null, required) is { } value) config.Set(key, value);
     }
 
-    private static async Task ApplyRunModeAsync(
-        ToolContext     context,
-        DeploymentState state,
-        RunMode         previousMode,
-        string          previousHostService,
-        string          previousMonitorService,
-        bool            previouslyInstalled)
+    private static async Task ApplyRunModeAsync(ToolContext context, DeploymentState state, InstalledServices installed)
     {
-        bool sameServices = previousMode == RunMode.Service
-                            && previousHostService == state.HostServiceName
-                            && previousMonitorService == state.MonitorServiceName;
-        if (previouslyInstalled && !(state.RunMode == RunMode.Service && sameServices))
+        if (installed.Installed && !installed.Matches(state))
         {
-            context.Log.Say("运行方式或服务名已改变，先删除原有服务。");
+            context.Log.Say("运行方式、服务名或运行用户已改变，先删除原有服务。");
             DeploymentState old = new()
             {
                 RunMode            = RunMode.Service,
-                HostServiceName    = previousHostService,
-                MonitorServiceName = previousMonitorService,
+                HostServiceName    = installed.HostServiceName,
+                MonitorServiceName = installed.MonitorServiceName,
                 ServicesInstalled  = true,
-                ServiceUser        = state.ServiceUser,
-                ServiceUserCreated = false,
+                ServiceUser        = installed.User,
+                // 只有原用户由工具创建、且新的设置不再使用它时才询问是否删除；仍使用时删除后又会重建。
+                ServiceUserCreated = installed.UserCreated && installed.User != state.ServiceUser,
                 BundledPlugins     = state.BundledPlugins
             };
             IServiceManager previousManager = ServiceManagers.ForCurrentPlatform();
@@ -363,4 +355,46 @@ public static class InitCommand
 
         await ServiceCommand.InstallAsync(context, state, ServiceManagers.ForCurrentPlatform());
     }
+}
+
+/// <summary>init 开始前部署状态中的服务设置，用于判断重新配置后是否需要先删除原服务再重新创建。</summary>
+public sealed class InstalledServices
+{
+    /// <summary>服务是否已创建。</summary>
+    public required bool Installed { get; init; }
+
+    /// <summary>运行方式。</summary>
+    public required RunMode Mode { get; init; }
+
+    /// <summary>宿主服务名。</summary>
+    public required string HostServiceName { get; init; }
+
+    /// <summary>状态页服务名。</summary>
+    public required string MonitorServiceName { get; init; }
+
+    /// <summary>服务的运行用户（Linux 专用用户）；以调用者身份运行时为 null。</summary>
+    public string? User { get; init; }
+
+    /// <summary><see cref="User" /> 是否由工具创建。</summary>
+    public bool UserCreated { get; init; }
+
+    /// <summary>记下部署状态当前的服务设置。</summary>
+    public static InstalledServices Of(DeploymentState state) =>
+        new()
+        {
+            Installed          = state.ServicesInstalled,
+            Mode               = state.RunMode,
+            HostServiceName    = state.HostServiceName,
+            MonitorServiceName = state.MonitorServiceName,
+            User               = state.ServiceUser,
+            UserCreated        = state.ServiceUserCreated
+        };
+
+    /// <summary>重新配置后仍为服务模式，且服务名与运行用户都未改变，原服务可以继续使用。</summary>
+    public bool Matches(DeploymentState state) =>
+        Mode == RunMode.Service
+        && state.RunMode == RunMode.Service
+        && HostServiceName == state.HostServiceName
+        && MonitorServiceName == state.MonitorServiceName
+        && User == state.ServiceUser;
 }

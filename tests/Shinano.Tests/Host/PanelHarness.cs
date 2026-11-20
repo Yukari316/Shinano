@@ -77,6 +77,7 @@ public sealed class PanelHarness : IAsyncDisposable
         builder.Services.AddSingleton(new MemoryLogSink());
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(new RestartOptions());
+        builder.Services.AddSingleton(new DeploymentOptions());
         // 插件包暂存与重启只作用于临时数据目录内的插件目录，不触及仓库中的测试插件输出。
         builder.Services.AddSingleton(new PluginRuntimeSettings
         {

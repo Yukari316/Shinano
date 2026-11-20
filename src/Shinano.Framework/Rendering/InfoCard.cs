@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Shinano.Framework.Rendering;
 
 /// <summary>信息卡片：如搜图结果、搜番结果、图库图片信息。</summary>
@@ -29,4 +31,18 @@ public sealed class InfoCard
 
     /// <summary>页脚右侧的自定义文字；为 null 时不显示。</summary>
     public string? FooterRight { get; init; }
+
+    /// <summary>卡片无法绘制时代替图片发送的文字：标题、各行（多个元素以空格连接）、相似度与页脚说明，每项一行，没有的项省略。</summary>
+    public string ToText() =>
+        string.Join(
+            '\n',
+            (string[])
+            [
+                Title,
+                .. Rows.Select(row => $"{row.Label}：{(row.Style == CardRowStyle.Items ? string.Join(' ', row.Items) : row.Text)}"),
+                .. Similarity is { } similarity ? (string[]) [$"相似度：{similarity.ToString(SIMILARITY_FORMAT, CultureInfo.InvariantCulture)}%"] : [],
+                .. Note is { } note ? (string[]) [note] : []
+            ]);
+
+    private const string SIMILARITY_FORMAT = "0.##";
 }

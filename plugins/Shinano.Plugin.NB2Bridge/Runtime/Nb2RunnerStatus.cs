@@ -17,8 +17,8 @@ public sealed class Nb2RunnerStatus
     /// <summary>事件通道是否已连接。</summary>
     public required bool Connected { get; init; }
 
-    /// <summary>最近 1 分钟内的意外退出次数。</summary>
-    public required int RecentCrashes { get; init; }
+    /// <summary>自上次就绪（或手动启动）以来的自动重启次数，最多 <see cref="Nb2Runner.MAX_AUTO_RESTARTS" />。</summary>
+    public required int AutoRestarts { get; init; }
 
     /// <summary>上一次进程退出码；没有时为 null。</summary>
     public int? LastExitCode { get; init; }
@@ -54,7 +54,7 @@ public enum Nb2ProcessState
     /// <summary>正在停止。</summary>
     Stopping,
 
-    /// <summary>1 分钟内意外退出次数超过上限，已停止自动重启，需要手动启动。</summary>
+    /// <summary>自动重启达到上限后仍意外退出，已停止自动重启，需要手动启动。</summary>
     Failed,
 
     /// <summary>没有 NB2 运行环境（未运行 nb2-setup）。</summary>

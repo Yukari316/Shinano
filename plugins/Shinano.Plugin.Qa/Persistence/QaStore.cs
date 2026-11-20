@@ -26,6 +26,8 @@ public sealed class QaStore
     private readonly IPluginDatabase                                       _database;
     private readonly TimeProvider                                          _time;
     private readonly ConcurrentDictionary<long, IReadOnlyList<QaEntry>> _groups = new();
+    private readonly Lock                                                  _cacheLock = new();
+    private          long                                                  _cacheVersion;
 
     /// <summary>创建存储。</summary>
     public QaStore(IPluginInitializationContext context, TimeProvider time)
@@ -52,14 +54,28 @@ public sealed class QaStore
     {
         if (_groups.TryGetValue(groupId, out IReadOnlyList<QaEntry>? cached)) return cached;
 
+        long version;
+        lock (_cacheLock) version = _cacheVersion;
         List<QaEntryRecord> records = await _database.Account.Queryable<QaEntryRecord>()
                                                       .Where(record => record.GroupId == groupId)
                                                       .OrderByDescending(record => record.CreatedAt)
                                                       .OrderByDescending(record => record.Id)
                                                       .ToListAsync();
         IReadOnlyList<QaEntry> entries = [.. records.Select(ToEntry)];
-        _groups[groupId] = entries;
+        // 查询期间有词条变更时，这次的结果可能已过时，不写入缓存：否则会覆盖刚清除的缓存，新词条一直不生效。
+        lock (_cacheLock)
+            if (_cacheVersion == version) _groups[groupId] = entries;
         return entries;
+    }
+
+    // 词条变更后清除该群的缓存，并让变更前开始、尚未写入的查询放弃写入缓存。
+    private void Invalidate(long groupId)
+    {
+        lock (_cacheLock)
+        {
+            _cacheVersion++;
+            _groups.TryRemove(groupId, out _);
+        }
     }
 
     /// <summary>查找同群、同匹配方式、同问题的词条。</summary>
@@ -90,12 +106,12 @@ public sealed class QaStore
         catch (Exception)
         {
             // 唯一约束冲突（并发录入同一问题）按重复处理，其他错误照常抛出。
-            _groups.TryRemove(groupId, out _);
+            Invalidate(groupId);
             if (await FindAsync(groupId, matchType, question) is not null) return null;
             throw;
         }
 
-        _groups.TryRemove(groupId, out _);
+        Invalidate(groupId);
         return ToEntry(record);
     }
 
@@ -114,7 +130,7 @@ public sealed class QaStore
                                      })
                                      .Where(record => record.Id == existing.Id && record.Version == existing.Version)
                                      .ExecuteCommandAsync();
-        _groups.TryRemove(existing.GroupId, out _);
+        Invalidate(existing.GroupId);
         return updated == 1;
     }
 
@@ -131,7 +147,7 @@ public sealed class QaStore
         if (record is null) return null;
 
         int deleted = await _database.Account.Deleteable<QaEntryRecord>().Where(item => item.Id == id).ExecuteCommandAsync();
-        _groups.TryRemove(record.GroupId, out _);
+        Invalidate(record.GroupId);
         return deleted == 1 ? ToEntry(record) : null;
     }
 

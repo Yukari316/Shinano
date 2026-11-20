@@ -86,68 +86,66 @@ public sealed class ChatMediaStore
         return stored.Id;
     }
 
-    /// <summary>读取聊天媒体；媒体或对象不存在时返回 null。</summary>
-    public async Task<StoredObject?> OpenReadAsync(long chatMediaId, CancellationToken cancellationToken)
-    {
-        string? key = await FindKeyAsync(chatMediaId);
-        return key is null ? null : await _storage.OpenReadAsync(_bucket, key, cancellationToken);
-    }
-
-    /// <summary>生成 IM 实现端使用的预签名链接；媒体不存在时返回 null。</summary>
-    public async Task<string?> CreateImUrlAsync(long chatMediaId)
-    {
-        string? key = await FindKeyAsync(chatMediaId);
-        return key is null ? null : await _storage.CreateImUrlAsync(_bucket, key);
-    }
-
     /// <summary>
-    /// 删除 <paramref name="cutoff" /> 之前最后被引用的聊天媒体，分批执行直到没有过期项。
+    /// 删除 <paramref name="cutoff" /> 之前最后被引用的聊天媒体，分批执行直到没有过期项。先删除对象，只删除对象已删除的记录；
+    /// 对象删除失败（如 RustFS 离线）时本轮中止，其余记录保留到下一轮，不会留下没有记录的对象。
     /// </summary>
     /// <returns>删除的媒体数。</returns>
     public async Task<int> ExpireAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
         int total = 0;
-        int deleted = 0;
-        while (!cancellationToken.IsCancellationRequested)
+        bool failed = false;
+        while (!failed && !cancellationToken.IsCancellationRequested)
         {
-            // SQL_NEED: 需要 for update skip locked 跳过正被复用而锁定的行，并以 returning 取回待删除对象；SqlSugar 不支持。
-            List<string> keys = await Db.Ado.SqlQueryAsync<string>(
-                """
-                delete from chat_media_object
-                where id in (
-                    select id from chat_media_object
-                    where last_referenced_at < @cutoff
-                    order by last_referenced_at
-                    limit @limit
-                    for update skip locked)
-                returning object_key
-                """,
-                new
-                {
-                    cutoff,
-                    limit = EXPIRE_BATCH_SIZE
-                });
-            foreach (string key in keys)
-                if (await DeleteObjectQuietlyAsync(key)) deleted++;
-            total += keys.Count;
-            if (keys.Count < EXPIRE_BATCH_SIZE) break;
+            (int selected, int deleted, failed) = await Db.InTransactionAsync(() => ExpireBatchAsync(cutoff));
+            total += deleted;
+            if (selected < EXPIRE_BATCH_SIZE) break;
         }
 
         _logger.LogInformation(
-            "聊天媒体过期清理（最后引用早于 {Cutoff}）：数据库 chat_media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Deleted} 个对象，失败 {Failed} 个",
+            "聊天媒体过期清理（最后引用早于 {Cutoff}）：数据库 chat_media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Objects} 个对象",
             cutoff,
             total,
             _bucket,
-            deleted,
-            total - deleted);
+            total);
+        if (failed) _logger.LogWarning("聊天媒体对象删除失败，本轮过期清理中止，其余过期媒体下一轮重试");
         return total;
     }
 
-    private async Task<string?> FindKeyAsync(long chatMediaId) =>
-        await Db.Queryable<ChatMediaObjectRecord>()
-                .Where(item => item.Id == chatMediaId)
-                .Select(item => item.ObjectKey)
-                .FirstAsync();
+    // 调用方必须处于事务中：锁定的行在事务结束前不会被复用。第一个对象删除失败后不再尝试本批其余对象。
+    private async Task<(int Selected, int Deleted, bool Failed)> ExpireBatchAsync(DateTimeOffset cutoff)
+    {
+        // SQL_NEED: 需要 for update skip locked 跳过正被复用而锁定的行；SqlSugar 不支持。
+        List<StoredKey> rows = await Db.Ado.SqlQueryAsync<StoredKey>(
+            """
+            select id as "Id", object_key as "ObjectKey"
+            from chat_media_object
+            where last_referenced_at < @cutoff
+            order by last_referenced_at
+            limit @limit
+            for update skip locked
+            """,
+            new
+            {
+                cutoff,
+                limit = EXPIRE_BATCH_SIZE
+            });
+        List<long> deleted = [];
+        bool failed = false;
+        foreach (StoredKey row in rows)
+        {
+            if (!await DeleteObjectQuietlyAsync(row.ObjectKey))
+            {
+                failed = true;
+                break;
+            }
+
+            deleted.Add(row.Id);
+        }
+
+        if (deleted.Count > 0) await Db.Deleteable<ChatMediaObjectRecord>().In(deleted).ExecuteCommandAsync();
+        return (rows.Count, deleted.Count, failed);
+    }
 
     // 逐个对象的删除只记 Debug，批量清理由调用方汇总记录。
     private async Task<bool> DeleteObjectQuietlyAsync(string key)

@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Sockets;
 using Shinano.Host.Bot;
 using Shinano.Host.Plugins;
+using Shinano.Host.Web;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
 using Sora.Core.Types;
 using Sora.Entities.Info;
@@ -20,6 +22,7 @@ internal static class StatusEndpoints
         PluginRuntime     plugins,
         LogFileLayout     logLayout,
         LoggingOptions    logging,
+        DeploymentOptions deployment,
         IConfiguration    configuration,
         CancellationToken cancellationToken)
     {
@@ -52,7 +55,9 @@ internal static class StatusEndpoints
                     usedBytes = new DirectoryInfo(logLayout.Directory).EnumerateFiles().Sum(file => file.Length),
                     limitMiB  = logging.MaxTotalSizeMiB
                 },
-                statusPage = StatusPageLink.From(configuration)
+                statusPage = StatusPageLink.From(configuration),
+                // 统计按部署时区分日，面板的"今天"与日期列表也按它计算；故障模式下同样可用。
+                timeZone = deployment.TimeZone
             });
     }
 
@@ -115,12 +120,10 @@ public sealed class StatusPageLink
     public static StatusPageLink From(IConfiguration configuration)
     {
         IConfigurationSection section = configuration.GetSection(SECTION_NAME);
-        string text = section["ListenAddress"] is { Length: > 0 } value ? value.Trim() : "127.0.0.1";
-        IPAddress address = text.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            ? IPAddress.Loopback
-            : IPAddress.TryParse(text, out IPAddress? parsed) && !parsed.Equals(IPAddress.Any) && !parsed.Equals(IPAddress.IPv6Any)
-                ? parsed
-                : IPAddress.Loopback;
+        // 地址无效时状态页回退到回环地址监听，链接同样指向回环地址。
+        IPAddress address = section["ListenAddress"] is { Length: > 0 } value
+            ? WebEndpointResolver.ParseListenAddress(value, out _) ?? IPAddress.Loopback
+            : IPAddress.Loopback;
         int port = section.GetValue("Port", DEFAULT_PORT) is var configured and >= 1 and <= 65535 ? configured : DEFAULT_PORT;
         string scheme = string.IsNullOrWhiteSpace(section["CertificatePath"]) ? "http" : "https";
         string host = address.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{address}]" : address.ToString();

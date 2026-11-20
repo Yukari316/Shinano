@@ -2,10 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, describeError } from '../api'
 import { formatTime, isoDate, recentDates, shortDate } from '../format'
+import { overview } from '../status'
 import type { ArchiveGap } from '../types'
 
 const STRIP_DAYS = 30
-const DAY_MS = 86_400_000
 
 const CAUSE_TEXT: Record<ArchiveGap['cause'], string> = {
   DatabaseOffline: '数据库离线',
@@ -30,17 +30,19 @@ interface GapDay {
   causes: ArchiveGap['cause'][]
 }
 
-// 每天一格：与缺口区间有重叠的日子记下原因；数据库离线最严重，用 error 色，其余缺口用 warning 色。
-const days = computed<GapDay[]>(() =>
-  recentDates(STRIP_DAYS).map((date) => {
-    const start = new Date(`${date}T00:00:00`).getTime()
-    const end = start + DAY_MS
-    const causes = gaps.value
-      .filter((gap) => new Date(gap.startedAt).getTime() < end && new Date(gap.endedAt).getTime() >= start)
-      .map((gap) => gap.cause)
+// 每天一格（按部署时区分日，与统计一致）：与缺口区间有重叠的日子记下原因；数据库离线最严重，用 error 色，其余缺口用 warning 色。
+const days = computed<GapDay[]>(() => {
+  const timeZone = overview.value?.timeZone
+  const spans = gaps.value.map((gap) => ({
+    cause: gap.cause,
+    from: isoDate(new Date(gap.startedAt), timeZone),
+    to: isoDate(new Date(gap.endedAt), timeZone)
+  }))
+  return recentDates(STRIP_DAYS, timeZone).map((date) => {
+    const causes = spans.filter((span) => span.from <= date && date <= span.to).map((span) => span.cause)
     return { date, causes: [...new Set(causes)] }
   })
-)
+})
 const gapDays = computed(() => days.value.filter((day) => day.causes.length > 0).length)
 
 function cellClass(day: GapDay): string {
@@ -56,7 +58,7 @@ const readout = computed(() => {
   const day = days.value.find((item) => item.date === active.value)
   return day ? describe(day) : `近 ${STRIP_DAYS} 天有 ${gapDays.value} 天存在缺口`
 })
-const today = isoDate(new Date())
+const today = computed(() => isoDate(new Date(), overview.value?.timeZone))
 </script>
 
 <template>

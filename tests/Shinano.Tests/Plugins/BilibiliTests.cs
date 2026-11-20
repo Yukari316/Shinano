@@ -1,5 +1,7 @@
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using PuppeteerSharp;
 using Shinano.Framework.Plugins;
@@ -9,6 +11,9 @@ using Shinano.Plugin.Bilibili.Login;
 using Shinano.Plugin.Bilibili.Persistence;
 using Shinano.Tests.Host;
 using SkiaSharp;
+using Sora.Core.Enums;
+using Sora.Core.Types;
+using Sora.Entities.Interfaces;
 using Sora.Entities.Message;
 using Sora.Entities.Segments;
 
@@ -135,6 +140,51 @@ public sealed class BilibiliTests
     }
 
     [Fact]
+    public void TextNodes_PutHeaderThenTruncatedPlainTextPerDynamic()
+    {
+        BiliDynamic item = Feed.Items.Single(dynamic => dynamic.Id.EndsWith('8'));
+        BiliDynamic longText = new()
+        {
+            Id          = "900000000000000001",
+            Kind        = item.Kind,
+            AuthorId    = item.AuthorId,
+            AuthorName  = "虚构研究所",
+            AuthorFace  = string.Empty,
+            Action      = "发布了动态",
+            PublishedAt = item.PublishedAt,
+            Text        = [new BiliText { Kind = BiliTextKind.Plain, Text = new string('字', BiliPusher.FALLBACK_TEXT_MAX) + "😀溢出" }]
+        };
+
+        List<ForwardedMessageNode> nodes = [.. BiliPusher.TextNodes(114514, "虚构研究所", [item, longText])];
+
+        Assert.Equal(3, nodes.Count);
+        Assert.Equal("虚构研究所更新了喵", nodes[0].Segments.GetText());
+        Assert.All(nodes, node => Assert.IsType<TextSegment>(Assert.Single(node.Segments)));
+        string truncated = nodes[2].Segments.GetText();
+        Assert.StartsWith("虚构研究所发布了动态：字", truncated);
+        Assert.EndsWith("字……", truncated);
+    }
+
+    // 首选方式失败（如 IM 端下载图片失败）时改发纯文本合并转发，送达即算成功；未连接 LLBot 时不发送，返回失败以便下一轮重试。
+    [Fact]
+    public async Task PushDynamicsAsync_FallsBackToPlainTextForward_AndFailsWithoutConnection()
+    {
+        BiliDynamic item = Feed.Items.Single(dynamic => dynamic.Id.EndsWith('5'));
+        (IBotApi api, ScriptedBotApi script) = ScriptedBotApi.Create(false, true);
+        BiliPusher pusher = new(new RenderingContext(new BiliConfig(), new GroupBot { Api = api }), NullLogger<BiliPusher>.Instance);
+
+        Assert.True(await pusher.PushDynamicsAsync(1000, "虚构研究所", [(item, new BiliCard { Png = [1] })]));
+
+        Assert.Equal(2, script.Sent.Count);
+        IReadOnlyList<ForwardedMessageNode> fallback = Assert.IsType<ForwardSegment>(Assert.Single(script.Sent[1])).Messages;
+        Assert.Equal(2, fallback.Count);
+        Assert.All(fallback, node => Assert.IsType<TextSegment>(Assert.Single(node.Segments)));
+
+        BiliPusher offline = new(new RenderingContext(new BiliConfig(), new GroupBot()), NullLogger<BiliPusher>.Instance);
+        Assert.False(await offline.PushDynamicsAsync(1000, "虚构研究所", [(item, new BiliCard { Png = [1] })]));
+    }
+
+    [Fact]
     public async Task RenderAsync_ReportsTruncatedTextByConfiguredLines()
     {
         using BiliHttp http = new(NullLogger<BiliHttp>.Instance);
@@ -219,9 +269,14 @@ public sealed class BilibiliTests
 
     private sealed class RenderingContext : IPluginInitializationContext
     {
-        private readonly BiliConfig _config;
+        private readonly BiliConfig    _config;
+        private readonly IBotAccessor? _bot;
 
-        public RenderingContext(BiliConfig config) => _config = config;
+        public RenderingContext(BiliConfig config, IBotAccessor? bot = null)
+        {
+            _config = config;
+            _bot    = bot;
+        }
 
         public string PluginId => "bilibili";
 
@@ -235,7 +290,7 @@ public sealed class BilibiliTests
 
         public IPluginBuckets Buckets => throw new NotSupportedException();
 
-        public IBotAccessor Bot => throw new NotSupportedException();
+        public IBotAccessor Bot => _bot ?? throw new NotSupportedException();
 
         public IPluginAssets Assets => throw new NotSupportedException();
 
@@ -250,6 +305,8 @@ public sealed class BilibiliTests
         public IPluginTools Tools => throw new NotSupportedException();
 
         public string DataDirectory => throw new NotSupportedException();
+
+        public TimeZoneInfo TimeZone => TimeZoneInfo.Utc;
 
         public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();
 
@@ -268,5 +325,41 @@ public sealed class BilibiliTests
     private sealed class FixedConfig<T> : IPluginConfig<T> where T : class
     {
         public required T Value { get; init; }
+    }
+
+    private sealed class GroupBot : IBotAccessor
+    {
+        public IBotApi? Api { get; init; }
+
+        public long SelfId => 10001;
+
+        public IReadOnlyList<long> SuperUsers => [];
+
+        public Task<MilkyCallResult> CallMilkyAsync(string action, JsonObject parameters, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    /// <summary>按顺序给出群消息的发送结果并记录发出的消息；其他调用不支持。</summary>
+    public class ScriptedBotApi : DispatchProxy
+    {
+        private readonly Queue<bool> _results = [];
+
+        public List<MessageBody> Sent { get; } = [];
+
+        public static (IBotApi Api, ScriptedBotApi Script) Create(params bool[] results)
+        {
+            IBotApi api = Create<IBotApi, ScriptedBotApi>();
+            ScriptedBotApi script = (ScriptedBotApi)(object)api;
+            foreach (bool result in results) script._results.Enqueue(result);
+            return (api, script);
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            // SAFE: DispatchProxy 调用接口方法时总会给出方法与参数。
+            if (targetMethod!.Name != nameof(IBotApi.SendGroupMessageAsync)) throw new NotSupportedException(targetMethod.Name);
+            Sent.Add((MessageBody)args![1]!);
+            return ValueTask.FromResult(_results.Dequeue() ? SendMessageResult.Ok(1) : SendMessageResult.Fail(ApiStatusCode.ProtocolError, "下载图片失败"));
+        }
     }
 }

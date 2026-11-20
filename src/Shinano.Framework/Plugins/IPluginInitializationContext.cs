@@ -49,6 +49,12 @@ public interface IPluginInitializationContext
     IPluginTools Tools { get; }
 
     /// <summary>
+    /// 部署配置的时区（<c>Deployment:TimeZone</c>，与聊天分区、发言统计相同）。按日计数、在卡片中显示时间等与日期有关的业务都使用它，
+    /// 不使用机器本地时区；有固定时区语义的数据（如 B站动态按北京时间显示）除外。修改后重启生效。
+    /// </summary>
+    TimeZoneInfo TimeZone { get; }
+
+    /// <summary>
     /// 登记插件启停回调：插件被启用（含首次初始化完成后）时以 true 调用，被管理员停用时以 false 调用；数据库离线时的暂停不触发。
     /// 只供必须随启停管理外部进程的插件使用（如 NB2Bridge）。回调在宿主启停流程中同步执行，须很快返回，耗时工作放到后台；
     /// 回调抛出的异常只记录日志。只能在 <see cref="IShinanoPlugin.InitializeAsync" /> 中登记。

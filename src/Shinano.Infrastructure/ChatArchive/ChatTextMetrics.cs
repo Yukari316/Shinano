@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using Sora.Entities.Segments;
@@ -7,9 +8,15 @@ namespace Shinano.Infrastructure.ChatArchive;
 /// <summary>聊天字数规则。</summary>
 public static class ChatTextMetrics
 {
+    private const int VARIATION_SELECTORS_START            = 0xFE00;
+    private const int VARIATION_SELECTORS_END              = 0xFE0F;
+    private const int VARIATION_SELECTORS_SUPPLEMENT_START = 0xE0100;
+    private const int VARIATION_SELECTORS_SUPPLEMENT_END   = 0xE01EF;
+
     /// <summary>
     /// 按用户可见字符计数：以扩展字素簇为单位，完整 emoji（含组合序列、肤色与国旗）计为 1；
-    /// 空白与控制字符不计入。
+    /// 空白、控制字符、格式字符（如零宽空格 U+200B、U+2060）与单独出现的变体选择符（如 U+FE0F）不计入。
+    /// 孤立的代理项按 1 个字符计。
     /// </summary>
     public static int CountVisibleCharacters(string text)
     {
@@ -18,13 +25,22 @@ public static class ChatTextMetrics
         while (index < text.Length)
         {
             int length = StringInfo.GetNextTextElementLength(text, index);
-            Rune first = Rune.GetRuneAt(text, index);
-            if (!Rune.IsWhiteSpace(first) && !Rune.IsControl(first)) count++;
+            if (Rune.DecodeFromUtf16(text.AsSpan(index), out Rune first, out _) != OperationStatus.Done || IsVisible(first)) count++;
             index += length;
         }
 
         return count;
     }
+
+    private static bool IsVisible(Rune rune) =>
+        !Rune.IsWhiteSpace(rune)
+        && !Rune.IsControl(rune)
+        && Rune.GetUnicodeCategory(rune) != UnicodeCategory.Format
+        && !IsVariationSelector(rune.Value);
+
+    private static bool IsVariationSelector(int value) =>
+        value is >= VARIATION_SELECTORS_START and <= VARIATION_SELECTORS_END
+              or >= VARIATION_SELECTORS_SUPPLEMENT_START and <= VARIATION_SELECTORS_SUPPLEMENT_END;
 }
 
 /// <summary>一条消息计入发言统计的数量。</summary>

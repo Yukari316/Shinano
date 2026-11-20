@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhCaretUp, PhPlus, PhTrash } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, watch } from 'vue'
 import AnswerPreview from './AnswerPreview.vue'
 import EntryForm from './EntryForm.vue'
@@ -22,20 +22,22 @@ const error = ref('')
 const groupNames = computed(() => new Map(groups.value.map((group) => [group.groupId, group.name])))
 
 async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
-  error.value = ''
-  const response = await props.context.api(path, init)
-  if (response.ok) return response.status === 204 ? null : ((await response.json()) as T)
-  const body = (await response.json().catch(() => ({}))) as { error?: string }
-  error.value = body.error ?? `请求失败（${response.status}）`
-  return null
+  const result = await callApi<T>(props.context, path, init)
+  error.value = result.error ?? ''
+  return result.ok ? result.body : null
 }
+
+// 只采用最近一次请求的结果：快速切换筛选或输入关键字时，较慢的旧响应不覆盖新结果。
+let entriesRequest = 0
 
 async function loadEntries() {
   const query = new URLSearchParams()
   if (filterGroup.value !== '') query.set('groupId', String(filterGroup.value))
   if (filterType.value !== '') query.set('matchType', filterType.value)
   if (keyword.value.trim()) query.set('keyword', keyword.value.trim())
-  entries.value = (await call<Entry[]>(`/entries?${query}`)) ?? []
+  const request = ++entriesRequest
+  const result = await call<Entry[]>(`/entries?${query}`)
+  if (request === entriesRequest) entries.value = result ?? []
 }
 
 async function loadForbidden() {
@@ -50,11 +52,7 @@ async function removeEntry(entry: Entry) {
 
 async function addForbidden() {
   if (!newForbidden.value.trim()) return
-  await call('/forbidden', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: newForbidden.value.trim() })
-  })
+  await call('/forbidden', jsonBody('POST', { question: newForbidden.value.trim() }))
   if (!error.value) newForbidden.value = ''
   await loadForbidden()
 }
@@ -67,10 +65,6 @@ async function removeForbidden(item: ForbiddenQuestion) {
 function onSaved() {
   showForm.value = false
   void loadEntries()
-}
-
-function formatTime(value: string): string {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
 let keywordTimer: number | undefined

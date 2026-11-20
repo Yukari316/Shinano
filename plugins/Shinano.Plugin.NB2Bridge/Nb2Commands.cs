@@ -73,10 +73,10 @@ public sealed class Nb2Commands
             },
             new()
             {
-                Level = status.RecentCrashes == 0 ? CardLevel.Normal : CardLevel.Warning,
-                Name  = "自动重启",
-                Value = $"{status.RecentCrashes} 次",
-                Detail = "最近 1 分钟"
+                Level  = status.AutoRestarts == 0 ? CardLevel.Normal : CardLevel.Warning,
+                Name   = "自动重启",
+                Value  = $"{status.AutoRestarts} 次",
+                Detail = $"自上次就绪起，最多 {Nb2Runner.MAX_AUTO_RESTARTS} 次"
             }
         ];
 
@@ -143,7 +143,7 @@ public sealed class Nb2Commands
                 new StatusCard
                 {
                     Title = TITLE,
-                    Time  = _time.GetLocalNow(),
+                    Time  = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _context.TimeZone),
                     Items = items
                 });
             return new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png));

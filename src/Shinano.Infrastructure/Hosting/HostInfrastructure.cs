@@ -228,23 +228,41 @@ public sealed class HostInfrastructure : IDisposable
     }
 
     // 启动时先执行一次再按间隔执行，与日志清理一致：调试或运行不满一个间隔的进程同样会清理过期媒体，
-    // 否则聊天分区已在账号初始化时删除，对应的聊天媒体记录与对象却一直残留。
+    // 否则聊天分区已在账号初始化时删除，对应的聊天媒体记录与对象却一直残留。RustFS 不可用时跳过本轮。
     private void RegisterMaintenance(Components components)
     {
         _scheduler.Register(
             SCHEDULER_OWNER,
             "persistent-media-gc",
             MaintenanceInterval,
-            token => components.PersistentMedia.CollectOrphansAsync(_time.GetUtcNow(), token),
+            async token =>
+            {
+                if (await StorageReadyAsync(components, "持久媒体回收", token))
+                    await components.PersistentMedia.CollectOrphansAsync(_time.GetUtcNow(), token);
+            },
             runImmediately: true);
         _scheduler.Register(
             SCHEDULER_OWNER,
             "chat-media-expiry",
             MaintenanceInterval,
-            token => components.ChatMedia.ExpireAsync(
-                _time.GetUtcNow() - TimeSpan.FromDays(_settings.ChatArchive.RetentionDays),
-                token),
+            async token =>
+            {
+                if (!await StorageReadyAsync(components, "聊天媒体过期清理", token)) return;
+                DateTimeOffset cutoff = ChatPartitionMaintainer.RetentionCutoff(
+                    _time.GetUtcNow(),
+                    components.TimeZone,
+                    _settings.ChatArchive.RetentionDays);
+                await components.ChatMedia.ExpireAsync(cutoff, token);
+            },
             runImmediately: true);
+    }
+
+    // 按节流规则检查 RustFS，同时作为一次触发让离线后的恢复得以发现。
+    private async Task<bool> StorageReadyAsync(Components components, string task, CancellationToken cancellationToken)
+    {
+        if (await components.StorageAvailability.CheckAsync(force: false, cancellationToken)) return true;
+        _logger.LogInformation("RustFS 不可用，{Task}跳过本轮", task);
+        return false;
     }
 
     private async Task MaintainAccountAsync(Components components, long selfId, CancellationToken cancellationToken)

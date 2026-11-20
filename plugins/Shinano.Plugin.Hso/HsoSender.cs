@@ -19,12 +19,9 @@ namespace Shinano.Plugin.Hso;
 /// </summary>
 public sealed class HsoSender
 {
-    private const long   MIB           = 1024 * 1024;
-    private const long   IMAGE_LIMIT   = 20 * MIB;
-    private const string TEMP_PREFIX   = "tmp/";
-    private const string BASE64_PREFIX = "base64://";
-    private const string CARD_LABEL    = "HSO";
-    private const string UNTITLED      = "无题";
+    private const string TEMP_PREFIX = "tmp/";
+    private const string CARD_LABEL  = "HSO";
+    private const string UNTITLED    = "无题";
 
     /// <summary>临时对象的保留时间：足够宿主归档读取，超过即由清理任务删除。</summary>
     public static readonly TimeSpan TempRetention = TimeSpan.FromHours(1);
@@ -46,7 +43,8 @@ public sealed class HsoSender
     public async Task<bool> SendAsync(MessageReceivedEvent e, HsoImageRecord record, CancellationToken cancellationToken)
     {
         bool sent = await SendOriginalAsync(e, record, cancellationToken);
-        if (sent && record.InfoState == (int)HsoInfoState.Found && Card(record) is { } card) await SendCardAsync(e, card);
+        if (sent && record.InfoState == (int)HsoInfoState.Found && Card(record) is { } card)
+            await ImageReplies.SendCardAsync(e, _context.Images, card, _logger);
         return sent;
     }
 
@@ -55,14 +53,7 @@ public sealed class HsoSender
     {
         IPluginBucket bucket = _gallery.Bucket;
         DateTimeOffset cutoff = DateTimeOffset.UtcNow - TempRetention;
-        int deleted = 0;
-        await foreach (PluginBucketObject item in bucket.ListAsync(TEMP_PREFIX, cancellationToken))
-        {
-            if (item.LastModified >= cutoff) continue;
-            await bucket.DeleteObjectAsync(item.Key, cancellationToken);
-            deleted++;
-        }
-
+        int deleted = await bucket.DeleteOlderThanAsync(TEMP_PREFIX, cutoff, cancellationToken);
         _logger.LogInformation("Hso 临时对象清理（早于 {Cutoff}）：bucket {Bucket} 删除 {Count} 个对象", cutoff, bucket.Name, deleted);
     }
 
@@ -98,10 +89,6 @@ public sealed class HsoSender
         };
     }
 
-    /// <summary>卡片的文字形式，绘制失败时代替图片发送。</summary>
-    public static string ToText(InfoCard card) =>
-        string.Join('\n', [card.Title, .. card.Rows.Select(row => $"{row.Label}：{(row.Style == CardRowStyle.Items ? string.Join(' ', row.Items) : row.Text)}")]);
-
     private static CardRow[] Row(string label, string? text) =>
         text is null
             ? []
@@ -117,12 +104,11 @@ public sealed class HsoSender
     private async Task<bool> SendOriginalAsync(MessageReceivedEvent e, HsoImageRecord record, CancellationToken cancellationToken)
     {
         IPluginBucket bucket = _gallery.Bucket;
-        if (record.Size > IMAGE_LIMIT)
+        if (record.Size > ImageReplies.IMAGE_LIMIT)
         {
-            ApiResult<string> upload = await e.Api.UploadGroupFileAsync(e.Message.GroupId, await bucket.CreateImUrlAsync(record.ObjectKey), FileName(record));
-            if (!upload.IsSuccess) _logger.LogWarning("上传 Hso 图片 {Id} 为群文件失败：{Code} {Message}", record.Id, upload.Code, upload.Message);
-            else _logger.LogInformation("Hso 图片 {Id} 超过 20 MB（{Size}），已作为群文件发送", record.Id, ImageInspector.FormatSize(record.Size));
-            return upload.IsSuccess;
+            bool uploaded = await ImageReplies.UploadFileAsync(e, await bucket.CreateImUrlAsync(record.ObjectKey), FileName(record), _logger);
+            if (uploaded) _logger.LogInformation("Hso 图片 {Id} 超过 20 MB（{Size}），已作为群文件发送", record.Id, ImageInspector.FormatSize(record.Size));
+            return uploaded;
         }
 
         if (!record.Blocked && await SendImageAsync(e, await bucket.CreateImUrlAsync(record.ObjectKey), record.Id)) return true;
@@ -141,32 +127,9 @@ public sealed class HsoSender
             return false;
         }
 
-        if (PixelTweak.Apply(original, record.MediaType) is not { } tweaked)
-        {
-            _logger.LogInformation("Hso 图片 {Id}（{MediaType}）无法修改像素，不再重发", record.Id, record.MediaType);
-            return false;
-        }
-
-        IPluginBucket bucket = _gallery.Bucket;
+        _logger.LogInformation("Hso 图片 {Id} 改像素后重发", record.Id);
         string key = $"{TEMP_PREFIX}{Guid.NewGuid():N}{Path.GetExtension(record.ObjectKey)}";
-        using (MemoryStream content = new(tweaked))
-            await bucket.PutAsync(key, content, record.MediaType, null, cancellationToken);
-
-        bool sent = await SendImageAsync(e, await bucket.CreateImUrlAsync(key), record.Id);
-        _logger.LogInformation(
-            sent ? "Hso 图片 {Id} 改像素后发送成功 {Before} → {After}" : "Hso 图片 {Id} 改像素后发送失败 {Before} → {After}",
-            record.Id,
-            record.Sha256,
-            ImageInspector.Sha256(tweaked));
-        if (sent)
-        {
-            _logger.LogInformation("临时对象 bucket {Bucket}/{Key} 保留供归档读取，{Hours} 小时后由清理任务删除", bucket.Name, key, TempRetention.TotalHours);
-            return true;
-        }
-
-        await bucket.DeleteObjectAsync(key, CancellationToken.None);
-        _logger.LogInformation("已从 bucket {Bucket} 删除未发出的临时对象 {Key}", bucket.Name, key);
-        return false;
+        return await ImageReplies.SendTweakedAsync(e, _gallery.Bucket, original, record.MediaType, key, null, _logger, cancellationToken);
     }
 
     private async Task<bool> SendImageAsync(MessageReceivedEvent e, string url, long id)
@@ -174,23 +137,6 @@ public sealed class HsoSender
         SendMessageResult result = await e.ReplyAsync(new MessageBody().AddImage(url));
         if (!result.IsSuccess) _logger.LogWarning("发送 Hso 图片 {Id} 失败：{Code} {Error}", id, result.Code, result.ErrorMessage);
         return result.IsSuccess;
-    }
-
-    private async Task SendCardAsync(MessageReceivedEvent e, InfoCard card)
-    {
-        MessageBody body;
-        try
-        {
-            body = new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(_context.Images.RenderInfo(card)));
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "绘制 Hso 作品信息卡失败，改发文字");
-            body = new MessageBody(ToText(card));
-        }
-
-        SendMessageResult result = await e.ReplyAsync(body);
-        if (!result.IsSuccess) _logger.LogWarning("发送 Hso 作品信息卡失败：{Code} {Error}", result.Code, result.ErrorMessage);
     }
 
     private static string FileName(HsoImageRecord record) =>

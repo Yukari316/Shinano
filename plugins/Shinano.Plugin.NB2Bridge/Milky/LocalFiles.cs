@@ -48,7 +48,6 @@ public sealed class LocalFiles
     private readonly IPluginInitializationContext _context;
     private readonly TimeProvider                 _time;
     private readonly ILogger<LocalFiles>          _logger;
-    private          bool                         _bucketReady;
 
     /// <summary>创建上传器。</summary>
     public LocalFiles(IPluginInitializationContext context, TimeProvider time, ILogger<LocalFiles> logger)
@@ -103,15 +102,7 @@ public sealed class LocalFiles
     public async Task CleanupAsync(CancellationToken cancellationToken)
     {
         IPluginBucket bucket = _context.Buckets.Get(BUCKET_PURPOSE);
-        DateTimeOffset cutoff = _time.GetUtcNow() - ObjectRetention;
-        int deleted = 0;
-        await foreach (PluginBucketObject item in bucket.ListAsync(null, cancellationToken))
-        {
-            if (item.LastModified >= cutoff) continue;
-            await bucket.DeleteObjectAsync(item.Key, cancellationToken);
-            deleted++;
-        }
-
+        int deleted = await bucket.DeleteOlderThanAsync(null, _time.GetUtcNow() - ObjectRetention, cancellationToken);
         _logger.LogInformation("清理 NB2 发送的临时文件：删除 {Count} 个", deleted);
     }
 
@@ -127,11 +118,7 @@ public sealed class LocalFiles
     {
         string path = new Uri(uri).LocalPath;
         IPluginBucket bucket = _context.Buckets.Get(BUCKET_PURPOSE);
-        if (!_bucketReady)
-        {
-            await bucket.EnsureCreatedAsync(cancellationToken);
-            _bucketReady = true;
-        }
+        await bucket.EnsureCreatedAsync(cancellationToken);
 
         string extension = Path.GetExtension(path);
         string key = $"{_time.GetUtcNow().ToString("yyyyMMdd", CultureInfo.InvariantCulture)}/{Guid.NewGuid():N}{extension}";

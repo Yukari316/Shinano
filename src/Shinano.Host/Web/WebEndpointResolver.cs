@@ -28,11 +28,8 @@ public static class WebEndpointResolver
             port = WebOptions.DEFAULT_PORT;
         }
 
-        IPAddress? address = ParseAddress(options.ListenAddress);
-        if (address is null)
-            return Fallback(port, [.. problems, $"无法解析监听地址 \"{options.ListenAddress}\""]);
-        if (address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any))
-            return Fallback(port, [.. problems, $"不允许监听全部网卡地址 {address}"]);
+        if (ParseListenAddress(options.ListenAddress, out string? addressProblem) is not { } address)
+            return Fallback(port, [.. problems, addressProblem ?? string.Empty]);
 
         X509Certificate2? certificate = null;
         if (!string.IsNullOrWhiteSpace(options.CertificatePath))
@@ -51,11 +48,23 @@ public static class WebEndpointResolver
         };
     }
 
-    private static IPAddress? ParseAddress(string value)
+    /// <summary>
+    /// 解析监听地址（面板与状态页共用）：接受具体 IP 或 <c>localhost</c>；无法解析或为全部网卡地址时返回 null，
+    /// <paramref name="problem" /> 为可直接展示的原因。
+    /// </summary>
+    public static IPAddress? ParseListenAddress(string value, out string? problem)
     {
         string trimmed = value.Trim();
-        if (trimmed.Equals(LOCALHOST, StringComparison.OrdinalIgnoreCase)) return IPAddress.Loopback;
-        return IPAddress.TryParse(trimmed, out IPAddress? address) ? address : null;
+        IPAddress? address = trimmed.Equals(LOCALHOST, StringComparison.OrdinalIgnoreCase)
+            ? IPAddress.Loopback
+            : IPAddress.TryParse(trimmed, out IPAddress? parsed) ? parsed : null;
+        problem = address switch
+        {
+            null => $"无法解析监听地址 \"{value}\"",
+            _ when address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) => $"不允许监听全部网卡地址 {address}",
+            _ => null
+        };
+        return problem is null ? address : null;
     }
 
     private static X509Certificate2? LoadCertificate(string path, string? password, out string? problem)

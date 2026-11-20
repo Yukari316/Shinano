@@ -30,7 +30,7 @@ public static class UpgradeCommand
         DeploymentLayout source = context.Layout;
         string targetRoot = context.Arguments.Value(TARGET_OPTION) ?? throw new ToolException("用法：upgrade --target <要升级的部署根目录>");
         DeploymentLayout target = DeploymentLayout.At(targetRoot);
-        if (SamePath(source.Root, target.Root)) throw new ToolException("请把新发布包解压到另一个目录，再从那里对现有部署运行 upgrade");
+        if (DeploymentLayout.SamePath(source.Root, target.Root)) throw new ToolException("请把新发布包解压到另一个目录，再从那里对现有部署运行 upgrade");
         if (!File.Exists(target.HostExecutable) || !File.Exists(target.LocalConfigPath))
             throw new ToolException($"{target.Root} 不是已初始化的 Shinano 部署");
         DeploymentState state = DeploymentStateStore.Read(target)
@@ -141,9 +141,14 @@ public static class UpgradeCommand
         {
             ProgramSwap.Replace(upgrade.Source, target, upgrade.Log);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ToolException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return $"升级失败，已还原 {upgrade.FromVersion}：{exception.Message}";
+        }
+        catch (ToolException exception)
+        {
+            // 还原旧版也失败了，消息中写明旧版的位置与手动还原方法。
+            return $"升级失败，未能自动还原：{exception.Message}";
         }
 
         try
@@ -199,7 +204,7 @@ public static class UpgradeCommand
             {
                 try
                 {
-                    return process.MainModule?.FileName is { } path && SamePath(path, executable);
+                    return process.MainModule?.FileName is { } path && DeploymentLayout.SamePath(path, executable);
                 }
                 catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or NotSupportedException)
                 {
@@ -208,12 +213,6 @@ public static class UpgradeCommand
                 }
             }
         });
-
-    private static bool SamePath(string left, string right) =>
-        string.Equals(
-            Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar),
-            Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>一次升级的输入。</summary>
     private sealed class Upgrade

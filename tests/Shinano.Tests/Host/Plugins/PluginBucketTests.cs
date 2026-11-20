@@ -1,6 +1,7 @@
 using System.Text;
 using Shinano.Framework.Plugins;
 using Shinano.Host.Plugins.Capabilities;
+using Shinano.Infrastructure.Storage;
 using Shinano.Tests.Support;
 
 namespace Shinano.Tests.Host.Plugins;
@@ -48,6 +49,41 @@ public sealed class PluginBucketTests
         }
 
         Assert.Empty(await ListAsync(bucket, null));
+    }
+
+    // "已创建"按实例记住；bucket 在宿主之外被删除后，写入时重新创建；bucket 不存在时删除对象视为成功，RustFS 不可达时抛出。
+    [Fact]
+    public async Task Bucket_RecreatesAfterExternalDeletion_AndOnlyTreatsAnsweredMissingAsDeleted()
+    {
+        PluginBuckets buckets = new(["recreate"], _fixture.BucketPrefix, _fixture.Ready.Storage, LIMIT);
+        IPluginBucket bucket = buckets.Get("recreate");
+        Assert.Same(bucket, buckets.Get("recreate"));
+        try
+        {
+            await bucket.EnsureCreatedAsync(Token);
+            await _fixture.Ready.Storage.DeleteBucketAsync(bucket.Name, Token);
+            await bucket.EnsureCreatedAsync(Token);
+
+            Assert.Equal(5, await PutAsync((PluginBucket)bucket, "a.txt", "hello"));
+            Assert.Equal(["a.txt"], (await ListAsync((PluginBucket)bucket, null)).Select(item => item.Key));
+
+            await _fixture.Ready.Storage.DeleteBucketAsync(bucket.Name, Token);
+            await bucket.DeleteObjectAsync("a.txt", Token);
+        }
+        finally
+        {
+            await bucket.DeleteAsync(CancellationToken.None);
+        }
+
+        using ObjectStorage offline = new(
+            new RustFsOptions
+            {
+                Endpoint  = "http://127.0.0.1:1",
+                AccessKey = "offline",
+                SecretKey = "offline"
+            });
+        PluginBucket unreachable = new(bucket.Name, offline, LIMIT);
+        await Assert.ThrowsAnyAsync<Exception>(() => unreachable.DeleteObjectAsync("a.txt", Token));
     }
 
     private static async Task<long> PutAsync(PluginBucket bucket, string key, string text)

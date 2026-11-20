@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhArrowDown, PhArrowUp, PhAt, PhPaperclip, PhTextT, PhX } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, ref } from 'vue'
 import AnswerPreview from './AnswerPreview.vue'
 import type { DraftPart, Entry, Group, MatchType } from './types'
@@ -57,25 +57,22 @@ async function submit(replaceVersion?: number) {
   })
   form.set('parts', JSON.stringify(payload))
 
-  try {
-    const response = await props.context.api('/entries', { method: 'POST', body: form })
-    if (response.ok) {
-      duplicate.value = null
-      question.value = ''
-      parts.value = []
-      emit('saved')
-      return
-    }
-
-    const body = (await response.json().catch(() => ({}))) as { error?: string; existing?: Entry }
-    if (response.status === 409 && body.error === 'duplicate' && body.existing) duplicate.value = body.existing
-    else if (response.status === 409) {
-      duplicate.value = null
-      error.value = '这个问题刚被别人修改或删除了，请重新提交'
-    } else error.value = body.error ?? `保存失败（${response.status}）`
-  } finally {
-    saving.value = false
+  const result = await callApi<{ error?: string; existing?: Entry }>(props.context, '/entries', { method: 'POST', body: form })
+  saving.value = false
+  if (result.ok) {
+    duplicate.value = null
+    question.value = ''
+    parts.value = []
+    emit('saved')
+    return
   }
+
+  const body = result.body ?? {}
+  if (result.status === 409 && body.error === 'duplicate' && body.existing) duplicate.value = body.existing
+  else if (result.status === 409) {
+    duplicate.value = null
+    error.value = '这个问题刚被别人修改或删除了，请重新提交'
+  } else error.value = result.error ?? `保存失败（${result.status}）`
 }
 </script>
 

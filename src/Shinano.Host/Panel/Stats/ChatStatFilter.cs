@@ -1,3 +1,5 @@
+using Shinano.Infrastructure.ChatArchive;
+
 namespace Shinano.Host.Panel.Stats;
 
 /// <summary>统计查询条件。日期为配置时区的自然日，两端都包含。</summary>
@@ -17,6 +19,11 @@ public sealed class ChatStatFilter
 
     /// <summary>只统计某个会话；为 null 时不限。</summary>
     public long? ConversationId { get; init; }
+
+    /// <summary>
+    /// 与 <see cref="ConversationId" /> 一起指定会话的类型；为 null 时不限。好友与临时会话的 ID 都是对方的 QQ 号，只按 ID 会混在一起。
+    /// </summary>
+    public ChatConversationType? ConversationType { get; init; }
 
     /// <summary>是否包含 Bot 自己发送的消息。</summary>
     public required bool IncludeBot { get; init; }

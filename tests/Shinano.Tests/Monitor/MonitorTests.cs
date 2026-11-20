@@ -124,7 +124,8 @@ public sealed class MonitorTests : IDisposable
         int port = new Uri(fake.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First()).Port;
         using ServiceProber prober = new(
             Settings(hostPort: port, objectStorage: $"http://127.0.0.1:{port}/", llBotPort: port),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now),
+            NullLogger.Instance);
         CancellationToken token = TestContext.Current.CancellationToken;
 
         ProbeRecord host = await prober.ProbeAsync(MonitoredService.Host, token);
@@ -140,6 +141,17 @@ public sealed class MonitorTests : IDisposable
 
         ProbeRecord database = await prober.ProbeAsync(MonitoredService.Database, token);
         Assert.Equal(ProbeFailure.NotConfigured, database.Failure);
+    }
+
+    // LLBot 主机填 IPv6 地址时拼出的 URI 无效，抛出的 UriFormatException 曾让探测循环与监控进程退出。
+    [Fact]
+    public async Task Prober_ClassifiesUnexpectedExceptionAsError()
+    {
+        using ServiceProber prober = new(Settings(llBotHost: "::1"), new FakeTimeProvider(Now), NullLogger.Instance);
+
+        ProbeRecord bot = await prober.ProbeAsync(MonitoredService.Bot, TestContext.Current.CancellationToken);
+
+        Assert.Equal((HealthLevel.Stopped, ProbeFailure.Error), (bot.Level, bot.Failure));
     }
 
     [Fact]
@@ -217,7 +229,11 @@ public sealed class MonitorTests : IDisposable
             LatencyMs = 1
         };
 
-    private MonitorSettings Settings(int hostPort = MonitorSettings.DEFAULT_HOST_PORT, string? objectStorage = null, int llBotPort = 3000) =>
+    private MonitorSettings Settings(
+        int     hostPort      = MonitorSettings.DEFAULT_HOST_PORT,
+        string? objectStorage = null,
+        int     llBotPort     = 3000,
+        string  llBotHost     = "127.0.0.1") =>
         new()
         {
             DataDirectory         = _directory,
@@ -228,7 +244,7 @@ public sealed class MonitorTests : IDisposable
             TimeZone              = TimeZoneInfo.Utc,
             HostWeb               = new ListenOptions { Port = hostPort },
             ObjectStorageEndpoint = objectStorage,
-            LlBotHost             = "127.0.0.1",
+            LlBotHost             = llBotHost,
             LlBotPort             = llBotPort,
             LlBotPrefix           = "milky",
             LlBotAccessToken      = "wrong"

@@ -51,6 +51,18 @@ public sealed class PluginPackageStagingTests : IDisposable
         Assert.Equal("1.0.1", File.ReadAllText(Path.Combine(_staging.PackageDirectory("sample-a"), "Sample.dll")));
     }
 
+    // 重复条目曾在解压时抛出 IOException，上传接口返回 500。
+    [Fact]
+    public async Task DuplicateEntryPackage_IsRejectedAsInvalid()
+    {
+        List<KeyValuePair<string, string>> entries = [.. PackageFixture.Package("sample-a", "1.0.0"), new("Sample.dll", "again")];
+        await using Stream zip = PackageFixture.Zip(entries);
+
+        InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(() => _staging.StageAsync(zip, TestContext.Current.CancellationToken));
+        Assert.Contains("重复", error.Message);
+        Assert.Empty(_staging.Pending());
+    }
+
     [Theory]
     [InlineData("../escape.txt")]
     [InlineData("assets/../../escape.txt")]
@@ -62,8 +74,9 @@ public sealed class PluginPackageStagingTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidDataException>(() => _staging.StageAsync(zip, TestContext.Current.CancellationToken));
         Assert.Empty(_staging.Pending());
-        Assert.False(File.Exists(Path.Combine(_staging.Root, "escape.txt")));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_staging.Root, ".incoming-*"));
+        string stagingRoot = Path.Combine(_fixture.DataDirectory, "plugin-staging");
+        Assert.False(File.Exists(Path.Combine(stagingRoot, "escape.txt")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(stagingRoot, ".incoming-*"));
     }
 
     [Theory]

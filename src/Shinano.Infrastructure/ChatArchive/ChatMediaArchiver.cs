@@ -148,7 +148,7 @@ public sealed class ChatMediaArchiver
             {
                 _logger.LogWarning(exception, "保存聊天媒体失败（消息 {MessageId}）", entry.Message.MessageId);
                 // 连接故障是 S3 客户端重试后仍失败，立即标记 RustFS 不可用，不等节流的探测；其他失败（如数据库写入）交给探测确认。
-                if (IsConnectionFault(exception)) _storageAvailability.ReportFailure(exception);
+                if (IsConnectionFault(exception)) await _storageAvailability.ReportFailureAsync(exception);
                 else _ = _storageAvailability.CheckAsync(force: false, CancellationToken.None);
                 return null;
             }
@@ -201,7 +201,7 @@ public sealed class ChatMediaArchiver
     }
 
     private async Task<BufferedMedia> DownloadAsync(string url, ChatMediaSource source, CancellationToken cancellationToken) =>
-        await _downloader.DownloadAsync(new Uri(url), source.DeclaredSize, limitBytes: null, cancellationToken);
+        await _downloader.DownloadAsync(new Uri(url), source.DeclaredSize, cancellationToken);
 
     private async Task<BufferedMedia> DecodeAsync(string base64, CancellationToken cancellationToken)
     {

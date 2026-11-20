@@ -177,12 +177,14 @@ public sealed class PanelApiTests
             new JsonObject
             {
                 ["LlBot"]    = new JsonObject { ["Port"] = 70000 },
-                ["Web"]      = new JsonObject { ["Token"] = "x" },
+                ["Web"]      = new JsonObject { ["Token"] = "x", ["ListenAddress"] = "0.0.0.0" },
+                ["Monitor"]  = new JsonObject { ["ListenAddress"] = "not-an-ip" },
                 ["Database"] = new JsonObject { ["Dsn"] = null }
             },
             Token);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-        Assert.Equal(3, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
+        // 启动时会被拒绝的监听地址（全部网卡、无法解析）在保存时就拒绝，避免重启后管理员被锁在外面。
+        Assert.Equal(5, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
 
         // 修改数据库 DSN 时先实际连接，连不上则不写入。
         HttpResponseMessage unreachable = await client.PutAsJsonAsync(
@@ -253,7 +255,29 @@ public sealed class PanelApiTests
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/archive-gaps", Token)).StatusCode);
     }
 
-    private async Task ArchiveAsync(long groupId, long senderId, int chars) =>
+    // 好友与临时会话的 ID 都是对方的 QQ 号；只按 ID 过滤时，两边的发言会合并到一起。
+    [Fact]
+    public async Task Stats_SendersOfPrivateConversation_AreSeparatedByConversationType()
+    {
+        await using PanelHarness panel = await StartAsync();
+        using HttpClient client = await LoggedInClientAsync(panel);
+        long userId = Random.Shared.NextInt64(1_000_000, 9_000_000);
+        await ArchiveAsync(userId, userId, chars: 1, ChatConversationType.Friend);
+        await ArchiveAsync(userId, userId, chars: 1, ChatConversationType.Friend);
+        await ArchiveAsync(userId, userId, chars: 1, ChatConversationType.Temp);
+
+        JsonArray? friend = await client.GetFromJsonAsync<JsonArray>(
+            $"/api/stats/senders?scope=Private&conversationId={userId}&conversationType=Friend",
+            Token);
+        JsonArray? temp = await client.GetFromJsonAsync<JsonArray>(
+            $"/api/stats/senders?scope=Private&conversationId={userId}&conversationType=Temp",
+            Token);
+
+        Assert.Equal(2, Assert.Single(friend ?? [])?["messages"]?.GetValue<int>());
+        Assert.Equal(1, Assert.Single(temp ?? [])?["messages"]?.GetValue<int>());
+    }
+
+    private async Task ArchiveAsync(long conversationId, long senderId, int chars, ChatConversationType type = ChatConversationType.Group) =>
         Assert.NotNull(
             await _fixture.Ready.ChatArchive.InsertAsync(
                 InfrastructureFixture.SELF_ID,
@@ -261,8 +285,8 @@ public sealed class PanelApiTests
                 {
                     SentAt           = DateTimeOffset.UtcNow,
                     StatDate         = ChatPartitionMaintainer.LocalDate(DateTimeOffset.UtcNow, _fixture.Ready.TimeZone),
-                    ConversationType = ChatConversationType.Group,
-                    ConversationId   = groupId,
+                    ConversationType = type,
+                    ConversationId   = conversationId,
                     SenderId         = senderId,
                     MessageId        = Random.Shared.NextInt64(1, long.MaxValue),
                     Text             = new string('字', chars),

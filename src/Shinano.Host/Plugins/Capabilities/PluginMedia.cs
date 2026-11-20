@@ -41,7 +41,7 @@ internal sealed class PluginMedia : IPluginMedia
         long?             selfId,
         CancellationToken cancellationToken)
     {
-        await using BufferedMedia media = await _downloader.DownloadAsync(url, declaredSize, null, cancellationToken);
+        await using BufferedMedia media = await _downloader.DownloadAsync(url, declaredSize, cancellationToken);
         return await _store.StoreAsync(media, mediaType, Reference(refKey, selfId), cancellationToken);
     }
 

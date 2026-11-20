@@ -8,6 +8,10 @@ internal interface IPluginSecretsHolder
     /// <summary>当前机密。</summary>
     object Current { get; }
 
-    /// <summary>整体替换机密并写入文件，调用方保证类型与声明的机密类型一致。</summary>
-    Task SaveAsync(object value, CancellationToken cancellationToken);
+    /// <summary>
+    /// 在写入锁内读取当前机密、套用修改并写入文件，避免覆盖插件同时写入的新值（如刚刷新的登录状态）。
+    /// <paramref name="apply" /> 返回 null 时不写入；返回值的类型须与声明的机密类型一致。
+    /// </summary>
+    /// <returns>是否已写入。</returns>
+    Task<bool> UpdateAsync(Func<object, object?> apply, CancellationToken cancellationToken);
 }

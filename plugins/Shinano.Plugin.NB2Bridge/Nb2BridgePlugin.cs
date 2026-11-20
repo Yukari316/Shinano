@@ -4,13 +4,14 @@ using Shinano.Plugin.NB2Bridge.Milky;
 using Shinano.Plugin.NB2Bridge.Panel;
 using Shinano.Plugin.NB2Bridge.PluginPackages;
 using Shinano.Plugin.NB2Bridge.Runtime;
+using Shinano.Plugin.NB2Bridge.Scope;
 using Sora.Entities.Events;
 
 namespace Shinano.Plugin.NB2Bridge;
 
 /// <summary>
 /// NB2Bridge：托管 NoneBot2 服务进程（随插件启停），扮演 Milky 实现端在宿主事件与 NB2 之间转换，NB2 的发送经 Sora 执行并归档；
-/// 专有页面管理进程、NB2 插件（安装、卸载、启停、配置）与日志，Super User 可私聊或群聊「NB2状态」。
+/// 专有页面管理进程、响应范围、NB2 插件（安装、卸载、启停、配置）与日志，Super User 可私聊或群聊「NB2状态」。
 /// </summary>
 public sealed class Nb2BridgePlugin : IShinanoPlugin
 {
@@ -29,6 +30,7 @@ public sealed class Nb2BridgePlugin : IShinanoPlugin
         builder.Register(scope => new Nb2Layout(scope.Resolve<IPluginInitializationContext>().DataDirectory)).SingleInstance();
         builder.RegisterType<Nb2Catalog>().SingleInstance();
         builder.RegisterType<EventTracker>().SingleInstance();
+        builder.RegisterType<Nb2ScopeStore>().SingleInstance();
         builder.RegisterType<LocalFiles>().SingleInstance();
         builder.RegisterType<MilkyActions>().SingleInstance();
         builder.RegisterType<Nb2Runner>().SingleInstance();
@@ -43,15 +45,15 @@ public sealed class Nb2BridgePlugin : IShinanoPlugin
     public void ConfigurePanel(IPanelRegistration panel) => panel.UseConfig<Nb2Config>();
 
     /// <inheritdoc />
-    public ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
+    public async ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
     {
         ILifetimeScope container = _container ?? throw new InvalidOperationException("插件容器尚未建立");
+        await container.Resolve<Nb2ScopeStore>().LoadAsync();
         Nb2EventRelay relay = container.Resolve<Nb2EventRelay>();
         context.Events.Subscribe<BotEvent>(relay.HandleAsync);
         context.Scheduler.Register(CLEANUP_JOB, CleanupInterval, container.Resolve<LocalFiles>().CleanupAsync, runImmediately: true);
         context.OnEnabledChanged(container.Resolve<Nb2Runner>().OnEnabledChanged);
         context.Panel.UsePage(PAGE_TITLE, PAGE_ENTRY);
         context.Panel.MapApi(container.Resolve<Nb2PanelApi>().Map);
-        return ValueTask.CompletedTask;
     }
 }

@@ -13,7 +13,8 @@ namespace Shinano.Plugin.NB2Bridge.Runtime;
 
 /// <summary>
 /// NB2 进程的守护：随插件启用启动、停用停止；启动前覆盖 <c>bot.py</c> 与控制插件，生成本次的 token 与端口，启动 Milky 实现端；
-/// NB2 连上后先推送禁用集合再开始交付事件。意外退出时自动重启，1 分钟内超过上限后停止并通知 Super User 一次。
+/// NB2 连上后先推送禁用集合再开始交付事件。意外退出时间隔 20 秒自动重启，自上次就绪起最多重启 2 次；
+/// 第 2 次重启后仍然退出（或无法启动）时停止拉起并通知 Super User 一次。
 /// 停止先经控制 API 请求正常关停，超时强制结束。启动、停止与包变更串行执行。
 /// </summary>
 public sealed class Nb2Runner : IDisposable
@@ -27,7 +28,12 @@ public sealed class Nb2Runner : IDisposable
     private const int    PREPARE_ATTEMPTS    = 20;
     private const string FFMPEG_VERSION_WORD = "version";
 
-    private static readonly TimeSpan CrashWindow   = TimeSpan.FromMinutes(1);
+    /// <summary>自上次就绪（或手动启动）起最多自动重启的次数。</summary>
+    public const int MAX_AUTO_RESTARTS = 2;
+
+    /// <summary>意外退出后到自动重启的间隔。</summary>
+    public static readonly TimeSpan RestartDelay = TimeSpan.FromSeconds(20);
+
     private static readonly TimeSpan PrepareDelay  = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(3);
 
@@ -39,7 +45,14 @@ public sealed class Nb2Runner : IDisposable
     private readonly TimeProvider                 _time;
     private readonly ILogger<Nb2Runner>           _logger;
     private readonly SemaphoreSlim                _gate    = new(1, 1);
-    private readonly Queue<DateTimeOffset>        _crashes = new();
+    private readonly Lock                         _enabledLock = new();
+    private          Task                         _enabledChanges = Task.CompletedTask;
+
+    // 以下三项只在持有 _gate 时修改（_autoRestarts 在就绪时清零除外，只是一次整数写入）。
+    // _generation 在手动启动、停止、重启与包变更时递增，等待中的自动重启发现它变化就放弃。
+    private volatile int                            _autoRestarts;
+    private          int                            _generation;
+    private          bool                           _restartPending;
 
     private volatile Process?                       _process;
     private volatile MilkyServer?                   _server;
@@ -94,7 +107,7 @@ public sealed class Nb2Runner : IDisposable
             Pid             = process?.Id,
             StartedAt       = _startedAt,
             Connected       = _server?.IsConnected ?? false,
-            RecentCrashes   = RecentCrashes(),
+            AutoRestarts    = _autoRestarts,
             LastExitCode    = _lastExitCode,
             LastError       = _lastError,
             FfmpegDirectory = _ffmpegDirectory,
@@ -110,7 +123,8 @@ public sealed class Nb2Runner : IDisposable
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            lock (_crashes) _crashes.Clear();
+            CancelAutoRestart();
+            _autoRestarts = 0;
             await StartCoreAsync(cancellationToken);
         }
         finally
@@ -119,12 +133,13 @@ public sealed class Nb2Runner : IDisposable
         }
     }
 
-    /// <summary>停止 NB2。</summary>
+    /// <summary>停止 NB2，并取消等待中的自动重启。</summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            CancelAutoRestart();
             await StopCoreAsync();
         }
         finally
@@ -139,8 +154,9 @@ public sealed class Nb2Runner : IDisposable
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            CancelAutoRestart();
             await StopCoreAsync();
-            lock (_crashes) _crashes.Clear();
+            _autoRestarts = 0;
             await StartCoreAsync(cancellationToken);
         }
         finally
@@ -155,7 +171,9 @@ public sealed class Nb2Runner : IDisposable
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            bool running = _process is not null;
+            // 等待自动重启的也视为运行中：包变更完成后直接启动，不再等待。
+            bool running = _process is not null || _restartPending;
+            CancelAutoRestart();
             if (running) await StopCoreAsync();
             try
             {
@@ -172,20 +190,28 @@ public sealed class Nb2Runner : IDisposable
         }
     }
 
-    /// <summary>插件启停回调：启用时在后台启动 NB2，停用时在后台停止。</summary>
-    public void OnEnabledChanged(bool enabled) =>
-        _ = Task.Run(async () =>
+    /// <summary>
+    /// 插件启停回调：启用时在后台启动 NB2，停用时在后台停止。回调按到达顺序依次执行，
+    /// 快速先启用再停用时不会因后台任务交错而在插件已停用后仍运行 NB2。
+    /// </summary>
+    public void OnEnabledChanged(bool enabled)
+    {
+        lock (_enabledLock)
+            _enabledChanges = _enabledChanges.ContinueWith(_ => ApplyEnabledAsync(enabled), TaskScheduler.Default).Unwrap();
+    }
+
+    private async Task ApplyEnabledAsync(bool enabled)
+    {
+        try
         {
-            try
-            {
-                if (enabled) await StartAsync(CancellationToken.None);
-                else await StopAsync(CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(exception, "随插件{Action} NB2 失败", enabled ? "启用启动" : "停用停止");
-            }
-        });
+            if (enabled) await StartAsync(CancellationToken.None);
+            else await StopAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "随插件{Action} NB2 失败", enabled ? "启用启动" : "停用停止");
+        }
+    }
 
     /// <summary>就绪时把当前的禁用集合推送给 NB2；未就绪时连上后会推送。</summary>
     /// <exception cref="HttpRequestException">NB2 拒绝或不可达。</exception>
@@ -212,14 +238,11 @@ public sealed class Nb2Runner : IDisposable
 
     private string[] Disabled() => [.. _catalog.Entries().Where(entry => !entry.Enabled).Select(entry => entry.Module)];
 
-    private int RecentCrashes()
+    // 调用方持有 _gate。
+    private void CancelAutoRestart()
     {
-        DateTimeOffset cutoff = _time.GetUtcNow() - CrashWindow;
-        lock (_crashes)
-        {
-            while (_crashes.TryPeek(out DateTimeOffset oldest) && oldest < cutoff) _crashes.Dequeue();
-            return _crashes.Count;
-        }
+        _generation++;
+        _restartPending = false;
     }
 
     // 调用方持有 _gate。
@@ -387,8 +410,9 @@ public sealed class Nb2Runner : IDisposable
             {
                 await control.SetDisabledAsync(Disabled(), CancellationToken.None);
                 if (!ReferenceEquals(control, _control)) return;
-                _ready = true;
-                _state = Nb2ProcessState.Running;
+                _ready        = true;
+                _state        = Nb2ProcessState.Running;
+                _autoRestarts = 0;
                 _logger.LogInformation("NB2 已就绪，开始交付事件");
                 return;
             }
@@ -408,55 +432,88 @@ public sealed class Nb2Runner : IDisposable
         if (_state == Nb2ProcessState.Running) _state = Nb2ProcessState.Starting;
     }
 
+    // 意外退出后按固定间隔重启；重启时无法启动同样算一次失败。等待期间不持有 _gate，管理员可以随时手动启停。
     private async Task OnExitedAsync(Process process)
     {
-        await _gate.WaitAsync();
         try
         {
-            // 主动停止时由 StopCoreAsync 清理，这里只处理意外退出。
-            if (!ReferenceEquals(process, _process)) return;
-
-            int exitCode = process.ExitCode;
-            await CleanupAsync();
-            _lastExitCode = exitCode;
-            _logger.LogWarning("NB2 进程意外退出，退出码 {ExitCode}", exitCode);
-
-            int crashes;
-            lock (_crashes)
+            int? generation = await HandleExitAsync(process);
+            while (generation is { } current)
             {
-                _crashes.Enqueue(_time.GetUtcNow());
+                await Task.Delay(RestartDelay, _time);
+                generation = await RestartIfCurrentAsync(current);
             }
-
-            crashes = RecentCrashes();
-            int limit = _context.Config<Nb2Config>().Value.RestartLimit;
-            if (crashes <= limit)
-            {
-                _logger.LogInformation("自动重启 NB2（1 分钟内第 {Count} 次）", crashes);
-                await StartCoreAsync(CancellationToken.None);
-                return;
-            }
-
-            _state     = Nb2ProcessState.Failed;
-            _lastError = $"1 分钟内意外退出 {crashes} 次，已停止自动重启";
-            _logger.LogError("NB2 1 分钟内意外退出 {Count} 次，停止自动重启", crashes);
-            _context.Notices.NotifySuperUsers(
-                new SuperUserNotice
-                {
-                    Level  = CardLevel.Error,
-                    Title  = "NB2 服务已停止",
-                    Code   = "NB2-STOPPED",
-                    Cause  = $"NB2 进程 1 分钟内意外退出 {crashes} 次，最后退出码 {exitCode}",
-                    Impact = "NB2 插件停止响应，需在 NB2Bridge 页面查看日志后手动启动"
-                });
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "处理 NB2 进程退出失败");
         }
+    }
+
+    // 返回等待中的自动重启所属的轮次；主动停止或已放弃时为 null。
+    private async Task<int?> HandleExitAsync(Process process)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            // 主动停止时由 StopCoreAsync 清理，这里只处理意外退出。
+            if (!ReferenceEquals(process, _process)) return null;
+
+            int exitCode = process.ExitCode;
+            await CleanupAsync();
+            _lastExitCode = exitCode;
+            _logger.LogWarning("NB2 进程意外退出，退出码 {ExitCode}", exitCode);
+            return ScheduleRestartOrGiveUp($"退出码 {exitCode}");
+        }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task<int?> RestartIfCurrentAsync(int generation)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            if (generation != _generation || _process is not null) return null;
+            _restartPending = false;
+            _logger.LogInformation("自动重启 NB2（第 {Count} 次，最多 {Max} 次）", _autoRestarts, MAX_AUTO_RESTARTS);
+            await StartCoreAsync(CancellationToken.None);
+            // 没有运行环境时不再重试；其他启动失败按一次失败计。
+            return _process is null && _state != Nb2ProcessState.Missing ? ScheduleRestartOrGiveUp(_lastError ?? "启动失败") : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // 调用方持有 _gate。未达上限时登记下一次自动重启并返回其轮次；已达上限时停止拉起并通知 Super User 一次。
+    private int? ScheduleRestartOrGiveUp(string reason)
+    {
+        if (_autoRestarts < MAX_AUTO_RESTARTS)
+        {
+            _autoRestarts++;
+            _restartPending = true;
+            _state          = Nb2ProcessState.Starting;
+            _lastError      = $"NB2 意外退出（{reason}），{RestartDelay.TotalSeconds:0} 秒后第 {_autoRestarts} 次自动重启";
+            return _generation;
+        }
+
+        _state     = Nb2ProcessState.Failed;
+        _lastError = $"自动重启 {MAX_AUTO_RESTARTS} 次后仍意外退出（{reason}），已停止自动重启";
+        _logger.LogError("NB2 自动重启 {Max} 次后仍意外退出（{Reason}），停止自动重启", MAX_AUTO_RESTARTS, reason);
+        _context.Notices.NotifySuperUsers(
+            new SuperUserNotice
+            {
+                Level  = CardLevel.Error,
+                Title  = "NB2 服务已停止",
+                Code   = "NB2-STOPPED",
+                Cause  = $"NB2 进程自动重启 {MAX_AUTO_RESTARTS} 次后仍意外退出（{reason}）",
+                Impact = "NB2 插件停止响应，需在 NB2Bridge 页面查看日志后手动启动"
+            });
+        return null;
     }
 
     // 调用方持有 _gate。

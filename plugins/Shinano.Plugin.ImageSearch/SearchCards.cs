@@ -1,4 +1,3 @@
-using System.Globalization;
 using Shinano.Framework.Rendering;
 using Shinano.Plugin.ImageSources;
 
@@ -10,7 +9,6 @@ namespace Shinano.Plugin.ImageSearch;
 /// </summary>
 public static class SearchCards
 {
-    private const string SIMILARITY_FORMAT = "0.##";
     private const string META_ILLUST       = "ILLUST";
     private const string META_ANIME        = "ANIME";
     private const string LOW_NOTE          = "相似度低于阈值，可能不准";
@@ -47,18 +45,6 @@ public static class SearchCards
             Row("集数", hit.Episode),
             Row("时间点", hit.Time),
             Row("来源", hit.SourceName));
-
-    /// <summary>卡片无法绘制时代替发送的文字。</summary>
-    public static string ToText(InfoCard card) =>
-        string.Join(
-            '\n',
-            (string[])
-            [
-                card.Title,
-                .. card.Rows.Select(row => $"{row.Label}：{(row.Style == CardRowStyle.Items ? string.Join(' ', row.Items) : row.Text)}"),
-                .. card.Similarity is { } similarity ? (string[]) [$"相似度：{Percent(similarity)}"] : [],
-                .. card.Note is { } note ? (string[]) [note] : []
-            ]);
 
     private static InfoCard Card(SearchHit hit, string meta, string title, double threshold, bool lowSimilarity, params CardRow?[] rows) =>
         new()
@@ -100,6 +86,4 @@ public static class SearchCards
                 Items      = [.. tags.Take(maxTags).Select(tag => tag.Name)],
                 ItemBorder = true
             };
-
-    private static string Percent(double similarity) => similarity.ToString(SIMILARITY_FORMAT, CultureInfo.InvariantCulture) + "%";
 }

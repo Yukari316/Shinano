@@ -15,6 +15,7 @@ public sealed class ObjectStorage : IDisposable
 {
     private const string DEFAULT_REGION    = "us-east-1";
     private const int    DELETE_BATCH_SIZE = 1000;
+    private const string NO_SUCH_BUCKET    = "NoSuchBucket";
 
     private readonly AmazonS3Client _client;
     private readonly AmazonS3Client _imClient;
@@ -42,6 +43,9 @@ public sealed class ObjectStorage : IDisposable
     /// <exception cref="AmazonServiceException">服务拒绝请求。</exception>
     public async Task CheckAsync(CancellationToken cancellationToken) =>
         await _client.ListBucketsAsync(new ListBucketsRequest(), cancellationToken);
+
+    /// <summary>异常是否为 RustFS 答复 bucket 不存在（不包括连接失败等无法确定的情况）。</summary>
+    public static bool IsMissingBucket(Exception exception) => exception is AmazonS3Exception { ErrorCode: NO_SUCH_BUCKET };
 
     /// <summary>bucket 不存在时创建。</summary>
     public async Task EnsureBucketAsync(string bucket, CancellationToken cancellationToken)
@@ -137,26 +141,6 @@ public sealed class ObjectStorage : IDisposable
         }
     }
 
-    /// <summary>判断对象是否存在。</summary>
-    public async Task<bool> ExistsAsync(string bucket, string key, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _client.GetObjectMetadataAsync(
-                new GetObjectMetadataRequest
-                {
-                    BucketName = bucket,
-                    Key        = key
-                },
-                cancellationToken);
-            return true;
-        }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-    }
-
     /// <summary>对象的元数据；对象不存在时返回 null。</summary>
     public async Task<StoredObjectInfo?> GetInfoAsync(string bucket, string key, CancellationToken cancellationToken)
     {
@@ -225,7 +209,7 @@ public sealed class ObjectStorage : IDisposable
         {
             return await _client.ListObjectsV2Async(request, cancellationToken);
         }
-        catch (AmazonS3Exception exception) when (exception.ErrorCode == "NoSuchBucket")
+        catch (AmazonS3Exception exception) when (IsMissingBucket(exception))
         {
             return null;
         }

@@ -110,7 +110,7 @@ public sealed class BotService : BackgroundService
                 _loggingOptions.MaxTotalSizeMiB,
                 _images,
                 _time,
-                TimeZoneInfo.TryFindSystemTimeZoneById(_deployment.TimeZone, out TimeZoneInfo? zone) ? zone : TimeZoneInfo.Local,
+                _infrastructure.TimeZone,
                 _loggerFactory.CreateLogger<HostCommands>()));
         hostCommands.ScanCommandGroups();
         _plugins.Attach(_service);

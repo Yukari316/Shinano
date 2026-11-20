@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhArrowsClockwise, PhQrCode, PhX } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { type ApiResult, callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Account, Follow, Group, LoginState, QrState, QrStateView, QrView, Status } from './types'
 
@@ -51,15 +51,11 @@ const filteredGroups = computed(() => {
   return keyword ? groups.value.filter((group) => String(group.id).includes(keyword) || (group.name ?? '').includes(keyword)) : groups.value
 })
 
-async function call<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T | null }> {
-  error.value = ''
-  const response = await props.context.api(path, init)
-  const body = response.status === 204 ? null : ((await response.json().catch(() => null)) as T | null)
-  if (!response.ok && response.status !== 409) {
-    const message = (body as { error?: string; detail?: string } | null) ?? {}
-    error.value = message.error ?? message.detail ?? `请求失败（${response.status}）`
-  }
-  return { ok: response.ok, status: response.status, body }
+// 409 是需要页面自行处理的业务冲突（如已登录需确认），不作为错误显示。
+async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const result = await callApi<T>(props.context, path, init)
+  error.value = result.status === 409 ? '' : (result.error ?? '')
+  return result
 }
 
 async function loadStatus() {
@@ -125,6 +121,12 @@ async function pollLogin() {
 
   const result = await call<QrStateView>(`/login/${encodeURIComponent(qr.value.key)}`)
   if (!polling) return
+  // 请求未送达时继续轮询，二维码过期前恢复连接仍可完成登录。
+  if (result.status === 0) {
+    schedulePoll()
+    return
+  }
+
   const state = result.body?.state ?? 'Failed'
   if (state === 'Waiting' || state === 'Scanned') {
     qrState.value = state
@@ -180,14 +182,6 @@ async function saveGroups() {
   editing.value.groups = [...selected.value].sort((a, b) => a - b)
   await save(editing.value)
   editing.value = null
-}
-
-function jsonBody(method: string, body: unknown): RequestInit {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-}
-
-function formatTime(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : '—'
 }
 
 onMounted(async () => {

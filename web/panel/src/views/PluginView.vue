@@ -36,8 +36,9 @@ onMounted(async () => {
 })
 
 // 专有页面只在插件启用时存在；停用后移除页面组件。
+// 地址带上插件版本：入口文件名固定为 index.js，浏览器按地址缓存模块，升级插件后不带版本仍会加载旧页面。
 watch(
-  () => plugin.value?.pageEntry ?? null,
+  () => (plugin.value?.pageEntry ? `${plugin.value.pageEntry}?v=${encodeURIComponent(plugin.value.version)}` : null),
   async (entry) => {
     page.value = null
     pageError.value = ''

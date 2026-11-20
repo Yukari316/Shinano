@@ -38,6 +38,10 @@ public sealed class HostConfigConnectionCheck : IDisposable
         {
             builder = PostgresConnectionString.Parse(dsn);
         }
+        catch (NotSupportedException exception)
+        {
+            return ConnectionCheck.Failed(exception.Message);
+        }
         catch (Exception exception) when (exception is ArgumentException or FormatException)
         {
             return ConnectionCheck.Failed("DSN 格式无效");

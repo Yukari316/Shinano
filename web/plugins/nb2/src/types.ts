@@ -13,7 +13,8 @@ export interface Status {
   pid: number | null
   startedAt: string | null
   connected: boolean
-  recentCrashes: number
+  /** 自上次就绪（或手动启动）以来的自动重启次数。 */
+  autoRestarts: number
   lastExitCode: number | null
   lastError: string | null
   ffmpegDirectory: string | null
@@ -81,4 +82,23 @@ export interface ConfigSchema {
 export interface ConfigView {
   schema: ConfigSchema
   values: Record<string, unknown>
+}
+
+/** NB2 响应范围的会话类别。 */
+export type ScopeKind = 'group' | 'private'
+
+/** 一类会话的响应范围。 */
+export interface Scope {
+  /** 为 true 时为白名单，否则为黑名单。 */
+  whitelist: boolean
+  ids: number[]
+}
+
+/** 群聊与私聊的响应范围。 */
+export type Scopes = Record<ScopeKind, Scope>
+
+/** 选择范围时的候选会话；Bot 已不在该群或已不是好友时没有名称。 */
+export interface ScopeCandidate {
+  id: number
+  name: string | null
 }

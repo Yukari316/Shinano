@@ -149,7 +149,7 @@ startupLogger.LogInformation(
 // 首次启动时生成面板 Token，避免等到第一次登录请求。
 app.Services.GetRequiredService<PanelTokenStore>();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(PanelStaticFiles.Options);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapApiRoutes();

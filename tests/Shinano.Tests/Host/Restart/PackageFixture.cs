@@ -82,7 +82,7 @@ internal sealed class PackageFixture : IDisposable
             ["assets/a.txt"] = "asset"
         };
 
-    public static Stream Zip(IReadOnlyDictionary<string, string> entries)
+    public static Stream Zip(IEnumerable<KeyValuePair<string, string>> entries)
     {
         MemoryStream stream = new();
         using (ZipArchive archive = new(stream, ZipArchiveMode.Create, leaveOpen: true))

@@ -47,12 +47,23 @@ public sealed class DependencyAvailability
     /// <summary>依赖当前是否可用。</summary>
     public bool IsAvailable => _health.Get(_component).Level == HealthLevel.Normal;
 
-    /// <summary>报告一次连接故障，使依赖进入不可用状态。</summary>
-    public void ReportFailure(Exception exception)
+    /// <summary>
+    /// 报告一次连接故障，使依赖进入不可用状态。与探测共用同一把锁：否则与并发的探测成功交错时，健康事件可能按相反顺序发出，
+    /// Super User 最后收到"不可用"而实际已恢复。进行中的探测结束后才写入。
+    /// </summary>
+    public async Task ReportFailureAsync(Exception exception)
     {
-        if (IsAvailable) _logger.LogError(exception, "{Component} 不可用", _component);
-        MarkProbed();
-        _health.Set(_component, _failureLevel, exception.Message);
+        await _probeGate.WaitAsync();
+        try
+        {
+            if (IsAvailable) _logger.LogError(exception, "{Component} 不可用", _component);
+            MarkProbed();
+            _health.Set(_component, _failureLevel, exception.Message);
+        }
+        finally
+        {
+            _probeGate.Release();
+        }
     }
 
     /// <summary>

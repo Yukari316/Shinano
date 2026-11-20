@@ -96,4 +96,8 @@ public sealed class HsoImageRecord
     /// <summary>导入时间（UTC）。</summary>
     [SugarColumn(ColumnName = "imported_at")]
     public DateTimeOffset ImportedAt { get; set; }
+
+    /// <summary>每日补全最近一次尝试的时间（UTC）；没有尝试过为 null。每日补全优先取没尝试过的、再取尝试得最早的。</summary>
+    [SugarColumn(ColumnName = "info_tried_at", IsNullable = true)]
+    public DateTimeOffset? InfoTriedAt { get; set; }
 }

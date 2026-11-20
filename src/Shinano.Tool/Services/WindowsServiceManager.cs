@@ -63,6 +63,9 @@ public sealed class WindowsServiceManager : IServiceManager
                 "Environment",
                 "/t",
                 "REG_MULTI_SZ",
+                // reg.exe 默认以 \0 分隔多个字符串，路径中的 \0（如 D:\0bots）会被截断；改用 Windows 路径不能含有的 |。
+                "/s",
+                "|",
                 "/d",
                 $"{DeploymentLayout.DATA_DIRECTORY_VARIABLE}={setup.DataDirectory}",
                 "/f"),

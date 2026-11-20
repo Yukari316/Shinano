@@ -140,6 +140,7 @@ dotnet build Shinano.slnx
 | `Notices` | 通知全部 Super User（第 9 节） |
 | `Config<T>()` / `Secrets<T>()` | 配置与机密（第 6 节） |
 | `DataDirectory` | 部署数据目录的绝对路径。只供需要管理外部程序及其数据的插件使用，且只使用约定给自己的子目录。 |
+| `TimeZone` | 部署配置的时区。按日计数、在卡片中显示时间等与日期有关的业务都用它，不用机器本地时区（`TimeProvider.GetLocalNow`）；有固定时区语义的数据除外。 |
 | `OnEnabledChanged(Action<bool>)` | 启停回调。只供必须随启停管理外部进程的插件使用，只能在 `InitializeAsync` 中登记。 |
 
 `Events.Subscribe`、`Scheduler.Register`、`Panel.UsePage` 和 `OnEnabledChanged` 都只能在 `InitializeAsync` 中调用。
@@ -343,6 +344,11 @@ context.Panel.MapApi(api => api.MapGet("/stats", () => Results.Ok(new { Count = 
 - **页面模块**：默认导出一个 Vue 组件，宿主以 `context` 属性传入 `PluginPageContext`（来自 `@shinano/plugin-sdk`）。它包含：
   - `pluginId`；
   - `api(path, init)`：`path` 相对插件 API 前缀，以 `/` 开头；请求携带面板会话，会话失效时宿主跳转登录页。
+- **SDK 辅助函数**（同样来自 `@shinano/plugin-sdk`）：
+  - `callApi(context, path, init)`：调用插件 API 并解析 JSON，返回 `{ ok, status, body, error }`，不抛出异常；请求未送达时 `status` 为 0。`error` 优先取响应的 `error`，其次 `detail`。页面用它调用 API，加载中、上传中等状态才能在网络错误后复位；
+  - `jsonBody(method, body)`：以 JSON 为请求体的请求选项；
+  - `formatTime(value)`：把 ISO 时间显示为本地时间（24 小时制），没有值时为「—」；
+  - `pluginApiBase(pluginId)`：插件 API 的完整前缀，用于页面中直接引用的链接与图片地址。
 - **共享依赖**：`vue` 与 `@shinano/plugin-sdk` 由面板的 import map 提供，构建时必须声明为外部依赖，不能自带 Vue 运行时。其他依赖（如图标库）打进插件的模块。
 - **样式**：页面不加载单独的 CSS 文件。面板的 Tailwind 与 daisyUI 样式在构建面板时，从本仓库 `web/plugins/` 的源码一并生成。因此仓库外的插件只能使用面板已经生成的类，或使用行内样式。
 - **示例**：自带插件的页面源码在 `web/plugins/<名称>/`，是 pnpm 工作区包，用 Vue 单文件组件与 TypeScript 编写，用 Vite 以库模式构建为单个 ES 模块，输出到插件工程的 `web/`。`web/plugins/qa/vite.config.ts` 可以作为模板：
@@ -361,15 +367,15 @@ export default defineConfig({
 
 ```vue
 <script setup lang="ts">
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, type PluginPageContext } from '@shinano/plugin-sdk'
 import { onMounted, ref } from 'vue'
 
 const props = defineProps<{ context: PluginPageContext }>()
 const count = ref(0)
 
 onMounted(async () => {
-  const response = await props.context.api('/stats')
-  if (response.ok) count.value = ((await response.json()) as { count: number }).count
+  const result = await callApi<{ count: number }>(props.context, '/stats')
+  if (result.ok && result.body) count.value = result.body.count
 })
 </script>
 
@@ -473,10 +479,11 @@ RustFS 经 S3 协议访问，bucket 名为 `<部署前缀>-<用途>`。插件有
 - 适合对象不来自聊天、由插件自己管理生命周期的数据，例如图库。
 - 用途必须在 `plugin.json` 的 `bucketPurposes` 中声明，否则抛出 `ArgumentException`。用途名只含小写字母、数字与连字符，拼接后的 bucket 名不超过 63 个字符。
 - `IPluginBucket` 提供：
-  - `EnsureCreatedAsync` / `DeleteAsync`：创建与删除 bucket；
-  - `PutAsync`：写入，上限取 `limitBytes` 与部署上限中较小的一个；
-  - `OpenReadAsync`、`GetInfoAsync`、`ListAsync`、`DeleteObjectAsync`：读取、元数据、列出与删除对象；
-  - `CreateImUrlAsync`：生成 IM 可下载的临时链接。
+  - `EnsureCreatedAsync` / `DeleteAsync`：创建与删除 bucket。宿主记住已创建，可在每次写入前直接调用；
+  - `PutAsync`：写入，上限取 `limitBytes` 与部署上限中较小的一个。bucket 在宿主之外被删除时重新创建并重试一次；
+  - `OpenReadAsync`、`GetInfoAsync`、`ListAsync`、`DeleteObjectAsync`：读取、元数据、列出与删除对象。删除时对象或 bucket 不存在视为成功，RustFS 不可达等错误照常抛出；
+  - `CreateImUrlAsync`：生成 IM 可下载的临时链接；
+  - 扩展方法 `DeleteOlderThanAsync(前缀, 截止时间)`：删除早于截止时间的对象，用于清理发送后暂存的临时对象。
 
   插件只能访问自己声明的 bucket。
 

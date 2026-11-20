@@ -37,9 +37,11 @@ export function describeFailure(status: ServiceStatus): string | null {
   return status.failure === 'HttpStatus' && status.statusCode !== null ? `HTTP ${status.statusCode}` : FAILURES[status.failure]
 }
 
+const FLOAT_EPSILON = 1e-9
+
 export function percent(value: number | null): string {
   if (value === null) return '—'
   if (value === 1) return '100%'
-  // 向下取两位小数，不把 99.996% 显示成 100%。
-  return `${(Math.floor(value * 10_000) / 100).toFixed(2)}%`
+  // 向下取两位小数，不把 99.996% 显示成 100%；加一个极小量抵消浮点误差，否则 0.57 * 10000 = 5699.999… 会显示成 56.99%。
+  return `${(Math.floor(value * 10_000 + FLOAT_EPSILON) / 100).toFixed(2)}%`
 }

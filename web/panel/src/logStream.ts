@@ -12,12 +12,11 @@ const MAX_ENTRIES = 1000
  */
 export const logEntries = ref<LogEntry[]>([])
 export const logsPaused = ref(false)
-const pausedAt = ref(0)
+// 暂停那一刻的快照：按序号过滤会随缓冲裁剪逐渐变空，宿主重启后序号重新开始时也会把新日志漏进来。
+const pausedEntries = ref<LogEntry[]>([])
 
-/** 当前应显示的日志：暂停时只到暂停前的最后一条。 */
-export const visibleLogs = computed(() =>
-  logsPaused.value ? logEntries.value.filter((entry) => entry.sequence <= pausedAt.value) : logEntries.value
-)
+/** 当前应显示的日志：暂停时为暂停那一刻的快照。 */
+export const visibleLogs = computed(() => (logsPaused.value ? pausedEntries.value : logEntries.value))
 
 export const warningCount = computed(() => logEntries.value.filter((entry) => entry.level === 'Warning').length)
 export const errorCount = computed(
@@ -30,6 +29,12 @@ let lastSequence = 0
 
 function connect(): void {
   source = new EventSource('/api/logs/stream')
+  // 服务端每次连接都会重发全部缓冲（与本地上限同为 1000 条），所以连上时清空重收；
+  // 宿主重启后序号从 1 重新开始，不清空就会把新进程的日志当作重复全部丢弃。
+  source.onopen = () => {
+    lastSequence = 0
+    logEntries.value = []
+  }
   source.onmessage = (event: MessageEvent<string>) => {
     const entry = JSON.parse(event.data) as LogEntry
     if (entry.sequence <= lastSequence) return
@@ -52,7 +57,7 @@ document.addEventListener('visibilitychange', syncConnection)
 
 export function togglePause(): void {
   logsPaused.value = !logsPaused.value
-  pausedAt.value = lastSequence
+  pausedEntries.value = logsPaused.value ? [...logEntries.value] : []
 }
 
 /** 订阅实时日志，返回取消订阅的函数。 */

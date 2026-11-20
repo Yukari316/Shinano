@@ -84,6 +84,21 @@ public sealed class HsoReviewIntegrationTests : IAsyncLifetime
         Assert.Null(await Reviews.FindAsync(record.Id));
     }
 
+    // 每日补全曾总取最早导入的待补全图片，一张持续查询失败的图会让每天的补全都卡在它上面。
+    [Fact]
+    public async Task PendingIds_PutTriedImagesAfterUntriedOnes()
+    {
+        TestEnvironment.RequireConfigured();
+        HsoImageRecord older = await ImportAsync();
+        HsoImageRecord newer = await ImportAsync();
+        Assert.Equal(HsoInfoState.Pending, (HsoInfoState)older.InfoState);
+
+        await Gallery.MarkInfoTriedAsync(older.Id, DateTimeOffset.UtcNow);
+        List<long> pending = await Gallery.PendingIdsAsync(int.MaxValue);
+
+        Assert.True(pending.IndexOf(newer.Id) < pending.IndexOf(older.Id));
+    }
+
     [Fact]
     public async Task Replace_RefusesWhenCandidateDuplicatesAnotherImage()
     {
@@ -239,6 +254,8 @@ public sealed class HsoReviewIntegrationTests : IAsyncLifetime
         public IPluginTools Tools => throw new NotSupportedException();
 
         public string DataDirectory => throw new NotSupportedException();
+
+        public TimeZoneInfo TimeZone => TimeZoneInfo.Utc;
 
         public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();
 

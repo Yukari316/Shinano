@@ -46,7 +46,7 @@ public sealed class HealthTests
             NullLogger.Instance);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        availability.ReportFailure(new IOException("refused"));
+        await availability.ReportFailureAsync(new IOException("refused"));
         Assert.False(await availability.CheckAsync(force: false, token));
         Assert.Equal(0, probes);
 

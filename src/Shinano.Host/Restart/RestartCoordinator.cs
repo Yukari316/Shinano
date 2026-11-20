@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Hosting.Systemd;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
+using Shinano.Framework.Plugins;
+using Shinano.Framework.Rendering;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Plugins;
@@ -48,7 +50,7 @@ public sealed class RestartCoordinator : IDisposable
     private readonly ILogger<RestartCoordinator>  _logger;
     private readonly Lock                         _lock = new();
     private          RestartResult?               _lastResult;
-    private          NotificationCard?            _rollbackNotice;
+    private          SuperUserNotice?            _rollbackNotice;
     private          IReadOnlyList<string>        _loadFailures = [];
     private volatile StartupPhase                 _phase        = StartupPhase.Starting;
     private          bool                         _restarting;
@@ -332,7 +334,7 @@ public sealed class RestartCoordinator : IDisposable
     {
         if (change.Current is not { Component: HealthComponent.Bot, Level: HealthLevel.Normal }) return;
 
-        NotificationCard? notice;
+        SuperUserNotice? notice;
         lock (_lock)
         {
             notice          = _rollbackNotice;
@@ -342,10 +344,10 @@ public sealed class RestartCoordinator : IDisposable
         if (notice is not null) _notifier.Notify(notice);
     }
 
-    private static NotificationCard RollbackCard(RestartResult result) =>
+    private static SuperUserNotice RollbackCard(RestartResult result) =>
         new()
         {
-            Level  = NotificationLevel.Warning,
+            Level  = CardLevel.Warning,
             Code   = "PLUGIN-ROLLBACK",
             Title  = "插件更新已回滚",
             Cause  = result.Reason ?? "未知",

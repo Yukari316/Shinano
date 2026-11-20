@@ -29,7 +29,7 @@ public sealed class ProbeService : BackgroundService
         TimeProvider          time,
         ILogger<ProbeService> logger)
     {
-        _prober       = new ServiceProber(settings, time);
+        _prober       = new ServiceProber(settings, time, logger);
         _store        = store;
         _settings     = settings;
         _logRetention = logRetention;
@@ -90,14 +90,15 @@ public sealed class ProbeService : BackgroundService
         _configChanged = false;
         try
         {
-            ServiceProber next = new(_settings.Reload(), _time);
+            ServiceProber next = new(_settings.Reload(), _time, _logger);
             _prober.Dispose();
             _prober = next;
             _logger.LogInformation("部署配置已变化，按新配置探测");
         }
-        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception exception)
         {
-            _logger.LogWarning(exception, "部署配置已变化但无法读取，继续使用原配置探测，直到文件再次变化");
+            // 读取失败与新配置无效（如证书无法加载）都不能让探测循环退出。
+            _logger.LogWarning(exception, "部署配置已变化但无法读取或无效，继续使用原配置探测，直到文件再次变化");
         }
     }
 

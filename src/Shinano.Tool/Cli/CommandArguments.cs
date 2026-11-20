@@ -18,13 +18,9 @@ public sealed class CommandArguments
     private readonly Dictionary<string, string> _values      = new(StringComparer.Ordinal);
     private readonly HashSet<string>            _switches    = new(StringComparer.Ordinal);
 
-    private CommandArguments(IReadOnlyList<string> raw)
+    private CommandArguments()
     {
-        Raw = raw;
     }
-
-    /// <summary>原始参数，用于以管理员身份重新启动同一命令。</summary>
-    public IReadOnlyList<string> Raw { get; }
 
     /// <summary>位置参数，第一个为子命令。</summary>
     public IReadOnlyList<string> Positionals => _positionals;
@@ -33,7 +29,7 @@ public sealed class CommandArguments
     /// <exception cref="ToolException">选项缺少值或重复。</exception>
     public static CommandArguments Parse(IReadOnlyList<string> args)
     {
-        CommandArguments result = new(args);
+        CommandArguments result = new();
         for (int index = 0; index < args.Count; index++)
         {
             string token = args[index];

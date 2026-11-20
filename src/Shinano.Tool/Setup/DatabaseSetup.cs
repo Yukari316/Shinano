@@ -35,7 +35,24 @@ public static class DatabaseSetup
         string role = business.Username ?? throw new ToolException("缺少业务角色名");
 
         await using NpgsqlConnection connection = await OpenAsync(admin, "管理员");
+        try
+        {
+            await ProvisionAsync(connection, database, role, business.Password ?? string.Empty, adminUser, log);
+        }
+        catch (NpgsqlException exception)
+        {
+            // 服务端消息不含执行的语句，不会带出密码。
+            throw new ToolException($"以管理员 {adminUser} 开通数据库失败：{exception.Message}");
+        }
+    }
+
+    private static async Task ProvisionAsync(NpgsqlConnection connection, string database, string role, string password, string adminUser, ToolLog log)
+    {
         RequireServer(await ReadServerAsync(connection), checkEncoding: false);
+
+        // 先确认权限再执行：没有权限时 CREATE/ALTER ROLE 会失败，PostgreSQL 会把失败的语句（含明文密码）写进服务端日志。
+        if (!await ScalarAsync<bool>(connection, "select rolsuper or rolcreaterole from pg_roles where rolname = current_user"))
+            throw new ToolException($"管理员 {adminUser} 没有创建角色的权限（需要 CREATEROLE 或超级用户）");
 
         // SQL_NEED: CREATE/ALTER ROLE 的密码不能参数化，由服务端的 format(%I, %L) 负责标识符与字面量的引号。
         bool roleExists = await ScalarAsync<bool>(connection, "select exists(select 1 from pg_roles where rolname = @name)", ("name", role));
@@ -43,7 +60,7 @@ public static class DatabaseSetup
             connection,
             roleExists ? "select format('alter role %I with login password %L', @name, @password)" : "select format('create role %I with login password %L', @name, @password)",
             ("name", role),
-            ("password", business.Password ?? string.Empty));
+            ("password", password));
         await ExecuteAsync(connection, roleSql);
         log.Info(roleExists ? $"已更新业务角色 {role} 的密码" : $"已创建业务角色 {role}");
 
@@ -53,6 +70,8 @@ public static class DatabaseSetup
             ("name", database)) as string;
         if (encoding is null)
         {
+            if (!await ScalarAsync<bool>(connection, "select rolsuper or rolcreatedb from pg_roles where rolname = current_user"))
+                throw new ToolException($"数据库 {database} 不存在，管理员 {adminUser} 没有创建数据库的权限（需要 CREATEDB 或超级用户）");
             // SQL_NEED: CREATE DATABASE 不能在事务中执行，也不能参数化数据库名。
             await ExecuteAsync(
                 connection,

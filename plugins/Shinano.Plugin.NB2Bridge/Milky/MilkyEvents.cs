@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Shinano.Plugin.NB2Bridge.Scope;
 using Sora.Core.Enums;
 using Sora.Entities.Events;
 using Sora.Entities.Info;
@@ -31,6 +32,34 @@ public static class MilkyEvents
             MessageDeletedEvent or NudgeEvent or FileUploadEvent or GroupAdminChangedEvent or GroupEssenceChangedEvent or MemberJoinedEvent
                 or MemberLeftEvent or GroupNameChangedEvent or GroupDisbandedEvent or GroupReactionEvent or GroupMuteEvent
                 or PeerPinChangedEvent => Nb2EventKind.Notice,
+            _ => null
+        };
+
+    /// <summary>
+    /// 事件所属的响应范围会话：群聊事件为群号，好友私聊事件为好友 QQ 号。好友申请与入群邀请还没有对应的会话，为 null，不受响应范围限制。
+    /// </summary>
+    public static (Nb2ScopeKind Kind, long Id)? ScopeTarget(BotEvent e) =>
+        e switch
+        {
+            MessageReceivedEvent { Message.SourceType: MessageSourceType.Group } message => (Nb2ScopeKind.Group, (long)message.Message.GroupId),
+            MessageReceivedEvent message => (Nb2ScopeKind.Private, (long)message.Message.SenderId),
+            MessageDeletedEvent { SourceType: MessageSourceType.Group } recall => (Nb2ScopeKind.Group, (long)recall.GroupId),
+            MessageDeletedEvent recall => (Nb2ScopeKind.Private, PrivatePeer(e, recall.SenderId, recall.OperatorId)),
+            NudgeEvent { SourceType: MessageSourceType.Group } nudge => (Nb2ScopeKind.Group, (long)nudge.GroupId),
+            NudgeEvent nudge => (Nb2ScopeKind.Private, PrivatePeer(e, nudge.SenderId, nudge.ReceiverId)),
+            FileUploadEvent { SourceType: MessageSourceType.Group } upload => (Nb2ScopeKind.Group, (long)upload.GroupId),
+            FileUploadEvent upload => (Nb2ScopeKind.Private, (long)upload.UserId),
+            PeerPinChangedEvent { SourceType: MessageSourceType.Group } pin => (Nb2ScopeKind.Group, pin.PeerId),
+            PeerPinChangedEvent pin => (Nb2ScopeKind.Private, pin.PeerId),
+            GroupAdminChangedEvent admin => (Nb2ScopeKind.Group, (long)admin.GroupId),
+            GroupEssenceChangedEvent essence => (Nb2ScopeKind.Group, (long)essence.GroupId),
+            MemberJoinedEvent joined => (Nb2ScopeKind.Group, (long)joined.GroupId),
+            MemberLeftEvent left => (Nb2ScopeKind.Group, (long)left.GroupId),
+            GroupNameChangedEvent name => (Nb2ScopeKind.Group, (long)name.GroupId),
+            GroupDisbandedEvent disband => (Nb2ScopeKind.Group, (long)disband.GroupId),
+            GroupReactionEvent reaction => (Nb2ScopeKind.Group, (long)reaction.GroupId),
+            GroupMuteEvent mute => (Nb2ScopeKind.Group, (long)mute.GroupId),
+            GroupJoinRequestEvent join => (Nb2ScopeKind.Group, (long)join.GroupId),
             _ => null
         };
 

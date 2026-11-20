@@ -11,6 +11,7 @@ using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Storage;
 using Shinano.Monitor.Web;
 using Shinano.Tests.Host.Restart;
+using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
 using Shinano.Tool.Plugins;
@@ -64,6 +65,7 @@ public sealed class ToolContractTests : IDisposable
         config.Set(ConfigKeys.In(ConfigKeys.MONITOR, ConfigKeys.LISTEN_ADDRESS), "10.0.0.6");
         config.Set(ConfigKeys.In(ConfigKeys.MONITOR, ConfigKeys.PORT), 19201);
         config.Set(ConfigKeys.MONITOR_SERVICE_NAME, "ShinanoMonitorA");
+        config.Set(ConfigKeys.PLUGIN_DIRECTORY, "plugins-a");
         config.Save();
 
         IConfigurationRoot root = new ConfigurationBuilder().AddJsonFile(path).Build();
@@ -82,6 +84,7 @@ public sealed class ToolContractTests : IDisposable
         Assert.Equal("t", root[ConfigKeys.PANEL_TOKEN]);
         Assert.Equal("ShinanoA", Bind<RestartOptions>(root, RestartOptions.SECTION_NAME).EffectiveServiceName);
         Assert.Equal(ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, new PluginOptions().Directory);
+        Assert.Equal("plugins-a", Bind<PluginOptions>(root, PluginOptions.SECTION_NAME).Directory);
 
         MonitorSettings monitor = MonitorSettings.Load(path, _directory);
         Assert.Equal(("10.0.0.6", 19201), (monitor.Listen.ListenAddress, monitor.Listen.Port));
@@ -99,6 +102,16 @@ public sealed class ToolContractTests : IDisposable
         Npgsql.NpgsqlConnectionStringBuilder tool = DsnFormat.Parse(dsn);
 
         Assert.Equal((host.Host, host.Port, host.Database, host.Username, host.Password), (tool.Host, tool.Port, tool.Database, tool.Username, tool.Password));
+    }
+
+    // URI 写法的查询参数与 # 片段曾被静默丢弃（如 sslmode），宿主与工具都改为拒绝。
+    [Theory]
+    [InlineData("postgres://role:pass@db.local:5433/shinano?sslmode=verify-full")]
+    [InlineData("postgres://role:pass@db.local:5433/shinano#ss")]
+    public void DsnFormat_RejectsUriQueryLikeHost(string dsn)
+    {
+        Assert.Throws<NotSupportedException>(() => PostgresConnectionString.Parse(dsn));
+        Assert.Throws<ToolException>(() => DsnFormat.Parse(dsn));
     }
 
     [Fact]
