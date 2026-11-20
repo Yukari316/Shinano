@@ -1,0 +1,4 @@
+# NB2 基础环境：NB2 直接运行所需的依赖（bot.py 与控制插件），不含任何 NB2 插件。
+# 修改后运行 build/nb2-lock 重新生成 base.lock 与 initial-plugins.lock，并提高 NB2Bridge 的 plugin.json 版本号。
+nonebot2[fastapi,httpx,websockets]==2.5.0
+nonebot-adapter-milky==1.3.0

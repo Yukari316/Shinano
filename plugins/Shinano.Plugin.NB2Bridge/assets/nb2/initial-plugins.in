@@ -1,0 +1,2 @@
+# 首次建立 NB2 环境时随附的插件，以 base.lock 为约束锁定；版本须与 Shinano.Tool nb2-setup 写入的初始插件清单一致（契约测试核对）。
+nonebot-plugin-parser==2.7.3

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Shinano.Plugin.NB2Bridge.PluginPackages;
 using Shinano.Plugin.NB2Bridge.Runtime;
 
 namespace Shinano.Plugin.NB2Bridge.Panel;
@@ -56,6 +57,9 @@ public sealed class Nb2InstallRequest
 
     /// <summary>顶层模块名；为空时取包名把 <c>-</c> 换成 <c>_</c>。</summary>
     public string? Module { get; init; }
+
+    /// <summary>允许调整已装插件的依赖：与已装插件冲突后由管理员确认重试时为 true。</summary>
+    public bool RelaxInstalled { get; init; }
 }
 
 /// <summary>NB2 进程内插件状态的页面视图（不含配置值）。</summary>
@@ -78,4 +82,18 @@ public sealed class Nb2RemoteView
 
     /// <summary>统计。</summary>
     public required Nb2PluginStats Stats { get; init; }
+}
+
+/// <summary>依赖变更（安装、卸载、重建）成功的结果。</summary>
+public sealed class Nb2ChangeView
+{
+    /// <summary>插件层的版本变化，按包名排列。</summary>
+    public required IReadOnlyList<Nb2VersionChange> Changes { get; init; }
+}
+
+/// <summary>管理员约束文件的内容；读取与保存共用。</summary>
+public sealed class Nb2ConstraintsView
+{
+    /// <summary>约束文本（requirements 格式，每行一个包名与版本条件，可带 <c># 注释</c>）。</summary>
+    public string Text { get; init; } = string.Empty;
 }

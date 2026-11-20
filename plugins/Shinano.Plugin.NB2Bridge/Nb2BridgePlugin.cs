@@ -29,6 +29,7 @@ public sealed class Nb2BridgePlugin : IShinanoPlugin
         builder.RegisterInstance(TimeProvider.System);
         builder.Register(scope => new Nb2Layout(scope.Resolve<IPluginInitializationContext>().DataDirectory)).SingleInstance();
         builder.RegisterType<Nb2Catalog>().SingleInstance();
+        builder.RegisterType<Nb2Venv>().SingleInstance();
         builder.RegisterType<EventTracker>().SingleInstance();
         builder.RegisterType<Nb2ScopeStore>().SingleInstance();
         builder.RegisterType<LocalFiles>().SingleInstance();
@@ -49,6 +50,7 @@ public sealed class Nb2BridgePlugin : IShinanoPlugin
     {
         ILifetimeScope container = _container ?? throw new InvalidOperationException("插件容器尚未建立");
         await container.Resolve<Nb2ScopeStore>().LoadAsync();
+        await container.Resolve<Nb2Venv>().LoadAsync(cancellationToken);
         Nb2EventRelay relay = container.Resolve<Nb2EventRelay>();
         context.Events.Subscribe<BotEvent>(relay.HandleAsync);
         context.Scheduler.Register(CLEANUP_JOB, CleanupInterval, container.Resolve<LocalFiles>().CleanupAsync, runImmediately: true);

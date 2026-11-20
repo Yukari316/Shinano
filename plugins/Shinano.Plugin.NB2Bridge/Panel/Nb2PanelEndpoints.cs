@@ -112,11 +112,9 @@ internal static class Nb2PanelEndpoints
 
     /// <summary>从 PyPI 安装插件。</summary>
     internal static async Task<IResult> InstallAsync(Nb2Packages packages, Nb2InstallRequest request, CancellationToken cancellationToken) =>
-        await packages.InstallAsync(request.Package.Trim(), request.Version.Trim(), request.Module, cancellationToken) is { } error
-            ? Results.BadRequest(new { error })
-            : Results.NoContent();
+        Change(await packages.InstallAsync(request.Package.Trim(), request.Version.Trim(), request.Module, request.RelaxInstalled, cancellationToken));
 
-    /// <summary>上传 wheel 安装插件；表单字段 <c>file</c> 与可选的 <c>module</c>。</summary>
+    /// <summary>上传 wheel 安装插件；表单字段 <c>file</c>、可选的 <c>module</c> 与 <c>relaxInstalled</c>（<c>true</c> 时允许调整已装插件的依赖）。</summary>
     internal static async Task<IResult> InstallWheelAsync(HttpRequest request, Nb2Packages packages, CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType) return Results.BadRequest(new { error = "请上传 wheel 文件" });
@@ -125,17 +123,48 @@ internal static class Nb2PanelEndpoints
         IFormCollection form = await request.ReadFormAsync(cancellationToken);
         if (form.Files.FirstOrDefault() is not { } file) return Results.BadRequest(new { error = "请上传 wheel 文件" });
 
+        bool relaxInstalled = string.Equals(form["relaxInstalled"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
         await using Stream content = file.OpenReadStream();
-        return await packages.InstallWheelAsync(file.FileName, content, form["module"].ToString(), cancellationToken) is { } error
-            ? Results.BadRequest(new { error })
-            : Results.NoContent();
+        return Change(await packages.InstallWheelAsync(file.FileName, content, form["module"].ToString(), relaxInstalled, cancellationToken));
     }
 
     /// <summary>卸载插件。</summary>
     internal static async Task<IResult> UninstallAsync(Nb2Packages packages, string module, CancellationToken cancellationToken) =>
-        await packages.UninstallAsync(module, cancellationToken) is { } error
-            ? Results.BadRequest(new { error })
-            : Results.NoContent();
+        Change(await packages.UninstallAsync(module, cancellationToken));
+
+    /// <summary>按当前 NB2Bridge 期望的基础锁定文件重建环境。</summary>
+    internal static async Task<IResult> RebuildAsync(Nb2Packages packages, CancellationToken cancellationToken) =>
+        Change(await packages.RebuildAsync(cancellationToken));
+
+    /// <summary>管理员约束文件的内容；文件不存在时为空。</summary>
+    internal static async Task<IResult> ConstraintsAsync(Nb2Layout layout, CancellationToken cancellationToken) =>
+        Results.Ok(
+            new Nb2ConstraintsView
+            {
+                Text = File.Exists(layout.ConstraintsFile) ? await File.ReadAllTextAsync(layout.ConstraintsFile, cancellationToken) : string.Empty
+            });
+
+    /// <summary>校验并保存管理员约束文件；内容为空时删除文件。此后的安装与重建生效。</summary>
+    internal static async Task<IResult> SaveConstraintsAsync(Nb2Layout layout, Nb2ConstraintsView update, ILogger logger, CancellationToken cancellationToken)
+    {
+        // 请求体中显式的 null 会覆盖默认值。
+        string text = (update.Text ?? string.Empty).Replace("\r\n", "\n");
+        if (Nb2Constraints.Validate(text) is { } error) return Results.BadRequest(new { error });
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            File.Delete(layout.ConstraintsFile);
+        }
+        else
+        {
+            string temporary = layout.ConstraintsFile + ".tmp";
+            await File.WriteAllTextAsync(temporary, text.EndsWith('\n') ? text : text + "\n", cancellationToken);
+            File.Move(temporary, layout.ConstraintsFile, overwrite: true);
+        }
+
+        logger.LogInformation("面板修改 NB2 管理员约束：{Constraints}", string.IsNullOrWhiteSpace(text) ? "（已清空）" : text.Trim());
+        return Results.NoContent();
+    }
 
     /// <summary>插件配置表单：只有 NB2 运行时能读取配置模型。</summary>
     internal static async Task<IResult> ConfigAsync(Nb2Runner runner, string module, ILogger logger, CancellationToken cancellationToken)
@@ -182,6 +211,12 @@ internal static class Nb2PanelEndpoints
         logger.LogInformation("已保存 NB2 插件 {Module} 的配置：{Fields}，重启 NB2 后生效", module, string.Join("、", changes.Keys));
         return Results.Ok(new { restartRequired = true });
     }
+
+    // 失败时 conflict 表示与已装插件锁定的版本冲突，页面据此提供「允许调整已装插件的依赖后重试」。
+    private static IResult Change(Nb2ChangeResult result) =>
+        result.Error is { } error
+            ? Results.BadRequest(new { error, conflict = result.Conflict })
+            : Results.Ok(new Nb2ChangeView { Changes = result.Changes });
 
     private static async Task<IReadOnlyList<Nb2RemotePlugin>> RemoteAsync(Nb2Runner runner, ILogger logger, CancellationToken cancellationToken)
     {

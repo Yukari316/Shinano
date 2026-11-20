@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { PhArrowsClockwise, PhGear, PhPencilSimple, PhPlay, PhStop, PhTrash, PhUploadSimple, PhX } from '@phosphor-icons/vue'
+import { PhArrowsClockwise, PhGear, PhPencilSimple, PhPlay, PhStop, PhTrash, PhUploadSimple, PhWrench, PhX } from '@phosphor-icons/vue'
 import { type ApiResult, callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { ConfigSchema, ConfigView, Plugin, ProcessState, SchemaProperty, ScopeCandidate, ScopeKind, Scopes, Status } from './types'
+import type { BaseState, ChangeError, ChangeView, ConfigSchema, ConfigView, ConstraintsView, Plugin, ProcessState, SchemaProperty, ScopeCandidate, ScopeKind, Scopes, Status, VersionChange } from './types'
 
 const props = defineProps<{ context: PluginPageContext }>()
 
@@ -23,6 +23,11 @@ const STATE_CLASS: Record<ProcessState, string> = {
   Stopping: 'badge-warning',
   Failed: 'badge-error',
   Missing: 'badge-error'
+}
+const BASE_NOTICE: Partial<Record<BaseState, string>> = {
+  Incomplete: 'NB2 环境刚建立，插件层尚未安装；启动 NB2 时会自动安装，也可以现在重建。',
+  Outdated: 'NB2 基础环境与当前 NB2Bridge 版本不一致（NB2Bridge 已升级），建议重建环境；重建前不能安装或升级插件。',
+  Unmanaged: 'NB2 基础环境不是按锁定文件建立的（旧版建立），建议重建环境；重建前不能安装或升级插件。'
 }
 const SCOPE_KINDS: ScopeKind[] = ['group', 'private']
 const SCOPE_LABEL: Record<ScopeKind, { title: string; noun: string }> = {
@@ -66,6 +71,11 @@ const scopeSelected = ref<number[]>([])
 const scopeCandidates = ref<ScopeCandidate[]>([])
 const scopeLoading = ref(false)
 const scopeFilter = ref('')
+const changes = ref<VersionChange[]>([])
+/** 上一次安装失败的来源；用于「允许调整已装插件的依赖后重试」。 */
+const retry = ref<'pypi' | 'wheel' | null>(null)
+const rebuildConfirm = ref(false)
+const constraints = ref('')
 let refreshTimer: number | undefined
 
 const running = computed(() => status.value?.state === 'Running')
@@ -112,49 +122,94 @@ async function setEnabled(plugin: Plugin) {
   if (!result.ok) await refresh()
 }
 
-async function install() {
+function describeChanges(result: ChangeView | null): string {
+  const list = result?.changes ?? []
+  changes.value = list
+  return list.length > 0 ? `，插件层 ${list.length} 个包版本变化（见下方列表）` : ''
+}
+
+async function install(relaxInstalled = false) {
   error.value = ''
   notice.value = ''
+  retry.value = null
   busy.value = true
-  const result = await call('/plugins', jsonBody('POST', { package: installPackage.value, version: installVersion.value, module: installModule.value || null }))
+  const result = await call<ChangeView>('/plugins', jsonBody('POST', { package: installPackage.value, version: installVersion.value, module: installModule.value || null, relaxInstalled }))
   busy.value = false
   if (result.ok) {
-    notice.value = `已安装 ${installPackage.value} ${installVersion.value}，默认不启用`
+    notice.value = `已安装 ${installPackage.value} ${installVersion.value}，默认不启用${describeChanges(result.body)}`
     installPackage.value = ''
     installVersion.value = ''
     installModule.value = ''
+  } else if ((result.body as ChangeError | null)?.conflict) {
+    retry.value = 'pypi'
   }
   await refresh()
 }
 
-async function uploadWheel() {
+async function uploadWheel(relaxInstalled = false) {
   const file = wheelInput.value?.files?.[0]
   if (!file) return
   error.value = ''
   notice.value = ''
+  retry.value = null
   busy.value = true
   const form = new FormData()
   form.append('file', file)
   if (wheelModule.value) form.append('module', wheelModule.value)
-  const result = await call('/plugins/wheel', { method: 'POST', body: form })
+  if (relaxInstalled) form.append('relaxInstalled', 'true')
+  const result = await call<ChangeView>('/plugins/wheel', { method: 'POST', body: form })
   busy.value = false
   if (result.ok) {
-    notice.value = `已安装 ${file.name}，默认不启用`
+    notice.value = `已安装 ${file.name}，默认不启用${describeChanges(result.body)}`
     wheelModule.value = ''
     if (wheelInput.value) wheelInput.value.value = ''
+  } else if ((result.body as ChangeError | null)?.conflict) {
+    retry.value = 'wheel'
   }
   await refresh()
+}
+
+async function retryRelaxed() {
+  const kind = retry.value
+  if (kind === 'pypi') await install(true)
+  else if (kind === 'wheel') await uploadWheel(true)
 }
 
 async function uninstall() {
   if (!removing.value) return
   error.value = ''
+  notice.value = ''
+  retry.value = null
   busy.value = true
-  const result = await call(`/plugins/${encodeURIComponent(removing.value.module)}`, { method: 'DELETE' })
+  const result = await call<ChangeView>(`/plugins/${encodeURIComponent(removing.value.module)}`, { method: 'DELETE' })
   busy.value = false
-  if (result.ok) notice.value = `已卸载 ${removing.value.package}`
+  if (result.ok) notice.value = `已卸载 ${removing.value.package}${describeChanges(result.body)}`
   removing.value = null
   await refresh()
+}
+
+async function rebuild() {
+  rebuildConfirm.value = false
+  error.value = ''
+  notice.value = ''
+  retry.value = null
+  busy.value = true
+  const result = await call<ChangeView>('/environment/rebuild', { method: 'POST' })
+  busy.value = false
+  if (result.ok) notice.value = `NB2 环境已重建${describeChanges(result.body)}`
+  await refresh()
+}
+
+async function loadConstraints() {
+  const result = await call<ConstraintsView>('/constraints')
+  if (result.ok) constraints.value = result.body?.text ?? ''
+}
+
+async function saveConstraints() {
+  error.value = ''
+  notice.value = ''
+  const result = await call('/constraints', jsonBody('PUT', { text: constraints.value }))
+  if (result.ok) notice.value = '约束已保存，此后的安装与重建生效'
 }
 
 // pydantic 的 Optional 字段为 anyOf [类型, null]，枚举与嵌套模型经 $ref 引用 $defs。
@@ -304,7 +359,7 @@ async function saveScope() {
 }
 
 onMounted(async () => {
-  await Promise.all([refresh(), loadScopes()])
+  await Promise.all([refresh(), loadScopes(), loadConstraints()])
   refreshTimer = window.setInterval(refresh, REFRESH_MS)
 })
 onBeforeUnmount(() => window.clearInterval(refreshTimer))
@@ -312,8 +367,20 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
 
 <template>
   <div class="flex flex-col gap-6">
-    <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
-    <div v-if="notice" role="status" class="alert alert-success">{{ notice }}</div>
+    <div v-if="error" role="alert" class="alert alert-error flex flex-col items-start gap-2">
+      <span class="[overflow-wrap:anywhere] whitespace-pre-wrap">{{ error }}</span>
+      <button v-if="retry" class="btn btn-sm" :disabled="busy" @click="retryRelaxed">允许调整已装插件的依赖后重试</button>
+    </div>
+    <div v-if="notice" role="status" class="alert alert-success flex flex-col items-start gap-2">
+      <span>{{ notice }}</span>
+      <ul v-if="changes.length > 0" class="text-xs tabular-nums">
+        <li v-for="change in changes" :key="change.package"><span class="font-mono">{{ change.package }}</span> {{ change.from ?? "（新增）" }} → {{ change.to ?? "（移除）" }}</li>
+      </ul>
+    </div>
+    <div v-if="status && BASE_NOTICE[status.baseState]" role="status" class="alert alert-warning flex items-center gap-4">
+      <span>{{ BASE_NOTICE[status.baseState] }}</span>
+      <button class="btn btn-sm ml-auto" :disabled="busy" @click="rebuildConfirm = true">重建环境</button>
+    </div>
     <div v-if="restartHint" role="status" class="alert alert-warning flex items-center gap-4">
       <span>配置已保存到 .env，重启 NB2 后生效；重启会影响 NB2 内的全部插件。</span>
       <button class="btn btn-sm ml-auto" :disabled="busy" @click="processAction('restart')"><PhArrowsClockwise class="size-4" />重启 NB2</button>
@@ -350,6 +417,7 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
         <button class="btn btn-primary btn-sm" :disabled="busy || status?.state === 'Running' || status?.state === 'Starting'" @click="processAction('start')"><PhPlay class="size-4" />启动</button>
         <button class="btn btn-sm" :disabled="busy || !status?.pid" @click="processAction('restart')"><PhArrowsClockwise class="size-4" />重启</button>
         <button class="btn btn-sm" :disabled="busy || !status?.pid" @click="processAction('stop')"><PhStop class="size-4" />停止</button>
+        <button class="btn btn-sm" :disabled="busy || status?.baseState === 'Missing'" title="按当前 NB2Bridge 的基础锁定文件重建 NB2 运行环境" @click="rebuildConfirm = true"><PhWrench class="size-4" />重建环境</button>
         <span v-if="busy" class="loading loading-spinner loading-sm self-center"></span>
       </div>
       <details v-if="status && status.environment.length > 0" class="text-sm">
@@ -415,18 +483,25 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
           </tbody>
         </table>
       </div>
-      <p class="text-sm opacity-70">安装与卸载会先停止 NB2，完成后恢复原来的运行状态；失败时按锁定文件还原依赖。只安装经人工认可来源与代码的插件。</p>
+      <p class="text-sm opacity-70">安装、卸载与重建会先停止 NB2，完成后恢复原来的运行状态；装好后实际加载全部插件检查，失败时整体还原。新插件不能改变 NB2 基础环境与已装插件的依赖版本，冲突时可确认后放宽重试。只安装经人工认可来源与代码的插件。</p>
       <div class="flex flex-wrap items-end gap-2">
         <label class="flex flex-col gap-1 text-sm">PyPI 包名<input v-model="installPackage" class="input input-sm w-64" placeholder="nonebot-plugin-xxx" /></label>
         <label class="flex flex-col gap-1 text-sm">版本<input v-model="installVersion" class="input input-sm w-28" placeholder="1.0.0" /></label>
         <label class="flex flex-col gap-1 text-sm">模块名（可选）<input v-model="installModule" class="input input-sm w-56" placeholder="默认为包名把 - 换成 _" /></label>
-        <button class="btn btn-primary btn-sm" :disabled="busy || !installPackage || !installVersion" @click="install">安装</button>
+        <button class="btn btn-primary btn-sm" :disabled="busy || !installPackage || !installVersion" @click="install()">安装</button>
       </div>
       <div class="flex flex-wrap items-end gap-2">
         <label class="flex flex-col gap-1 text-sm">wheel 文件<input ref="wheelInput" type="file" accept=".whl" class="file-input file-input-sm w-72" /></label>
         <label class="flex flex-col gap-1 text-sm">模块名（可选）<input v-model="wheelModule" class="input input-sm w-56" placeholder="默认为包名" /></label>
-        <button class="btn btn-sm" :disabled="busy" @click="uploadWheel"><PhUploadSimple class="size-4" />上传安装</button>
+        <button class="btn btn-sm" :disabled="busy" @click="uploadWheel()"><PhUploadSimple class="size-4" />上传安装</button>
       </div>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h3 class="font-semibold">依赖约束</h3>
+      <p class="text-sm opacity-70">用于排除已知有问题的版本，此后安装插件与重建环境时生效；不能改变 NB2 基础环境。每行一个包名与版本条件，例如 <code>tarina&lt;0.8</code>，可用 # 写明原因。</p>
+      <textarea v-model="constraints" class="textarea textarea-sm w-full max-w-2xl font-mono" rows="4" placeholder="tarina<0.8  # 0.8.0 与 arclet-alconna 1.8 不兼容" aria-label="依赖约束"></textarea>
+      <div><button class="btn btn-sm" :disabled="busy" @click="saveConstraints">保存约束</button></div>
     </section>
 
     <section class="flex flex-col gap-3">
@@ -436,6 +511,19 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
       </div>
       <pre class="max-h-96 overflow-auto rounded-box bg-base-200 p-3 text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ logs.length > 0 ? logs.join('\n') : '没有输出' }}</pre>
     </section>
+
+    <Teleport to="body">
+      <div v-if="rebuildConfirm" class="modal modal-open" role="dialog" aria-labelledby="nb2-rebuild-title">
+        <div class="modal-box flex flex-col gap-4">
+          <h3 id="nb2-rebuild-title" class="text-lg font-semibold">重建 NB2 环境</h3>
+          <p class="text-sm">将停止 NB2，按当前 NB2Bridge 的基础锁定文件同步 NB2 基础环境，再重新安装全部 NB2 插件并逐一试加载，之后恢复 NB2 的运行状态。基础环境未变时按现有锁定精确还原；基础环境变化时先保留插件原有的依赖版本，不行再重新解析，版本变化会列在结果中。失败时整体还原。</p>
+          <div class="flex justify-end gap-2">
+            <button class="btn btn-ghost btn-sm" :disabled="busy" @click="rebuildConfirm = false">取消</button>
+            <button class="btn btn-primary btn-sm" :disabled="busy" @click="rebuild"><span v-if="busy" class="loading loading-spinner loading-xs"></span>重建</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="removing" class="modal modal-open" role="dialog" aria-labelledby="nb2-remove-title">

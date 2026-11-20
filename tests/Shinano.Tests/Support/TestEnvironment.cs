@@ -49,6 +49,16 @@ public static class TestEnvironment
     public static void RequireBrowser() =>
         Assert.SkipUnless(BrowserDirectory is not null, "未设置 SHINANO_TEST_BROWSER_DIR 环境变量（会下载 Chrome for Testing）");
 
+    /// <summary>
+    /// NB2 依赖变更演练使用的工作目录：用 uv 创建 venv、从 PyPI 下载 NB2 基础环境并现场构建演示插件。需要 uv 与网络，
+    /// 只在修改 NB2 环境管理或锁定文件时手动设置运行。
+    /// </summary>
+    public static string? Nb2Directory => Read("SHINANO_TEST_NB2_DIR");
+
+    /// <summary>未设置 NB2 演练目录时跳过当前测试。</summary>
+    public static void RequireNb2() =>
+        Assert.SkipUnless(Nb2Directory is not null, "未设置 SHINANO_TEST_NB2_DIR 环境变量（需要 uv，会从 PyPI 下载依赖）");
+
     private static string? Read(string name)
     {
         string? value = Environment.GetEnvironmentVariable(name);

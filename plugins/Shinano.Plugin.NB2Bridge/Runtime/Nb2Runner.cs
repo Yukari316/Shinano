@@ -19,10 +19,6 @@ namespace Shinano.Plugin.NB2Bridge.Runtime;
 /// </summary>
 public sealed class Nb2Runner : IDisposable
 {
-    private const string BOT_ASSET           = "nb2/bot.py";
-    private const string CONTROL_ASSET       = "nb2/control/shinano_nb2_control/__init__.py";
-    private const string CONTROL_PACKAGE     = "shinano_nb2_control";
-    private const string CONTROL_INIT        = "__init__.py";
     private const int    TOKEN_BYTES         = 32;
     private const long   BYTES_PER_MIB       = 1024 * 1024;
     private const int    PREPARE_ATTEMPTS    = 20;
@@ -40,6 +36,7 @@ public sealed class Nb2Runner : IDisposable
     private readonly IPluginInitializationContext _context;
     private readonly Nb2Layout                    _layout;
     private readonly Nb2Catalog                   _catalog;
+    private readonly Nb2Venv                      _venv;
     private readonly MilkyActions                 _actions;
     private readonly Nb2LogSink                   _log;
     private readonly TimeProvider                 _time;
@@ -72,6 +69,7 @@ public sealed class Nb2Runner : IDisposable
         IPluginInitializationContext context,
         Nb2Layout                    layout,
         Nb2Catalog                   catalog,
+        Nb2Venv                      venv,
         MilkyActions                 actions,
         TimeProvider                 time,
         ILogger<Nb2Runner>           logger)
@@ -79,6 +77,7 @@ public sealed class Nb2Runner : IDisposable
         _context = context;
         _layout  = layout;
         _catalog = catalog;
+        _venv    = venv;
         _actions = actions;
         _log     = new Nb2LogSink(layout.LogsDirectory);
         _time    = time;
@@ -113,7 +112,8 @@ public sealed class Nb2Runner : IDisposable
             FfmpegDirectory = _ffmpegDirectory,
             FfmpegError     = _ffmpegError,
             FfmpegVersion   = _ffmpegVersion,
-            Environment     = _environment
+            Environment     = _environment,
+            BaseState       = _venv.State()
         };
     }
 
@@ -258,11 +258,12 @@ public sealed class Nb2Runner : IDisposable
         }
 
         _state = Nb2ProcessState.Starting;
+        await PrepareEnvironmentAsync();
         MilkyServer?      server  = null;
         Nb2ControlClient? control = null;
         try
         {
-            await WriteScriptsAsync(cancellationToken);
+            await _venv.WriteScriptsAsync(cancellationToken);
             await ResolveFfmpegAsync(cancellationToken);
 
             string token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(TOKEN_BYTES));
@@ -336,15 +337,23 @@ public sealed class Nb2Runner : IDisposable
         return process;
     }
 
-    private async Task WriteScriptsAsync(CancellationToken cancellationToken)
+    // 调用方持有 _gate，NB2 未运行。nb2-setup 刚建立的环境在首次启动前自动安装插件层；基础层需要重建时只提示，照常启动。
+    private async Task PrepareEnvironmentAsync()
     {
-        string package = Path.Combine(_layout.ControlDirectory, CONTROL_PACKAGE);
-        Directory.CreateDirectory(package);
-        await File.WriteAllBytesAsync(_layout.BotScript, await _context.Assets.ReadAllBytesAsync(BOT_ASSET, cancellationToken), cancellationToken);
-        await File.WriteAllBytesAsync(
-            Path.Combine(package, CONTROL_INIT),
-            await _context.Assets.ReadAllBytesAsync(CONTROL_ASSET, cancellationToken),
-            cancellationToken);
+        Nb2BaseState state = _venv.State();
+        if (state is Nb2BaseState.Outdated or Nb2BaseState.Unmanaged)
+        {
+            _logger.LogWarning(
+                state == Nb2BaseState.Outdated
+                    ? "NB2 基础环境与当前 NB2Bridge 版本不一致，建议在 NB2 页面重建环境"
+                    : "NB2 基础环境不是按锁定文件建立的，建议在 NB2 页面重建环境");
+            return;
+        }
+
+        if (state != Nb2BaseState.Incomplete) return;
+        _logger.LogInformation("NB2 环境刚建立，启动前安装插件层");
+        Nb2ChangeResult result = await _venv.RebuildAsync(_catalog.Entries());
+        if (result.Error is not null) _logger.LogWarning("NB2 插件层未能安装，仍启动 NB2；可在 NB2 页面重建环境");
     }
 
     // ffmpeg 不可用不阻止启动：只有用到 ffmpeg 的解析会失败。

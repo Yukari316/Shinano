@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Shinano.Plugin.NB2Bridge.PluginPackages;
 
 namespace Shinano.Plugin.NB2Bridge.Runtime;
 
@@ -37,6 +38,9 @@ public sealed class Nb2RunnerStatus
 
     /// <summary>本次启动传入的环境变量（显示值）；未启动过时为空。</summary>
     public required IReadOnlyList<Nb2EnvironmentVariable> Environment { get; init; }
+
+    /// <summary>环境与当前 NB2Bridge 期望的基础锁定文件的关系。</summary>
+    public required Nb2BaseState BaseState { get; init; }
 }
 
 /// <summary>NB2 进程的状态。</summary>

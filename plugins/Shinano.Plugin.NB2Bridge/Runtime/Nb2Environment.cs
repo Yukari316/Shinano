@@ -46,6 +46,9 @@ public static class Nb2Environment
     /// <summary>可执行文件搜索路径；ffmpeg 目录前置，parser 按命令名调用 ffmpeg。</summary>
     public const string PATH = "PATH";
 
+    /// <summary>为 <c>1</c> 时 <c>bot.py</c> 只试加载全部插件后退出，见 <see cref="BuildProbe" />。</summary>
+    public const string PROBE = "SHINANO_NB2_PROBE";
+
     private const string LOOPBACK   = "127.0.0.1";
     private const string DRIVERS    = "~fastapi+~httpx+~websockets";
     private const string CONFIGURED = "（已设置）";
@@ -116,6 +119,21 @@ public static class Nb2Environment
 
         return variables;
     }
+
+    /// <summary>
+    /// 试加载（<c>bot.py</c> 的 <see cref="PROBE" /> 模式）的环境：与正式运行相同的驱动与插件列表，localstore 指向
+    /// <paramref name="storeDirectory" />（调用方用完删除），不需要监听端口与 Milky 连接。
+    /// </summary>
+    public static IReadOnlyList<Nb2EnvironmentVariable> BuildProbe(IReadOnlyList<string> modules, string storeDirectory) =>
+    [
+        Plain(DRIVER, DRIVERS),
+        Plain(PLUGINS, JsonSerializer.Serialize(modules)),
+        Plain(LOCALSTORE_DATA, Path.Combine(storeDirectory, "data")),
+        Plain(LOCALSTORE_CONFIG, Path.Combine(storeDirectory, "config")),
+        Plain(LOCALSTORE_CACHE, Path.Combine(storeDirectory, "cache")),
+        Plain(PYTHON_UTF8, "1"),
+        Plain(PROBE, "1")
+    ];
 
     private static Nb2EnvironmentVariable Plain(string name, string value) =>
         new()

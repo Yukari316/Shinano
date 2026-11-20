@@ -273,7 +273,9 @@ public sealed class Nb2BridgeTests
             Assert.Equal(DateTimeOffset.UnixEpoch, entry.InstalledAt);
             Assert.Equal(Nb2SetupCommand.DIRECTORY_NAME, Nb2Layout.DIRECTORY_NAME);
             Assert.Equal(Nb2SetupCommand.PLUGINS_FILE, Nb2Layout.PLUGINS_FILE);
-            Assert.Equal(Nb2SetupCommand.LOCK_FILE, Nb2Layout.LOCK_FILE);
+            Assert.Equal(Nb2SetupCommand.BASE_LOCK_FILE, Nb2Layout.BASE_LOCK_FILE);
+            Assert.Equal(Nb2SetupCommand.PLUGINS_LOCK_FILE, Nb2Layout.PLUGINS_LOCK_FILE);
+            Assert.Equal(Nb2SetupCommand.MinimumUvVersion, Nb2Venv.MinimumUvVersion);
         }
         finally
         {
@@ -384,7 +386,9 @@ public sealed class Nb2BridgeTests
             BridgeContext context = new(new TestAccessor(RecordingBotApi.Create().Api), notices: notices);
             FakeTimeProvider time = new(DateTimeOffset.UtcNow);
             MilkyActions actions = new(context, new EventTracker(), new LocalFiles(context, time, NullLogger<LocalFiles>.Instance), time, NullLogger<MilkyActions>.Instance);
-            using Nb2Runner runner = new(context, layout, new Nb2Catalog(layout), actions, time, NullLogger<Nb2Runner>.Instance);
+            Nb2Venv venv = new(context, layout, NullLogger<Nb2Venv>.Instance);
+            await venv.LoadAsync(TestContext.Current.CancellationToken);
+            using Nb2Runner runner = new(context, layout, new Nb2Catalog(layout), venv, actions, time, NullLogger<Nb2Runner>.Instance);
 
             await runner.StartAsync(TestContext.Current.CancellationToken);
             // 每轮推进一个重启间隔；等待中的重启尚未登记计时器时推进不会生效，下一轮再推进。

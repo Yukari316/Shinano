@@ -1,7 +1,7 @@
 namespace Shinano.Plugin.NB2Bridge.Runtime;
 
 /// <summary>
-/// NB2 运行环境在部署数据目录下的布局（<c>nb2/</c>）。目录名、插件清单与锁定文件名与 <c>Shinano.Tool nb2-setup</c> 一致。
+/// NB2 运行环境在部署数据目录下的布局（<c>nb2/</c>）。目录名、插件清单、实际基础锁定文件与插件层锁定文件名与 <c>Shinano.Tool nb2-setup</c> 一致。
 /// </summary>
 public sealed class Nb2Layout
 {
@@ -11,8 +11,14 @@ public sealed class Nb2Layout
     /// <summary>插件清单文件名。</summary>
     public const string PLUGINS_FILE = "plugins.json";
 
-    /// <summary>依赖锁定文件名。</summary>
-    public const string LOCK_FILE = "requirements.lock";
+    /// <summary>实际基础锁定文件名：当前 venv 已同步的 NB2 基础环境，与 NB2Bridge 资产中的期望基础锁定文件同名。</summary>
+    public const string BASE_LOCK_FILE = "base.lock";
+
+    /// <summary>插件层锁定文件名：已验证插件层的确切版本与哈希。</summary>
+    public const string PLUGINS_LOCK_FILE = "plugins.lock";
+
+    /// <summary>管理员约束文件名。</summary>
+    public const string CONSTRAINTS_FILE = "constraints.txt";
 
     /// <summary>NB2 入口脚本名。</summary>
     public const string BOT_SCRIPT = "bot.py";
@@ -48,8 +54,14 @@ public sealed class Nb2Layout
     /// <summary>插件清单。</summary>
     public string PluginsFile => Path.Combine(Root, PLUGINS_FILE);
 
-    /// <summary>依赖锁定文件，安装或卸载失败时据此还原。</summary>
-    public string LockFile => Path.Combine(Root, LOCK_FILE);
+    /// <summary>实际基础锁定文件；缺失表示环境不是按锁定文件建立的。</summary>
+    public string BaseLockFile => Path.Combine(Root, BASE_LOCK_FILE);
+
+    /// <summary>插件层锁定文件；与实际基础锁定文件一起用于还原与基础层不变时的重建。</summary>
+    public string PluginsLockFile => Path.Combine(Root, PLUGINS_LOCK_FILE);
+
+    /// <summary>管理员约束文件，排除已知有问题的版本；所有插件安装与重建都附加。</summary>
+    public string ConstraintsFile => Path.Combine(Root, CONSTRAINTS_FILE);
 
     /// <summary>上传的 wheel 文件。</summary>
     public string WheelsDirectory => Path.Combine(Root, "wheels");

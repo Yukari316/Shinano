@@ -1,3 +1,6 @@
+/** NB2 运行环境与期望基础锁定文件的关系：Incomplete 为刚建立、启动时自动安装插件层；Outdated、Unmanaged 建议重建。 */
+export type BaseState = 'Missing' | 'Current' | 'Incomplete' | 'Outdated' | 'Unmanaged'
+
 /** NB2 进程状态。 */
 export type ProcessState = 'Stopped' | 'Starting' | 'Running' | 'Stopping' | 'Failed' | 'Missing'
 
@@ -21,6 +24,8 @@ export interface Status {
   ffmpegVersion: string | null
   ffmpegError: string | null
   environment: EnvironmentVariable[]
+  /** 环境与当前 NB2Bridge 期望的基础锁定文件的关系。 */
+  baseState: BaseState
 }
 
 /** NB2 插件的最近一次错误。 */
@@ -101,4 +106,27 @@ export type Scopes = Record<ScopeKind, Scope>
 export interface ScopeCandidate {
   id: number
   name: string | null
+}
+
+/** 插件层一个包的版本变化；新增或移除的包另一侧为 null。 */
+export interface VersionChange {
+  package: string
+  from: string | null
+  to: string | null
+}
+
+/** 依赖变更（安装、卸载、重建）成功的结果。 */
+export interface ChangeView {
+  changes: VersionChange[]
+}
+
+/** 管理员约束文件的内容。 */
+export interface ConstraintsView {
+  text: string
+}
+
+/** 依赖变更失败的响应；conflict 表示与已装插件锁定的版本冲突，可确认后放宽重试。 */
+export interface ChangeError {
+  error: string
+  conflict: boolean
 }

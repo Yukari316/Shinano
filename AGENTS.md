@@ -25,7 +25,7 @@
 
 - 构建：`dotnet build Shinano.slnx`。插件输出到 `artifacts/plugins/<工程名>/`（插件包目录布局），测试用插件输出到 `artifacts/test-plugins/`。
 - 前端：`pnpm -C web install` 后按包构建（如 `pnpm -C web --filter @shinano/panel run build`）；面板构建产物由宿主托管，插件页面构建到对应插件的 `web/`。
-- 测试：`dotnet test --project tests/Shinano.Tests`，聚焦时加 `--filter-class <完整类名>`。集成测试需要 `SHINANO_TEST_DSN` 与 `SHINANO_TEST_S3_ENDPOINT`、`SHINANO_TEST_S3_ACCESS_KEY`、`SHINANO_TEST_S3_SECRET_KEY`，未设置时跳过；调用真实图源服务的测试需要 `SHINANO_TEST_GATEWAY_TOKEN`，浏览器测试需要 `SHINANO_TEST_BROWSER_DIR`，只在修改相关功能时手动执行。
+- 测试：`dotnet test --project tests/Shinano.Tests`，聚焦时加 `--filter-class <完整类名>`。集成测试需要 `SHINANO_TEST_DSN` 与 `SHINANO_TEST_S3_ENDPOINT`、`SHINANO_TEST_S3_ACCESS_KEY`、`SHINANO_TEST_S3_SECRET_KEY`，未设置时跳过；调用真实图源服务的测试需要 `SHINANO_TEST_GATEWAY_TOKEN`，浏览器测试需要 `SHINANO_TEST_BROWSER_DIR`，NB2 依赖变更演练（用 uv 从 PyPI 下载）需要 `SHINANO_TEST_NB2_DIR`，只在修改相关功能时手动执行。
 - 发布包：`build/pack.ps1` 或 `build/pack.sh`，输出到 `artifacts/release/`。版本号取根目录 `Directory.Build.props` 的 `Version`；插件版本以各自的 `plugin.json` 为准，插件程序集版本在构建时取自同一字段（`plugins/Directory.Build.props`）。
 - 运行中的宿主会锁住插件与宿主的程序集，构建前先停止宿主。
 

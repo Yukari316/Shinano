@@ -77,6 +77,12 @@ public sealed class Nb2Commands
                 Name   = "自动重启",
                 Value  = $"{status.AutoRestarts} 次",
                 Detail = $"自上次就绪起，最多 {Nb2Runner.MAX_AUTO_RESTARTS} 次"
+            },
+            new()
+            {
+                Level  = status.BaseState == Nb2BaseState.Current ? CardLevel.Normal : status.BaseState == Nb2BaseState.Missing ? CardLevel.Error : CardLevel.Warning,
+                Name   = "基础环境",
+                Value  = BaseStateText(status.BaseState)
             }
         ];
 
@@ -167,6 +173,16 @@ public sealed class Nb2Commands
             Nb2ProcessState.Failed   => "已停止（重启次数超限）",
             Nb2ProcessState.Missing  => "缺少运行环境",
             _                        => "已停止"
+        };
+
+    private static string BaseStateText(Nb2BaseState state) =>
+        state switch
+        {
+            Nb2BaseState.Current    => "与 NB2Bridge 一致",
+            Nb2BaseState.Incomplete => "插件层未安装，启动时自动安装",
+            Nb2BaseState.Outdated   => "与 NB2Bridge 版本不一致，建议重建",
+            Nb2BaseState.Unmanaged  => "不是按锁定文件建立，建议重建",
+            _                       => "缺少运行环境"
         };
 
     private static string Uptime(TimeSpan elapsed) =>

@@ -71,6 +71,12 @@ public sealed class Nb2PanelApi
         routes.MapDelete(
             "/plugins/{module}",
             (string module, CancellationToken cancellationToken) => Nb2PanelEndpoints.UninstallAsync(_packages, module, cancellationToken));
+        routes.MapPost("/environment/rebuild", (CancellationToken cancellationToken) => Nb2PanelEndpoints.RebuildAsync(_packages, cancellationToken));
+        routes.MapGet("/constraints", (CancellationToken cancellationToken) => Nb2PanelEndpoints.ConstraintsAsync(_layout, cancellationToken));
+        routes.MapPut(
+            "/constraints",
+            (Nb2ConstraintsView update, CancellationToken cancellationToken) =>
+                Nb2PanelEndpoints.SaveConstraintsAsync(_layout, update, _logger, cancellationToken));
         routes.MapGet(
             "/plugins/{module}/config",
             (string module, CancellationToken cancellationToken) => Nb2PanelEndpoints.ConfigAsync(_runner, module, _logger, cancellationToken));

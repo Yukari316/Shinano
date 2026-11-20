@@ -114,7 +114,7 @@ public static class InitCommand
         {
             try
             {
-                Nb2SetupCommand.Setup(Path.Combine(layout.DataDirectory, Nb2SetupCommand.DIRECTORY_NAME), log);
+                Nb2SetupCommand.Setup(layout.DataDirectory, log);
             }
             catch (ToolException exception)
             {
