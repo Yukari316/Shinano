@@ -1,3 +1,5 @@
+using Shinano.Framework.Plugins;
+using Shinano.Framework.Rendering;
 using Shinano.Host.Plugins;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Health;
@@ -66,14 +68,14 @@ public sealed class HealthReactions : IHostedService
                 else _plugins.Resume();
                 TrackGap(ArchiveGapCause.DatabaseOffline, failing, current.Since);
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Error, "DB-OFFLINE", "数据库不可用", current.Detail, "Bot 暂停响应全部功能")
-                    : Card(NotificationLevel.Normal, "DB-RECOVERED", "数据库已恢复", null, "已恢复响应"));
+                    ? Card(CardLevel.Error, "DB-OFFLINE", "数据库不可用", current.Detail, "Bot 暂停响应全部功能")
+                    : Card(CardLevel.Normal, "DB-RECOVERED", "数据库已恢复", null, "已恢复响应"));
                 if (!failing) _ = _activation.RunAsync(CancellationToken.None);
                 break;
             case HealthComponent.ObjectStorage:
                 _notifier.Notify(failing
-                    ? Card(NotificationLevel.Warning, "RUSTFS-OFFLINE", "RustFS 不可用", current.Detail, "媒体功能暂不可用")
-                    : Card(NotificationLevel.Normal, "RUSTFS-RECOVERED", "RustFS 已恢复", null, "媒体功能已恢复"));
+                    ? Card(CardLevel.Warning, "RUSTFS-OFFLINE", "RustFS 不可用", current.Detail, "媒体功能暂不可用")
+                    : Card(CardLevel.Normal, "RUSTFS-RECOVERED", "RustFS 已恢复", null, "媒体功能已恢复"));
                 if (!failing) _ = _activation.RunAsync(CancellationToken.None);
                 break;
             case HealthComponent.Bot:
@@ -82,7 +84,7 @@ public sealed class HealthReactions : IHostedService
         }
     }
 
-    private static NotificationCard Card(NotificationLevel level, string code, string title, string? cause, string impact) =>
+    private static SuperUserNotice Card(CardLevel level, string code, string title, string? cause, string impact) =>
         new()
         {
             Level  = level,

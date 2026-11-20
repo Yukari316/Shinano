@@ -1,6 +1,8 @@
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Shinano.Framework.Plugins;
+using Shinano.Framework.Rendering;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Plugins.Capabilities;
@@ -43,7 +45,7 @@ public sealed class PluginDataPurger : BackgroundService
     private readonly ILogger<PluginDataPurger> _logger;
     private readonly SemaphoreSlim             _gate            = new(1, 1);
     private readonly Lock                      _lock            = new();
-    private readonly List<NotificationCard>    _deferredNotices = [];
+    private readonly List<SuperUserNotice>    _deferredNotices = [];
 
     /// <summary>创建清除服务。</summary>
     public PluginDataPurger(
@@ -226,9 +228,9 @@ public sealed class PluginDataPurger : BackgroundService
         }
 
         Notify(
-            new NotificationCard
+            new SuperUserNotice
             {
-                Level  = NotificationLevel.Error,
+                Level  = CardLevel.Error,
                 Code   = FAILED_CODE,
                 Title  = "插件数据清除未完成",
                 Cause  = $"{purge.Name}：{string.Join("、", failed.Select(step => StepName(step.Kind)))}失败",
@@ -420,7 +422,7 @@ public sealed class PluginDataPurger : BackgroundService
         };
 
     // 清除在启动阶段执行，此时机器人可能尚未连上；连上后再通知。
-    private void Notify(NotificationCard card)
+    private void Notify(SuperUserNotice card)
     {
         lock (_lock)
         {
@@ -438,14 +440,14 @@ public sealed class PluginDataPurger : BackgroundService
     {
         if (change.Current is not { Component: HealthComponent.Bot, Level: HealthLevel.Normal }) return;
 
-        List<NotificationCard> notices;
+        List<SuperUserNotice> notices;
         lock (_lock)
         {
             notices = [.. _deferredNotices];
             _deferredNotices.Clear();
         }
 
-        foreach (NotificationCard notice in notices) _notifier.Notify(notice);
+        foreach (SuperUserNotice notice in notices) _notifier.Notify(notice);
     }
 
     private string SecretsPath(string pluginId) =>

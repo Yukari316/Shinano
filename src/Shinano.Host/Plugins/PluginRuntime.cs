@@ -44,7 +44,7 @@ public sealed class PluginRuntime : IDisposable
     private readonly CardRenderer           _images;
     private readonly BrowserService         _browser;
     private readonly FfmpegService          _ffmpeg;
-    private readonly PluginNotices          _notices;
+    private readonly SuperUserNotifier      _notices;
     private readonly ILoggerFactory         _loggerFactory;
     private readonly ILogger<PluginRuntime> _logger;
     private readonly SemaphoreSlim          _gate          = new(1, 1);
@@ -79,7 +79,7 @@ public sealed class PluginRuntime : IDisposable
         _images         = images;
         _browser        = browser;
         _ffmpeg         = ffmpeg;
-        _notices        = new PluginNotices(notifier);
+        _notices        = notifier;
         _loggerFactory  = loggerFactory;
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }

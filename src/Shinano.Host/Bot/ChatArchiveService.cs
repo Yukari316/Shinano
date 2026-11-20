@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Shinano.Framework.Plugins;
+using Shinano.Framework.Rendering;
 using Shinano.Infrastructure.ChatArchive;
 using Shinano.Infrastructure.Hosting;
 using Sora.Entities.Interfaces;
@@ -77,9 +79,9 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
             {
                 _logger.LogInformation("归档缓冲已恢复写入");
                 _notifier.Notify(
-                    new NotificationCard
+                    new SuperUserNotice
                     {
-                        Level  = NotificationLevel.Normal,
+                        Level  = CardLevel.Normal,
                         Code   = "ARCHIVE-RECOVERED",
                         Title  = "聊天归档缓冲已恢复",
                         Impact = "已恢复归档"
@@ -90,9 +92,9 @@ public sealed class ChatArchiveService : BackgroundService, IMessageRecorder
         {
             _logger.LogWarning("归档缓冲已满，开始丢弃消息记录");
             _notifier.Notify(
-                new NotificationCard
+                new SuperUserNotice
                 {
-                    Level  = NotificationLevel.Warning,
+                    Level  = CardLevel.Warning,
                     Code   = "ARCHIVE-BACKLOG",
                     Title  = "聊天归档缓冲已满",
                     Cause  = "归档处理跟不上消息量",
