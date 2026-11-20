@@ -14,7 +14,8 @@ const scope = route.meta.scope ?? 'Group'
 const days = ref(30)
 const includeBot = ref(false)
 const conversations = ref<ConversationStat[]>([])
-const selected = ref<number | null>(null)
+// 以类型与 ID 一起标识会话：好友与临时会话的 ID 都是对方的 QQ 号，可能相同。
+const selected = ref<Pick<ConversationStat, 'type' | 'conversationId'> | null>(null)
 const senders = ref<SenderStat[]>([])
 const error = ref('')
 
@@ -41,14 +42,20 @@ watch(
   { immediate: true }
 )
 
+function isSelected(conversation: ConversationStat): boolean {
+  return selected.value?.type === conversation.type && selected.value.conversationId === conversation.conversationId
+}
+
 // 只采用最近一次请求的结果：快速切换会话或筛选时，较慢的旧响应不覆盖新结果。
 let sendersRequest = 0
 
-async function loadSenders(conversationId: number): Promise<void> {
-  selected.value = conversationId
+async function loadSenders(conversation: Pick<ConversationStat, 'type' | 'conversationId'>): Promise<void> {
+  selected.value = { type: conversation.type, conversationId: conversation.conversationId }
   const request = ++sendersRequest
   try {
-    const rows = await api.get<SenderStat[]>(`/api/stats/senders?${query()}&conversationId=${conversationId}&limit=100`)
+    const rows = await api.get<SenderStat[]>(
+      `/api/stats/senders?${query()}&conversationId=${conversation.conversationId}&conversationType=${conversation.type}&limit=100`
+    )
     if (request === sendersRequest) senders.value = rows
   } catch (e) {
     if (request === sendersRequest) error.value = describeError(e)
@@ -80,8 +87,8 @@ async function loadSenders(conversationId: number): Promise<void> {
             v-for="conversation in conversations"
             :key="`${conversation.type}-${conversation.conversationId}`"
             class="cursor-pointer hover:bg-[var(--raise)]"
-            :class="{ 'bg-[var(--raise-strong)]': selected === conversation.conversationId }"
-            @click="loadSenders(conversation.conversationId)"
+            :class="{ 'bg-[var(--raise-strong)]': isSelected(conversation) }"
+            @click="loadSenders(conversation)"
           >
             <td>
               {{ conversation.name ?? conversation.conversationId }}

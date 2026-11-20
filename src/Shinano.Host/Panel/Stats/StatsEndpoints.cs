@@ -78,17 +78,18 @@ internal static class StatsEndpoints
     }
 
     internal static async Task<IResult> SendersAsync(
-        HostInfrastructure infrastructure,
-        BotAccessor        bot,
-        CancellationToken  cancellationToken,
-        int                days           = DEFAULT_DAYS,
-        ChatStatScope      scope          = ChatStatScope.All,
-        long?              conversationId = null,
-        bool               includeBot     = false,
-        int                limit          = DEFAULT_LIMIT)
+        HostInfrastructure    infrastructure,
+        BotAccessor           bot,
+        CancellationToken     cancellationToken,
+        int                   days             = DEFAULT_DAYS,
+        ChatStatScope         scope            = ChatStatScope.All,
+        long?                 conversationId   = null,
+        bool                  includeBot       = false,
+        int                   limit            = DEFAULT_LIMIT,
+        ChatConversationType? conversationType = null)
     {
         if (Unavailable(infrastructure, bot) is { } unavailable) return unavailable;
-        ChatStatFilter filter = CreateFilter(infrastructure, bot, days, scope, conversationId, includeBot);
+        ChatStatFilter filter = CreateFilter(infrastructure, bot, days, scope, conversationId, includeBot, conversationType);
 
         List<ChatStatTotals> rows = await new ChatStatsQuery(infrastructure).SendersAsync(
             filter,
@@ -144,22 +145,24 @@ internal static class StatsEndpoints
     }
 
     private static ChatStatFilter CreateFilter(
-        HostInfrastructure infrastructure,
-        BotAccessor        bot,
-        int                days,
-        ChatStatScope      scope,
-        long?              conversationId,
-        bool               includeBot)
+        HostInfrastructure    infrastructure,
+        BotAccessor           bot,
+        int                   days,
+        ChatStatScope         scope,
+        long?                 conversationId,
+        bool                  includeBot,
+        ChatConversationType? conversationType = null)
     {
         DateOnly today = ChatPartitionMaintainer.LocalDate(DateTimeOffset.UtcNow, infrastructure.TimeZone);
         return new ChatStatFilter
         {
-            SelfId         = bot.SelfId,
-            From           = today.AddDays(1 - Math.Clamp(days, 1, MAX_DAYS)),
-            To             = today,
-            Scope          = scope,
-            ConversationId = conversationId,
-            IncludeBot     = includeBot
+            SelfId           = bot.SelfId,
+            From             = today.AddDays(1 - Math.Clamp(days, 1, MAX_DAYS)),
+            To               = today,
+            Scope            = scope,
+            ConversationId   = conversationId,
+            ConversationType = conversationType,
+            IncludeBot       = includeBot
         };
     }
 
