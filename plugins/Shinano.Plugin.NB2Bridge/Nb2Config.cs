@@ -26,11 +26,6 @@ public sealed class Nb2Config
     [Range(1, 60)]
     public int EventTimeoutSeconds { get; set; } = 5;
 
-    /// <summary>1 分钟内允许的自动重启次数，超过后停止并通知 Super User。</summary>
-    [Display(Name = "每分钟最多自动重启次数", Description = "NB2 进程意外退出时自动重启；1 分钟内超过这个次数后停止并通知 Super User", Order = 6)]
-    [Range(0, 10)]
-    public int RestartLimit { get; set; } = 3;
-
     /// <summary>停止 NB2 时等待正常退出的秒数，超时强制结束。</summary>
     [Display(Name = "正常停止等待（秒）", Order = 7)]
     [Range(1, 120)]

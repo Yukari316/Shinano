@@ -281,7 +281,7 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
           <template v-else>尚未检查（启动 NB2 时检查）</template>
         </span>
         <span class="opacity-70">自动重启</span>
-        <span class="tabular-nums">最近 1 分钟 {{ status.recentCrashes }} 次<template v-if="status.lastExitCode !== null">，上次退出码 {{ status.lastExitCode }}</template></span>
+        <span class="tabular-nums">自上次就绪起 {{ status.autoRestarts }} 次（最多 2 次）<template v-if="status.lastExitCode !== null">，上次退出码 {{ status.lastExitCode }}</template></span>
         <template v-if="status.lastError">
           <span class="opacity-70">最近错误</span>
           <span class="text-error-strong [overflow-wrap:anywhere]">{{ status.lastError }}</span>

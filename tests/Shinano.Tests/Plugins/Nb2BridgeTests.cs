@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.NB2Bridge.Milky;
 using Shinano.Plugin.NB2Bridge.PluginPackages;
@@ -21,7 +22,8 @@ namespace Shinano.Tests.Plugins;
 
 /// <summary>
 /// NB2Bridge：消息段与事件的 Milky 转换、<c>.env</c> 写入、插件清单与工具的契约，以及用 C# 客户端扮演 NB2 连接 Milky 实现端
-/// （鉴权、事件交付、处理结果回报与超时、发送转 Sora、其他动作转发）。NB2 进程本身由开发部署实测。
+/// （鉴权、事件交付、处理结果回报与超时、发送转 Sora、其他动作转发），以及进程守护的自动重启（以立即退出的系统程序代替 NB2）。
+/// NB2 进程本身由开发部署实测。
 /// </summary>
 public sealed class Nb2BridgeTests
 {
@@ -344,6 +346,43 @@ public sealed class Nb2BridgeTests
         Assert.Equal("get_login_info", harness.Accessor.LastAction);
     }
 
+    // 进程每次都在就绪前退出：间隔 20 秒自动重启 2 次，第 2 次重启后再退出时停止拉起并只通知一次。
+    // 原来按 1 分钟时间窗计数，而控制插件 60 秒才自行退出，窗口内永远只有 1 次，于是无限重启也不通知。
+    [Fact]
+    public async Task Runner_RestartsTwiceAtFixedInterval_ThenStopsAndNotifiesOnce()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "用系统自带的 where.exe 扮演启动后立即退出的 NB2 进程");
+        string data = Directory.CreateTempSubdirectory("shinano-nb2-runner-").FullName;
+        try
+        {
+            Nb2Layout layout = new(data);
+            Directory.CreateDirectory(Path.GetDirectoryName(layout.Python) ?? data);
+            File.Copy(Path.Combine(Environment.SystemDirectory, "where.exe"), layout.Python);
+            RecordingNotices notices = new();
+            BridgeContext context = new(new TestAccessor(RecordingBotApi.Create().Api), notices: notices);
+            FakeTimeProvider time = new(DateTimeOffset.UtcNow);
+            MilkyActions actions = new(context, new EventTracker(), new LocalFiles(context, time, NullLogger<LocalFiles>.Instance), time, NullLogger<MilkyActions>.Instance);
+            using Nb2Runner runner = new(context, layout, new Nb2Catalog(layout), actions, time, NullLogger<Nb2Runner>.Instance);
+
+            await runner.StartAsync(TestContext.Current.CancellationToken);
+            // 每轮推进一个重启间隔；等待中的重启尚未登记计时器时推进不会生效，下一轮再推进。
+            for (int round = 0; round < 200 && runner.Status().State != Nb2ProcessState.Failed; round++)
+            {
+                time.Advance(Nb2Runner.RestartDelay);
+                await Task.Delay(50, TestContext.Current.CancellationToken);
+            }
+
+            Nb2RunnerStatus status = runner.Status();
+            Assert.Equal((Nb2ProcessState.Failed, Nb2Runner.MAX_AUTO_RESTARTS), (status.State, status.AutoRestarts));
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            Assert.Equal("NB2-STOPPED", Assert.Single(notices.Sent).Code);
+        }
+        finally
+        {
+            Directory.Delete(data, recursive: true);
+        }
+    }
+
     private static MessageReceivedEvent GroupMessage(IBotApi api) =>
         new()
         {
@@ -507,14 +546,41 @@ public sealed class Nb2BridgeTests
         public Task DeleteObjectAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
+    /// <summary>记录发给 Super User 的通知。</summary>
+    private sealed class RecordingNotices : IPluginNotices
+    {
+        public List<SuperUserNotice> Sent { get; } = [];
+
+        public void NotifySuperUsers(SuperUserNotice notice)
+        {
+            lock (Sent) Sent.Add(notice);
+        }
+    }
+
+    /// <summary>素材一律为空文件，ffmpeg 一律不可用；进程守护测试只需要能写出脚本、启动进程。</summary>
+    private sealed class EmptyAssets : IPluginAssets, IPluginTools
+    {
+        public Task<byte[]> ReadAllBytesAsync(string relativePath, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<byte>());
+
+        public Task<string> FfmpegDirectoryAsync(CancellationToken cancellationToken) => throw new InvalidOperationException("测试中不提供 ffmpeg");
+    }
+
+    private sealed class DefaultConfig<T> : IPluginConfig<T> where T : class, new()
+    {
+        public T Value { get; } = new();
+    }
+
     private sealed class BridgeContext : IPluginInitializationContext
     {
-        private readonly IPluginBuckets? _buckets;
+        private readonly IPluginBuckets?  _buckets;
+        private readonly IPluginNotices? _notices;
+        private readonly EmptyAssets      _assets = new();
 
-        public BridgeContext(IBotAccessor bot, IPluginBuckets? buckets = null)
+        public BridgeContext(IBotAccessor bot, IPluginBuckets? buckets = null, IPluginNotices? notices = null)
         {
             Bot      = bot;
             _buckets = buckets;
+            _notices = notices;
         }
 
         public string PluginId => "nb2-bridge";
@@ -531,7 +597,7 @@ public sealed class Nb2BridgeTests
 
         public IBotAccessor Bot { get; }
 
-        public IPluginAssets Assets => throw new NotSupportedException();
+        public IPluginAssets Assets => _assets;
 
         public IPluginPanel Panel => throw new NotSupportedException();
 
@@ -543,13 +609,13 @@ public sealed class Nb2BridgeTests
 
         public string DataDirectory => throw new NotSupportedException();
 
-        public IPluginTools Tools => throw new NotSupportedException();
+        public IPluginTools Tools => _assets;
 
         public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();
 
-        public IPluginNotices Notices => throw new NotSupportedException();
+        public IPluginNotices Notices => _notices ?? throw new NotSupportedException();
 
-        public IPluginConfig<T> Config<T>() where T : class, new() => throw new NotSupportedException();
+        public IPluginConfig<T> Config<T>() where T : class, new() => new DefaultConfig<T>();
 
         public IPluginSecrets<T> Secrets<T>() where T : class, new() => throw new NotSupportedException();
     }

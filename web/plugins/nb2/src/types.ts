@@ -13,7 +13,8 @@ export interface Status {
   pid: number | null
   startedAt: string | null
   connected: boolean
-  recentCrashes: number
+  /** 自上次就绪（或手动启动）以来的自动重启次数。 */
+  autoRestarts: number
   lastExitCode: number | null
   lastError: string | null
   ffmpegDirectory: string | null
