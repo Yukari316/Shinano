@@ -39,7 +39,6 @@ public sealed class ResultSender : IDisposable
     private readonly ImageResolver                _resolver;
     private readonly ILogger<ResultSender>        _logger;
     private readonly HttpClient                   _http = new() { Timeout = PreviewTimeout };
-    private          bool                         _bucketReady;
 
     /// <summary>创建发送器。</summary>
     public ResultSender(IPluginInitializationContext context, YukariGateway gateway, ImageResolver resolver, ILogger<ResultSender> logger)
@@ -107,14 +106,7 @@ public sealed class ResultSender : IDisposable
     {
         IPluginBucket bucket = _context.Buckets.Get(BUCKET_PURPOSE);
         DateTimeOffset cutoff = DateTimeOffset.UtcNow - ObjectRetention;
-        int deleted = 0;
-        await foreach (PluginBucketObject item in bucket.ListAsync(null, cancellationToken))
-        {
-            if (item.LastModified >= cutoff) continue;
-            await bucket.DeleteObjectAsync(item.Key, cancellationToken);
-            deleted++;
-        }
-
+        int deleted = await bucket.DeleteOlderThanAsync(null, cutoff, cancellationToken);
         _logger.LogInformation("搜图临时原图清理（早于 {Cutoff}）：bucket {Bucket} 删除 {Count} 个对象", cutoff, bucket.Name, deleted);
     }
 
@@ -169,7 +161,7 @@ public sealed class ResultSender : IDisposable
         bool sent = false;
         try
         {
-            await EnsureBucketAsync(bucket, cancellationToken);
+            await bucket.EnsureCreatedAsync(cancellationToken);
             string label = source.Page is { } page ? $" {source.Site} 作品 {source.Id} 第 {page} 页" : $" {source.Site} 作品 {source.Id}";
             await using (Stream content = new DownloadProgressStream(await response.Content.ReadAsStreamAsync(cancellationToken), length, label, _logger))
                 size = await bucket.PutAsync(key, content, mediaType, limit, cancellationToken);
@@ -259,13 +251,6 @@ public sealed class ResultSender : IDisposable
             : await e.Api.UploadPrivateFileAsync(e.Message.SenderId, url, fileName);
         if (!result.IsSuccess) _logger.LogWarning("上传原图文件失败：{Code} {Message}", result.Code, result.Message);
         return result.IsSuccess;
-    }
-
-    private async Task EnsureBucketAsync(IPluginBucket bucket, CancellationToken cancellationToken)
-    {
-        if (_bucketReady) return;
-        await bucket.EnsureCreatedAsync(cancellationToken);
-        _bucketReady = true;
     }
 
     private async Task DeleteQuietlyAsync(IPluginBucket bucket, string key)

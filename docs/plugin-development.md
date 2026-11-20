@@ -473,10 +473,11 @@ RustFS 经 S3 协议访问，bucket 名为 `<部署前缀>-<用途>`。插件有
 - 适合对象不来自聊天、由插件自己管理生命周期的数据，例如图库。
 - 用途必须在 `plugin.json` 的 `bucketPurposes` 中声明，否则抛出 `ArgumentException`。用途名只含小写字母、数字与连字符，拼接后的 bucket 名不超过 63 个字符。
 - `IPluginBucket` 提供：
-  - `EnsureCreatedAsync` / `DeleteAsync`：创建与删除 bucket；
-  - `PutAsync`：写入，上限取 `limitBytes` 与部署上限中较小的一个；
-  - `OpenReadAsync`、`GetInfoAsync`、`ListAsync`、`DeleteObjectAsync`：读取、元数据、列出与删除对象；
-  - `CreateImUrlAsync`：生成 IM 可下载的临时链接。
+  - `EnsureCreatedAsync` / `DeleteAsync`：创建与删除 bucket。宿主记住已创建，可在每次写入前直接调用；
+  - `PutAsync`：写入，上限取 `limitBytes` 与部署上限中较小的一个。bucket 在宿主之外被删除时重新创建并重试一次；
+  - `OpenReadAsync`、`GetInfoAsync`、`ListAsync`、`DeleteObjectAsync`：读取、元数据、列出与删除对象。删除时对象或 bucket 不存在视为成功，RustFS 不可达等错误照常抛出；
+  - `CreateImUrlAsync`：生成 IM 可下载的临时链接；
+  - 扩展方法 `DeleteOlderThanAsync(前缀, 截止时间)`：删除早于截止时间的对象，用于清理发送后暂存的临时对象。
 
   插件只能访问自己声明的 bucket。
 

@@ -8,14 +8,18 @@ public interface IPluginBucket
     /// <summary>bucket 名。</summary>
     string Name { get; }
 
-    /// <summary>bucket 不存在时创建。</summary>
+    /// <summary>
+    /// bucket 不存在时创建。首次成功后记住结果，之后直接返回、不再访问 RustFS，可在每次写入前调用；
+    /// bucket 在宿主之外被删除时由 <see cref="PutAsync" /> 发现并重新创建。
+    /// </summary>
     Task EnsureCreatedAsync(CancellationToken cancellationToken);
 
-    /// <summary>清空并删除 bucket。</summary>
+    /// <summary>清空并删除 bucket；之后的 <see cref="EnsureCreatedAsync" /> 会重新创建。</summary>
     Task DeleteAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// 上传对象，同名对象被覆盖。内容超过 <paramref name="limitBytes" /> 或部署配置的单文件上限（取较小者）时中止并抛出异常。
+    /// bucket 已不存在（如在宿主之外被删除）时重新创建并重试一次，仍失败则抛出异常。
     /// </summary>
     /// <returns>写入的字节数。</returns>
     Task<long> PutAsync(string key, Stream content, string mediaType, long? limitBytes, CancellationToken cancellationToken);
@@ -32,7 +36,9 @@ public interface IPluginBucket
     /// </summary>
     IAsyncEnumerable<PluginBucketObject> ListAsync(string? prefix, CancellationToken cancellationToken);
 
-    /// <summary>删除对象；不存在时视为成功。</summary>
+    /// <summary>
+    /// 删除对象。RustFS 答复对象或 bucket 不存在时视为成功；连接失败、超时等其他错误抛出异常，不视为已删除。
+    /// </summary>
     Task DeleteObjectAsync(string key, CancellationToken cancellationToken);
 
     /// <summary>生成 IM 实现端可下载的临时链接，不检查对象是否存在。</summary>

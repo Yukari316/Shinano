@@ -55,14 +55,7 @@ public sealed class HsoSender
     {
         IPluginBucket bucket = _gallery.Bucket;
         DateTimeOffset cutoff = DateTimeOffset.UtcNow - TempRetention;
-        int deleted = 0;
-        await foreach (PluginBucketObject item in bucket.ListAsync(TEMP_PREFIX, cancellationToken))
-        {
-            if (item.LastModified >= cutoff) continue;
-            await bucket.DeleteObjectAsync(item.Key, cancellationToken);
-            deleted++;
-        }
-
+        int deleted = await bucket.DeleteOlderThanAsync(TEMP_PREFIX, cutoff, cancellationToken);
         _logger.LogInformation("Hso 临时对象清理（早于 {Cutoff}）：bucket {Bucket} 删除 {Count} 个对象", cutoff, bucket.Name, deleted);
     }
 
