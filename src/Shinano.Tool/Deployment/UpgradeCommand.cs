@@ -141,9 +141,14 @@ public static class UpgradeCommand
         {
             ProgramSwap.Replace(upgrade.Source, target, upgrade.Log);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ToolException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return $"升级失败，已还原 {upgrade.FromVersion}：{exception.Message}";
+        }
+        catch (ToolException exception)
+        {
+            // 还原旧版也失败了，消息中写明旧版的位置与手动还原方法。
+            return $"升级失败，未能自动还原：{exception.Message}";
         }
 
         try

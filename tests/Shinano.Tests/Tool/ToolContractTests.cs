@@ -65,6 +65,7 @@ public sealed class ToolContractTests : IDisposable
         config.Set(ConfigKeys.In(ConfigKeys.MONITOR, ConfigKeys.LISTEN_ADDRESS), "10.0.0.6");
         config.Set(ConfigKeys.In(ConfigKeys.MONITOR, ConfigKeys.PORT), 19201);
         config.Set(ConfigKeys.MONITOR_SERVICE_NAME, "ShinanoMonitorA");
+        config.Set(ConfigKeys.PLUGIN_DIRECTORY, "plugins-a");
         config.Save();
 
         IConfigurationRoot root = new ConfigurationBuilder().AddJsonFile(path).Build();
@@ -83,6 +84,7 @@ public sealed class ToolContractTests : IDisposable
         Assert.Equal("t", root[ConfigKeys.PANEL_TOKEN]);
         Assert.Equal("ShinanoA", Bind<RestartOptions>(root, RestartOptions.SECTION_NAME).EffectiveServiceName);
         Assert.Equal(ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, new PluginOptions().Directory);
+        Assert.Equal("plugins-a", Bind<PluginOptions>(root, PluginOptions.SECTION_NAME).Directory);
 
         MonitorSettings monitor = MonitorSettings.Load(path, _directory);
         Assert.Equal(("10.0.0.6", 19201), (monitor.Listen.ListenAddress, monitor.Listen.Port));

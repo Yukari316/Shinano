@@ -33,6 +33,27 @@ public sealed class ProgramSwapTests : IDisposable
         Assert.True(File.Exists(Path.Combine(source.HostDirectory, "new.dll")));
     }
 
+    // 复制新版时失败（这里用独占打开的文件模拟占用），旧版移回原处，替换了一半的新版目录被移开并删除。
+    [Fact]
+    public void Replace_RestoresOldVersion_WhenCopyFails()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "独占打开文件使复制失败只在 Windows 上成立");
+        DeploymentLayout target = DeploymentLayout.At(Path.Combine(_root, "deploy"));
+        DeploymentLayout source = DeploymentLayout.At(Path.Combine(_root, "package"));
+        Write(target.Root, "host/old.dll", "old");
+        Write(target.Root, "host/Logs/run.log", "log");
+        Write(source.Root, "host/a.dll", "new");
+        Write(source.Root, "host/locked.dll", "new");
+
+        using (new FileStream(Path.Combine(source.HostDirectory, "locked.dll"), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Throws<IOException>(() => ProgramSwap.Replace(source, target, new ToolLog(Path.Combine(_root, "tool.log"), null)));
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(target.HostDirectory, "old.dll")));
+        Assert.Equal("log", File.ReadAllText(Path.Combine(target.HostDirectory, "Logs", "run.log")));
+        Assert.False(File.Exists(Path.Combine(target.HostDirectory, "a.dll")));
+        Assert.Empty(Directory.EnumerateDirectories(target.Root, "host.failed-*"));
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static void Write(string root, string relative, string content)
