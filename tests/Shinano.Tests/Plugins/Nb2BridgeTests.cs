@@ -609,6 +609,8 @@ public sealed class Nb2BridgeTests
 
         public string DataDirectory => throw new NotSupportedException();
 
+        public TimeZoneInfo TimeZone => TimeZoneInfo.Utc;
+
         public IPluginTools Tools => _assets;
 
         public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();

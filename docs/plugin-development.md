@@ -140,6 +140,7 @@ dotnet build Shinano.slnx
 | `Notices` | 通知全部 Super User（第 9 节） |
 | `Config<T>()` / `Secrets<T>()` | 配置与机密（第 6 节） |
 | `DataDirectory` | 部署数据目录的绝对路径。只供需要管理外部程序及其数据的插件使用，且只使用约定给自己的子目录。 |
+| `TimeZone` | 部署配置的时区。按日计数、在卡片中显示时间等与日期有关的业务都用它，不用机器本地时区（`TimeProvider.GetLocalNow`）；有固定时区语义的数据除外。 |
 | `OnEnabledChanged(Action<bool>)` | 启停回调。只供必须随启停管理外部进程的插件使用，只能在 `InitializeAsync` 中登记。 |
 
 `Events.Subscribe`、`Scheduler.Register`、`Panel.UsePage` 和 `OnEnabledChanged` 都只能在 `InitializeAsync` 中调用。

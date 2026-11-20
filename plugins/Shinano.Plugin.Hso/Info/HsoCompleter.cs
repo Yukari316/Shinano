@@ -80,7 +80,7 @@ public sealed class HsoCompleter
     public async Task RunDailyAsync(CancellationToken cancellationToken)
     {
         int limit = _context.Config<HsoConfig>().Value.DailyCompletions;
-        DateOnly today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
+        DateOnly today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _context.TimeZone).DateTime);
         if (today != _day)
         {
             _day            = today;
@@ -96,6 +96,8 @@ public sealed class HsoCompleter
             if (!TryStart(id)) continue;
             try
             {
+                // 先记下尝试再查询：查询失败或抛出异常时，下次优先补全其他图片。
+                await _gallery.MarkInfoTriedAsync(id, _time.GetUtcNow());
                 await CompleteAsync(id, cancellationToken);
             }
             finally

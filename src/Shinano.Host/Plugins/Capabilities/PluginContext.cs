@@ -36,8 +36,10 @@ internal sealed class PluginContext : IPluginInitializationContext
         IPluginBrowser    browser,
         IPluginTools      tools,
         IPluginNotices    notices,
-        string            dataDirectory)
+        string            dataDirectory,
+        TimeZoneInfo      timeZone)
     {
+        TimeZone      = timeZone;
         PluginId      = pluginId;
         EventsHost    = events;
         SchedulerHost = scheduler;
@@ -59,6 +61,9 @@ internal sealed class PluginContext : IPluginInitializationContext
 
     /// <inheritdoc />
     public string PluginId { get; }
+
+    /// <inheritdoc />
+    public TimeZoneInfo TimeZone { get; }
 
     /// <summary>宿主侧的事件订阅集合。</summary>
     public PluginEvents EventsHost { get; }

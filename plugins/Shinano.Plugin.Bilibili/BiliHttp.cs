@@ -74,9 +74,11 @@ public sealed class BiliHttp : IDisposable
     }
 
     /// <summary>账号的全部关注。</summary>
+    /// <exception cref="InvalidDataException">读到的数量少于接口报告的总数（中途被限流、翻页提前结束）。</exception>
     public async Task<IReadOnlyList<BiliFollowing>> FollowingsAsync(long uid, CancellationToken cancellationToken)
     {
         List<BiliFollowing> result = [];
+        int total = 0;
         for (int page = 1; page <= MAX_FOLLOW_PAGES; page++)
         {
             JsonElement data = await GetAsync($"{API}/x/relation/followings?vmid={uid}&pn={page}&ps={FOLLOWINGS_SIZE}&order=desc", cancellationToken);
@@ -93,10 +95,13 @@ public sealed class BiliHttp : IDisposable
                 });
             }
 
-            int total = data.TryGetProperty("total", out JsonElement totalElement) ? totalElement.GetInt32() : 0;
+            total = data.TryGetProperty("total", out JsonElement totalElement) ? totalElement.GetInt32() : 0;
             if (count < FOLLOWINGS_SIZE || result.Count >= total) break;
         }
 
+        // 读不全时不能当作完整列表：调用方会据此把没读到的 UP 当作已取关，重置其推送设置。
+        if (total > 0 && result.Count < total)
+            throw new InvalidDataException($"B站关注列表只读到 {result.Count} 个，少于总数 {total}");
         return result;
     }
 

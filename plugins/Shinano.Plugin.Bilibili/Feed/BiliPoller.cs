@@ -78,10 +78,10 @@ public sealed class BiliPoller
             _logger.LogInformation("已刷新 B站关注列表：{Count} 个 UP，取关 {Removed}", followings.Count, removed.Count == 0 ? "无" : string.Join("、", removed));
             return true;
         }
-        catch (Exception exception) when (exception is BiliApiException or HttpRequestException or JsonException or TaskCanceledException
+        catch (Exception exception) when (exception is BiliApiException or HttpRequestException or JsonException or InvalidDataException or TaskCanceledException
                                           && !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogError(exception, "刷新 B站关注列表失败");
+            _logger.LogError(exception, "刷新 B站关注列表失败，保留原有关注记录");
             return false;
         }
     }

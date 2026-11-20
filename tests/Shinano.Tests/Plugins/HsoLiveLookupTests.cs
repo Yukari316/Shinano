@@ -91,6 +91,8 @@ public sealed class HsoLiveLookupTests
 
         public string DataDirectory => throw new NotSupportedException();
 
+        public TimeZoneInfo TimeZone => TimeZoneInfo.Utc;
+
         public void OnEnabledChanged(Action<bool> handler) => throw new NotSupportedException();
 
         public IPluginNotices Notices => throw new NotSupportedException();

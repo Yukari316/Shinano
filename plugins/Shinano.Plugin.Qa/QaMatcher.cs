@@ -10,8 +10,9 @@ namespace Shinano.Plugin.Qa;
 /// </summary>
 public sealed class QaMatcher
 {
-    private readonly ConcurrentDictionary<(long Id, int Version, TimeSpan Timeout), Regex> _regexes = new();
-    private readonly ILogger<QaMatcher>                                                    _logger;
+    // 按词条 ID 只保留最新版本的编译结果；以版本与超时为键时，旧版本永远不会被清除。
+    private readonly ConcurrentDictionary<long, CompiledQuestion> _regexes = new();
+    private readonly ILogger<QaMatcher>                           _logger;
 
     /// <summary>创建匹配器。</summary>
     public QaMatcher(ILogger<QaMatcher> logger)
@@ -50,8 +51,7 @@ public sealed class QaMatcher
 
             try
             {
-                Regex regex = _regexes.GetOrAdd((entry.Id, entry.Version, timeout), key => new Regex(entry.Question, RegexOptions.None, key.Timeout));
-                if (regex.IsMatch(text)) return entry;
+                if (Compiled(entry, timeout).IsMatch(text)) return entry;
             }
             catch (RegexMatchTimeoutException)
             {
@@ -65,6 +65,30 @@ public sealed class QaMatcher
         }
 
         return null;
+    }
+
+    private Regex Compiled(QaEntry entry, TimeSpan timeout)
+    {
+        if (_regexes.TryGetValue(entry.Id, out CompiledQuestion? cached) && cached.Version == entry.Version && cached.Timeout == timeout)
+            return cached.Regex;
+
+        Regex regex = new(entry.Question, RegexOptions.None, timeout);
+        _regexes[entry.Id] = new CompiledQuestion
+        {
+            Version = entry.Version,
+            Timeout = timeout,
+            Regex   = regex
+        };
+        return regex;
+    }
+
+    private sealed class CompiledQuestion
+    {
+        public required int Version { get; init; }
+
+        public required TimeSpan Timeout { get; init; }
+
+        public required Regex Regex { get; init; }
     }
 }
 

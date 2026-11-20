@@ -143,7 +143,7 @@ public sealed class Nb2Commands
                 new StatusCard
                 {
                     Title = TITLE,
-                    Time  = _time.GetLocalNow(),
+                    Time  = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _context.TimeZone),
                     Items = items
                 });
             return new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png));

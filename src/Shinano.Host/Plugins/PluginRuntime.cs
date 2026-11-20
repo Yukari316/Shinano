@@ -539,7 +539,8 @@ public sealed class PluginRuntime : IDisposable
             new PluginBrowser(id, _browser),
             _ffmpeg,
             _notices,
-            _settings.DataDirectory);
+            _settings.DataDirectory,
+            _infrastructure.TimeZone);
     }
 
     // 调用方持有 _gate。首次启用：关闭状态下登记程序集并注入指令实例、扫描、初始化，最后开启。

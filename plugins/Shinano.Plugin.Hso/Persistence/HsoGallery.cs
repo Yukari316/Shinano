@@ -47,15 +47,27 @@ public sealed class HsoGallery
         await Bucket.EnsureCreatedAsync(cancellationToken);
     }
 
-    /// <summary>最早导入的若干张待补全图片的 ID，供后台任务补全。</summary>
+    /// <summary>
+    /// 若干张待补全图片的 ID，供每日补全：没尝试过的优先（按导入先后），其次尝试得最早的。
+    /// 一张图持续查询失败时轮到其他图片，不会每天都卡在同一张上。
+    /// </summary>
     public async Task<List<long>> PendingIdsAsync(int count) =>
         await Database.Queryable<HsoImageRecord>()
                       .Where(record => record.InfoState == (int)HsoInfoState.Pending)
+                      // PostgreSQL 升序把 null 排在最后，以最小时间代替 null 使没尝试过的排在最前。
+                      .OrderBy(record => SqlFunc.IsNull(record.InfoTriedAt, DateTimeOffset.MinValue))
                       .OrderBy(record => record.ImportedAt)
                       .OrderBy(record => record.Id)
                       .Take(count)
                       .Select(record => record.Id)
                       .ToListAsync();
+
+    /// <summary>记下每日补全对该图片的一次尝试。</summary>
+    public async Task MarkInfoTriedAsync(long imageId, DateTimeOffset now) =>
+        await Database.Updateable<HsoImageRecord>()
+                      .SetColumns(record => new HsoImageRecord { InfoTriedAt = now })
+                      .Where(record => record.Id == imageId)
+                      .ExecuteCommandAsync();
 
     /// <summary>内容 SHA256 为 <paramref name="sha256" /> 的其他图片的 ID；没有时为 null。</summary>
     public async Task<long?> FindOtherBySha256Async(string sha256, long excludeId) =>
