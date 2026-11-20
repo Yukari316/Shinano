@@ -79,5 +79,12 @@ public sealed class DeploymentLayout
     /// <summary>指定部署根目录的部署。</summary>
     public static DeploymentLayout At(string root) => new(root);
 
+    /// <summary>两个路径是否指向同一位置：先转为完整路径并去掉末尾分隔符，Windows 上不区分大小写。</summary>
+    public static bool SamePath(string left, string right) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
     private static string Executable(string name) => OperatingSystem.IsWindows() ? name + WINDOWS_EXECUTABLE_SUFFIX : name;
 }

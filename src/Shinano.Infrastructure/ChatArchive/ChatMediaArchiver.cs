@@ -201,7 +201,7 @@ public sealed class ChatMediaArchiver
     }
 
     private async Task<BufferedMedia> DownloadAsync(string url, ChatMediaSource source, CancellationToken cancellationToken) =>
-        await _downloader.DownloadAsync(new Uri(url), source.DeclaredSize, limitBytes: null, cancellationToken);
+        await _downloader.DownloadAsync(new Uri(url), source.DeclaredSize, cancellationToken);
 
     private async Task<BufferedMedia> DecodeAsync(string base64, CancellationToken cancellationToken)
     {

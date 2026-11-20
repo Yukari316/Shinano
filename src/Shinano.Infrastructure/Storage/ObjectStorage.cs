@@ -137,26 +137,6 @@ public sealed class ObjectStorage : IDisposable
         }
     }
 
-    /// <summary>判断对象是否存在。</summary>
-    public async Task<bool> ExistsAsync(string bucket, string key, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _client.GetObjectMetadataAsync(
-                new GetObjectMetadataRequest
-                {
-                    BucketName = bucket,
-                    Key        = key
-                },
-                cancellationToken);
-            return true;
-        }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-    }
-
     /// <summary>对象的元数据；对象不存在时返回 null。</summary>
     public async Task<StoredObjectInfo?> GetInfoAsync(string bucket, string key, CancellationToken cancellationToken)
     {

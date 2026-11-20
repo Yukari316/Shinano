@@ -95,13 +95,22 @@ public sealed class InfrastructureIntegrationTests
             second = await store.StoreAsync(media, "text/plain", Token);
         Assert.Equal(first, second);
 
+        string bucket = BucketNames.Chat(_fixture.BucketPrefix);
+        string key = await ChatMediaKeyAsync(infrastructure, first) ?? throw new InvalidOperationException("聊天媒体记录不存在");
         await store.ExpireAsync(DateTimeOffset.UtcNow.AddDays(-1), Token);
-        await using (StoredObject? kept = await store.OpenReadAsync(first, Token))
+        await using (StoredObject? kept = await infrastructure.Storage.OpenReadAsync(bucket, key, Token))
             Assert.NotNull(kept);
 
         await store.ExpireAsync(DateTimeOffset.UtcNow.AddMinutes(1), Token);
-        Assert.Null(await store.OpenReadAsync(first, Token));
+        Assert.Null(await ChatMediaKeyAsync(infrastructure, first));
+        Assert.Null(await infrastructure.Storage.OpenReadAsync(bucket, key, Token));
     }
+
+    private static async Task<string?> ChatMediaKeyAsync(HostInfrastructure infrastructure, long chatMediaId) =>
+        await infrastructure.Database.Global.Queryable<ChatMediaObjectRecord>()
+                            .Where(item => item.Id == chatMediaId)
+                            .Select(item => item.ObjectKey)
+                            .FirstAsync();
 
     [Fact]
     public async Task BufferedMedia_OverLimit_IsRejected()

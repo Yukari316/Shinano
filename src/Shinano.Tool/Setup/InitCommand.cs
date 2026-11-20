@@ -56,7 +56,6 @@ public static class InitCommand
     private const string SERVICE                     = "service";
     private const string DEDICATED_USER              = "shinano";
     private const string DEFAULT_TIME_ZONE           = "Asia/Shanghai";
-    private const string DEFAULT_BUCKET_PREFIX       = "shinano";
     private const string DEFAULT_LOOPBACK            = "127.0.0.1";
     private const string DEFAULT_DATABASE            = "shinano";
     private const string DEFAULT_ROLE                = "shinano";
@@ -177,7 +176,7 @@ public static class InitCommand
             ask.Text("时区", TIME_ZONE_OPTION, config.GetString(ConfigKeys.TIME_ZONE) ?? DEFAULT_TIME_ZONE, InputRules.TimeZone));
         config.Set(
             ConfigKeys.BUCKET_PREFIX,
-            ask.Text("bucket 前缀（每个部署唯一）", BUCKET_PREFIX_OPTION, config.GetString(ConfigKeys.BUCKET_PREFIX) ?? DEFAULT_BUCKET_PREFIX, InputRules.BucketPrefix));
+            ask.Text("bucket 前缀（每个部署唯一）", BUCKET_PREFIX_OPTION, config.GetString(ConfigKeys.BUCKET_PREFIX) ?? ConfigKeys.DEFAULT_BUCKET_PREFIX, InputRules.BucketPrefix));
 
         long[] current = config.GetLongArray(ConfigKeys.SUPER_USERS);
         string superUsers = ask.Text(

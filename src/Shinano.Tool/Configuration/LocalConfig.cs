@@ -23,9 +23,6 @@ public sealed class LocalConfig
         _root = root;
     }
 
-    /// <summary>本地配置文件是否已存在。</summary>
-    public bool Exists => File.Exists(_path);
-
     /// <summary>读取本地配置；文件不存在时为空配置。</summary>
     /// <exception cref="ToolException">文件不是有效的 JSON 对象。</exception>
     public static LocalConfig Load(string path)

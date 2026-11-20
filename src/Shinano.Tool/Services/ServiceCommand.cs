@@ -115,7 +115,7 @@ public static class ServiceCommand
         context.Log.Say("以下资源仍然保留，需要时请自行处理：");
         context.Log.Say($"  部署目录：{context.Layout.Root}");
         context.Log.Say($"  数据库：{DatabaseName(config) ?? "（未配置）"}（保留以供再次部署时使用）");
-        context.Log.Say($"  bucket：{config.GetString(ConfigKeys.BUCKET_PREFIX) ?? "shinano"}-*");
+        context.Log.Say($"  bucket：{config.GetString(ConfigKeys.BUCKET_PREFIX) ?? ConfigKeys.DEFAULT_BUCKET_PREFIX}-*");
         return true;
     }
 
@@ -156,7 +156,7 @@ public static class ServiceCommand
             ServiceStatus status = manager.Query(service.Name);
             if (!status.Exists)
                 throw new ToolException($"部署状态记录了服务 {service.Name}，但服务管理器中不存在；请运行 service install 重新创建，或重新运行 init");
-            if (status.Executable is null || !SamePath(status.Executable, service.Executable))
+            if (status.Executable is null || !DeploymentLayout.SamePath(status.Executable, service.Executable))
                 throw new ToolException($"服务 {service.Name} 指向 {status.Executable ?? "未知位置"}，不是这个部署（{service.Executable}）；请核对后再操作");
         }
     }
@@ -220,8 +220,8 @@ public static class ServiceCommand
         foreach (ServiceDefinition service in setup.Services)
         {
             ServiceStatus status = manager.Query(service.Name);
-            allPresent &= status.Exists && status.Executable is not null && SamePath(status.Executable, service.Executable);
-            string where = status.Executable is null || SamePath(status.Executable, service.Executable)
+            allPresent &= status.Exists && status.Executable is not null && DeploymentLayout.SamePath(status.Executable, service.Executable);
+            string where = status.Executable is null || DeploymentLayout.SamePath(status.Executable, service.Executable)
                 ? string.Empty
                 : $"，指向其他位置 {status.Executable}";
             context.Log.Say($"  {service.Name}：{(!status.Exists ? "不存在" : status.Running ? "运行中" : "已停止")}{where}");
@@ -247,10 +247,4 @@ public static class ServiceCommand
 
     private static string? DatabaseName(LocalConfig config) =>
         config.GetString(ConfigKeys.DATABASE_DSN) is { } dsn ? DsnFormat.Parse(dsn).Database : null;
-
-    private static bool SamePath(string left, string right) =>
-        string.Equals(
-            Path.GetFullPath(left),
-            Path.GetFullPath(right),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }

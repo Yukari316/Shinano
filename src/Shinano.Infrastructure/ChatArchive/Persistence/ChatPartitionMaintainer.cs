@@ -107,8 +107,8 @@ public sealed partial class ChatPartitionMaintainer
         return dropped;
     }
 
-    /// <summary>列出账号聊天表的全部分区。</summary>
-    public async Task<List<ChatPartition>> ListAsync(long selfId, CancellationToken cancellationToken)
+    // 只供集成测试核对分区边界；宿主运行路径在维护时直接使用同一连接上的私有重载。
+    internal async Task<List<ChatPartition>> ListAsync(long selfId, CancellationToken cancellationToken)
     {
         string schema = SchemaNames.RequireIdentifier(_database.Schemas.Account(selfId));
         await using NpgsqlConnection connection = await _database.OpenConnectionAsync(cancellationToken);

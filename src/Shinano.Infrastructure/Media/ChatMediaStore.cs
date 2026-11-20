@@ -86,20 +86,6 @@ public sealed class ChatMediaStore
         return stored.Id;
     }
 
-    /// <summary>读取聊天媒体；媒体或对象不存在时返回 null。</summary>
-    public async Task<StoredObject?> OpenReadAsync(long chatMediaId, CancellationToken cancellationToken)
-    {
-        string? key = await FindKeyAsync(chatMediaId);
-        return key is null ? null : await _storage.OpenReadAsync(_bucket, key, cancellationToken);
-    }
-
-    /// <summary>生成 IM 实现端使用的预签名链接；媒体不存在时返回 null。</summary>
-    public async Task<string?> CreateImUrlAsync(long chatMediaId)
-    {
-        string? key = await FindKeyAsync(chatMediaId);
-        return key is null ? null : await _storage.CreateImUrlAsync(_bucket, key);
-    }
-
     /// <summary>
     /// 删除 <paramref name="cutoff" /> 之前最后被引用的聊天媒体，分批执行直到没有过期项。
     /// </summary>
@@ -142,12 +128,6 @@ public sealed class ChatMediaStore
             total - deleted);
         return total;
     }
-
-    private async Task<string?> FindKeyAsync(long chatMediaId) =>
-        await Db.Queryable<ChatMediaObjectRecord>()
-                .Where(item => item.Id == chatMediaId)
-                .Select(item => item.ObjectKey)
-                .FirstAsync();
 
     // 逐个对象的删除只记 Debug，批量清理由调用方汇总记录。
     private async Task<bool> DeleteObjectQuietlyAsync(string key)

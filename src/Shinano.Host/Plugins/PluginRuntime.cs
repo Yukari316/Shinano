@@ -84,9 +84,6 @@ public sealed class PluginRuntime : IDisposable
         _logger         = loggerFactory.CreateLogger<PluginRuntime>();
     }
 
-    /// <summary>是否因数据库离线而暂停全部插件。</summary>
-    public bool IsSuspended => _suspended;
-
     /// <summary>
     /// 发现插件目录下的插件包，加载程序集并构建插件容器，读取持久化的启用状态与顺序。
     /// 单个插件失败只记录原因，不影响其他插件。只在基础设施就绪后调用一次。

@@ -42,8 +42,7 @@ public sealed class PluginPackageStaging
             DeleteEntry(incoming);
     }
 
-    /// <summary>暂存区目录。</summary>
-    public string Root { get; }
+    private string Root { get; }
 
     private string PendingPath => Path.Combine(Root, PENDING_FILE);
 

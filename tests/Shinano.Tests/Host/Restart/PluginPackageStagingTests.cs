@@ -62,8 +62,9 @@ public sealed class PluginPackageStagingTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidDataException>(() => _staging.StageAsync(zip, TestContext.Current.CancellationToken));
         Assert.Empty(_staging.Pending());
-        Assert.False(File.Exists(Path.Combine(_staging.Root, "escape.txt")));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_staging.Root, ".incoming-*"));
+        string stagingRoot = Path.Combine(_fixture.DataDirectory, "plugin-staging");
+        Assert.False(File.Exists(Path.Combine(stagingRoot, "escape.txt")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(stagingRoot, ".incoming-*"));
     }
 
     [Theory]
