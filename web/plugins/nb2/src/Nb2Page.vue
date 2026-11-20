@@ -186,7 +186,8 @@ function fromDraft(field: FormField, draft: string | boolean | null): unknown {
     case 'boolean':
       return draft
     case 'number':
-      return Number(draft)
+      // 清空时提交 null 而不是 Number('') 得到的 0：可空项由此清除，不可空项由服务端校验报错，不会悄悄写入 0。
+      return draft === '' ? null : Number(draft)
     case 'list':
       return String(draft).split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
     case 'json':

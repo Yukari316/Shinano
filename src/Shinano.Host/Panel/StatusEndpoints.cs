@@ -4,6 +4,7 @@ using Shinano.Host.Bot;
 using Shinano.Host.Plugins;
 using Shinano.Host.Web;
 using Shinano.Infrastructure.Health;
+using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
 using Sora.Core.Types;
 using Sora.Entities.Info;
@@ -21,6 +22,7 @@ internal static class StatusEndpoints
         PluginRuntime     plugins,
         LogFileLayout     logLayout,
         LoggingOptions    logging,
+        DeploymentOptions deployment,
         IConfiguration    configuration,
         CancellationToken cancellationToken)
     {
@@ -53,7 +55,9 @@ internal static class StatusEndpoints
                     usedBytes = new DirectoryInfo(logLayout.Directory).EnumerateFiles().Sum(file => file.Length),
                     limitMiB  = logging.MaxTotalSizeMiB
                 },
-                statusPage = StatusPageLink.From(configuration)
+                statusPage = StatusPageLink.From(configuration),
+                // 统计按部署时区分日，面板的"今天"与日期列表也按它计算；故障模式下同样可用。
+                timeZone = deployment.TimeZone
             });
     }
 

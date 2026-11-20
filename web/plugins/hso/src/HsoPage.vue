@@ -75,13 +75,18 @@ async function saveGroup(group: Group) {
   if (error.value) await loadGroups()
 }
 
+// 只采用最近一次请求的结果：快速切换筛选或翻页时，较慢的旧响应不覆盖新结果。
+let imagesRequest = 0
+
 async function loadImages() {
   const query = new URLSearchParams({ page: String(page.value) })
   if (nsfw.value) query.set('nsfw', nsfw.value)
   if (hasPid.value) query.set('hasPid', hasPid.value)
   if (blocked.value) query.set('blocked', blocked.value)
   if (keyword.value.trim()) query.set('keyword', keyword.value.trim())
+  const request = ++imagesRequest
   const result = await call<ImagePage>(`/images?${query}`)
+  if (request !== imagesRequest) return
   images.value = result?.items ?? []
   total.value = result?.total ?? 0
 }

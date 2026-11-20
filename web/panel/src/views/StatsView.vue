@@ -6,6 +6,7 @@ import SenderTable from '../components/SenderTable.vue'
 import PageToolbar from '../components/PageToolbar.vue'
 import StatFilters from '../components/StatFilters.vue'
 import { formatNumber, recentDates, shortDate } from '../format'
+import { overview } from '../status'
 import type { DailyStat, SenderStat } from '../types'
 
 const days = ref(30)
@@ -28,13 +29,16 @@ const newestFirst = computed(() => [...daily.value].reverse())
 // 没有消息的日子接口不返回，图表按日期补 0。
 const points = computed(() => {
   const byDate = new Map(daily.value.map((day) => [day.date, day.messages]))
-  return recentDates(days.value).map((date) => ({ label: shortDate(date), value: byDate.get(date) ?? 0 }))
+  return recentDates(days.value, overview.value?.timeZone).map((date) => ({ label: shortDate(date), value: byDate.get(date) ?? 0 }))
 })
 const chartSummary = computed(() => `近 ${days.value} 天每日消息柱状图，共 ${totals.value.messages} 条`)
 
 watch(
   [days, includeBot],
-  async () => {
+  async (_value, _old, onCleanup) => {
+    // 筛选变化后，上一次尚未返回的请求作废，避免较慢的旧响应覆盖新结果。
+    let stale = false
+    onCleanup(() => (stale = true))
     error.value = ''
     const query = `days=${days.value}&includeBot=${includeBot.value}`
     try {
@@ -42,10 +46,11 @@ watch(
         api.get<DailyStat[]>(`/api/stats/daily?${query}`),
         api.get<SenderStat[]>(`/api/stats/senders?${query}&limit=20`)
       ])
+      if (stale) return
       daily.value = dailyRows
       senders.value = senderRows
     } catch (e) {
-      error.value = describeError(e)
+      if (!stale) error.value = describeError(e)
     }
   },
   { immediate: true }

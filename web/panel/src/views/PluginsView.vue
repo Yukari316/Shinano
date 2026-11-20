@@ -60,7 +60,12 @@ const OUTCOME: Record<RestartOutcome, { cls: string; title: string }> = {
 }
 
 onMounted(() => run(() => Promise.all([refreshPlugins(), refreshRestart(), refreshPurges()]).then(() => undefined)))
-onUnmounted(() => window.clearTimeout(purgeTimer))
+// 卸载后仍在途的刷新返回时不再设置定时器，否则离开页面后仍会一直轮询。
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+  window.clearTimeout(purgeTimer)
+})
 // 清除在重启后由新进程执行，连上新进程时重新读取。
 watch(
   () => restartStatus.value?.instanceId,
@@ -71,6 +76,7 @@ watch(
 async function refreshPurges(): Promise<void> {
   window.clearTimeout(purgeTimer)
   purges.value = await request<PluginPurge[]>('/api/plugin-purges')
+  if (unmounted) return
   if (purges.value.some((purge) => purge.state === 'Waiting' || purge.state === 'Running'))
     purgeTimer = window.setTimeout(() => void refreshPurges().catch(() => undefined), PURGE_POLL_MS)
 }

@@ -27,12 +27,17 @@ async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
   return result.ok ? result.body : null
 }
 
+// 只采用最近一次请求的结果：快速切换筛选或输入关键字时，较慢的旧响应不覆盖新结果。
+let entriesRequest = 0
+
 async function loadEntries() {
   const query = new URLSearchParams()
   if (filterGroup.value !== '') query.set('groupId', String(filterGroup.value))
   if (filterType.value !== '') query.set('matchType', filterType.value)
   if (keyword.value.trim()) query.set('keyword', keyword.value.trim())
-  entries.value = (await call<Entry[]>(`/entries?${query}`)) ?? []
+  const request = ++entriesRequest
+  const result = await call<Entry[]>(`/entries?${query}`)
+  if (request === entriesRequest) entries.value = result ?? []
 }
 
 async function loadForbidden() {

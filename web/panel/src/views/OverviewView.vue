@@ -39,7 +39,7 @@ onMounted(async () => {
 })
 
 const byDate = computed(() => new Map(daily.value.map((day) => [day.date, day])))
-const dates = computed(() => recentDates(CHART_DAYS))
+const dates = computed(() => recentDates(CHART_DAYS, overview.value?.timeZone))
 const today = computed(() => byDate.value.get(dates.value[dates.value.length - 1] ?? ''))
 const yesterday = computed(() => byDate.value.get(dates.value[dates.value.length - 2] ?? ''))
 const change = computed(() => {

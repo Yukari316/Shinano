@@ -27,8 +27,9 @@ function onScroll(): void {
   following.value = element.scrollHeight - element.scrollTop - element.clientHeight < NEAR_BOTTOM_PX
 }
 
+// 监听最后一条而不是条数：缓冲满 1000 条后条数不再变化，新日志仍要跟随到底部。
 watch(
-  () => entries.value.length,
+  () => entries.value.at(-1),
   async () => {
     if (!following.value) return
     await nextTick()

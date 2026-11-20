@@ -16,6 +16,8 @@ export interface Overview {
   plugins: { total: number; enabled: number; failed: number }
   logs: { usedBytes: number; limitMiB: number }
   statusPage: { url: string; loopbackOnly: boolean }
+  /** 部署时区 ID，统计按它分日。 */
+  timeZone: string
 }
 
 export interface BotStatus {

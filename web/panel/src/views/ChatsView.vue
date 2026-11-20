@@ -24,24 +24,34 @@ function query(): string {
 
 watch(
   [days, includeBot],
-  async () => {
+  async (_value, _old, onCleanup) => {
+    // 筛选变化后，上一次尚未返回的请求作废，避免较慢的旧响应覆盖新结果。
+    let stale = false
+    onCleanup(() => (stale = true))
     error.value = ''
     try {
-      conversations.value = await api.get<ConversationStat[]>(`/api/stats/conversations?${query()}`)
+      const rows = await api.get<ConversationStat[]>(`/api/stats/conversations?${query()}`)
+      if (stale) return
+      conversations.value = rows
       if (selected.value !== null) await loadSenders(selected.value)
     } catch (e) {
-      error.value = describeError(e)
+      if (!stale) error.value = describeError(e)
     }
   },
   { immediate: true }
 )
 
+// 只采用最近一次请求的结果：快速切换会话或筛选时，较慢的旧响应不覆盖新结果。
+let sendersRequest = 0
+
 async function loadSenders(conversationId: number): Promise<void> {
   selected.value = conversationId
+  const request = ++sendersRequest
   try {
-    senders.value = await api.get<SenderStat[]>(`/api/stats/senders?${query()}&conversationId=${conversationId}&limit=100`)
+    const rows = await api.get<SenderStat[]>(`/api/stats/senders?${query()}&conversationId=${conversationId}&limit=100`)
+    if (request === sendersRequest) senders.value = rows
   } catch (e) {
-    error.value = describeError(e)
+    if (request === sendersRequest) error.value = describeError(e)
   }
 }
 </script>
