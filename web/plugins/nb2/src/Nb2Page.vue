@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { PhArrowsClockwise, PhGear, PhPlay, PhStop, PhTrash, PhUploadSimple, PhX } from '@phosphor-icons/vue'
+import { PhArrowsClockwise, PhGear, PhPencilSimple, PhPlay, PhStop, PhTrash, PhUploadSimple, PhX } from '@phosphor-icons/vue'
 import { type ApiResult, callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { ConfigSchema, ConfigView, Plugin, ProcessState, SchemaProperty, Status } from './types'
+import type { ConfigSchema, ConfigView, Plugin, ProcessState, SchemaProperty, ScopeCandidate, ScopeKind, Scopes, Status } from './types'
 
 const props = defineProps<{ context: PluginPageContext }>()
 
@@ -23,6 +23,11 @@ const STATE_CLASS: Record<ProcessState, string> = {
   Stopping: 'badge-warning',
   Failed: 'badge-error',
   Missing: 'badge-error'
+}
+const SCOPE_KINDS: ScopeKind[] = ['group', 'private']
+const SCOPE_LABEL: Record<ScopeKind, { title: string; noun: string }> = {
+  group: { title: '群聊', noun: '群' },
+  private: { title: '私聊', noun: '好友' }
 }
 
 /** 表单字段的编辑方式。 */
@@ -54,9 +59,22 @@ const fields = ref<FormField[]>([])
 const drafts = ref<Record<string, string | boolean | null>>({})
 const changed = ref<Set<string>>(new Set())
 const restartHint = ref(false)
+const scopes = ref<Scopes | null>(null)
+const scopeEditing = ref<ScopeKind | null>(null)
+const scopeWhitelist = ref(false)
+const scopeSelected = ref<number[]>([])
+const scopeCandidates = ref<ScopeCandidate[]>([])
+const scopeLoading = ref(false)
+const scopeFilter = ref('')
 let refreshTimer: number | undefined
 
 const running = computed(() => status.value?.state === 'Running')
+const filteredCandidates = computed(() => {
+  const keyword = scopeFilter.value.trim()
+  return keyword
+    ? scopeCandidates.value.filter((candidate) => String(candidate.id).includes(keyword) || (candidate.name ?? '').includes(keyword))
+    : scopeCandidates.value
+})
 
 // 只在失败时写入错误；清除由各操作在开始时自行处理，定时刷新不清掉操作的错误。
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
@@ -245,8 +263,48 @@ function formatUnix(value: number): string {
   return formatTime(new Date(value * 1000).toISOString())
 }
 
+async function loadScopes() {
+  const result = await call<Scopes>('/scope')
+  if (result.ok) scopes.value = result.body
+}
+
+function scopeSummary(kind: ScopeKind): string {
+  const scope = scopes.value?.[kind]
+  if (!scope) return ''
+  const count = scope.ids.length > 0 ? `${scope.ids.length} 个${SCOPE_LABEL[kind].noun}` : '未选择'
+  return `${scope.whitelist ? '白名单' : '黑名单'} · ${count}`
+}
+
+async function openScope(kind: ScopeKind) {
+  const scope = scopes.value?.[kind]
+  if (!scope) return
+  error.value = ''
+  scopeEditing.value = kind
+  scopeWhitelist.value = scope.whitelist
+  scopeSelected.value = [...scope.ids]
+  scopeFilter.value = ''
+  scopeCandidates.value = []
+  scopeLoading.value = true
+  const result = await call<ScopeCandidate[]>(`/scope/${kind}/candidates`)
+  scopeLoading.value = false
+  if (result.ok) scopeCandidates.value = result.body ?? []
+}
+
+function toggleScopeSelected(id: number, checked: boolean) {
+  scopeSelected.value = checked ? [...scopeSelected.value, id] : scopeSelected.value.filter((selected) => selected !== id)
+}
+
+async function saveScope() {
+  if (!scopeEditing.value) return
+  error.value = ''
+  const result = await call(`/scope/${scopeEditing.value}`, jsonBody('PUT', { whitelist: scopeWhitelist.value, ids: scopeSelected.value }))
+  if (!result.ok) return
+  scopeEditing.value = null
+  await loadScopes()
+}
+
 onMounted(async () => {
-  await refresh()
+  await Promise.all([refresh(), loadScopes()])
   refreshTimer = window.setInterval(refresh, REFRESH_MS)
 })
 onBeforeUnmount(() => window.clearInterval(refreshTimer))
@@ -305,6 +363,21 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
           </tbody>
         </table>
       </details>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h3 class="font-semibold">响应范围</h3>
+      <p class="text-sm opacity-70">只限制交付给 NB2 的消息与事件，保存后立即生效；好友申请、入群邀请与 NB2 主动发送不受限制。</p>
+      <div v-if="scopes" class="grid grid-cols-[auto_1fr_auto] items-center gap-x-6 gap-y-2 text-sm">
+        <template v-for="kind in SCOPE_KINDS" :key="kind">
+          <span class="opacity-70">{{ SCOPE_LABEL[kind].title }}</span>
+          <span>
+            {{ scopeSummary(kind) }}
+            <span v-if="scopes[kind].whitelist && scopes[kind].ids.length === 0" class="ml-2 text-warning-strong">不响应任何{{ SCOPE_LABEL[kind].title }}</span>
+          </span>
+          <button class="btn btn-ghost btn-xs" :aria-label="`编辑${SCOPE_LABEL[kind].title}响应范围`" @click="openScope(kind)"><PhPencilSimple class="size-4" />编辑</button>
+        </template>
+      </div>
     </section>
 
     <section class="flex flex-col gap-3">
@@ -407,6 +480,41 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
           <footer class="flex justify-end gap-2">
             <button class="btn btn-ghost btn-sm" @click="editing = null">取消</button>
             <button class="btn btn-primary btn-sm" :disabled="changed.size === 0" @click="saveConfig">保存</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="scopeEditing" class="modal modal-open" role="dialog" aria-labelledby="nb2-scope-title">
+        <div class="modal-box flex max-h-[80vh] w-11/12 max-w-md flex-col gap-3">
+          <header class="flex items-center">
+            <h3 id="nb2-scope-title" class="text-lg font-semibold">{{ SCOPE_LABEL[scopeEditing].title }}响应范围</h3>
+            <button class="btn btn-ghost btn-sm btn-square ml-auto" aria-label="关闭" @click="scopeEditing = null"><PhX class="size-4" /></button>
+          </header>
+          <div class="flex items-center gap-2">
+            <div class="join" role="group" aria-label="名单模式">
+              <button class="btn join-item btn-sm" :class="{ 'btn-active': scopeWhitelist }" :aria-pressed="scopeWhitelist" @click="scopeWhitelist = true">白名单</button>
+              <button class="btn join-item btn-sm" :class="{ 'btn-active': !scopeWhitelist }" :aria-pressed="!scopeWhitelist" @click="scopeWhitelist = false">黑名单</button>
+            </div>
+            <button class="btn btn-ghost btn-sm ml-auto" :disabled="scopeSelected.length === 0" @click="scopeSelected = []">清空选择</button>
+          </div>
+          <p class="text-xs opacity-70">{{ scopeWhitelist ? `只响应勾选的${SCOPE_LABEL[scopeEditing].title}，不勾选则全部不响应` : `不响应勾选的${SCOPE_LABEL[scopeEditing].title}，其余照常响应` }}</p>
+          <input v-model="scopeFilter" class="input input-sm w-full" placeholder="按名称或号码筛选" aria-label="筛选" />
+          <ul class="min-h-0 flex-1 overflow-y-auto">
+            <li v-for="candidate in filteredCandidates" :key="candidate.id">
+              <label class="flex cursor-pointer items-center gap-3 rounded-box px-2 py-1.5 hover:bg-base-200">
+                <input type="checkbox" class="checkbox checkbox-sm" :checked="scopeSelected.includes(candidate.id)" @change="toggleScopeSelected(candidate.id, ($event.target as HTMLInputElement).checked)" />
+                <span class="[overflow-wrap:anywhere]">{{ candidate.name ?? (scopeEditing === 'group' ? '（Bot 已不在该群）' : '（已不是好友）') }}<span class="ml-1 text-xs opacity-60 tabular-nums">{{ candidate.id }}</span></span>
+              </label>
+            </li>
+            <li v-if="scopeLoading" class="py-4 text-center"><span class="loading loading-spinner loading-sm"></span></li>
+            <li v-else-if="filteredCandidates.length === 0" class="py-4 text-center text-sm opacity-60">{{ scopeCandidates.length === 0 ? `没有${SCOPE_LABEL[scopeEditing].noun}（Bot 未连接）` : '没有匹配的项' }}</li>
+          </ul>
+          <footer class="flex items-center gap-2">
+            <span class="text-sm opacity-70 tabular-nums">已选 {{ scopeSelected.length }} 个{{ SCOPE_LABEL[scopeEditing].noun }}</span>
+            <button class="btn btn-ghost btn-sm ml-auto" @click="scopeEditing = null">取消</button>
+            <button class="btn btn-primary btn-sm" :disabled="scopeLoading" @click="saveScope">保存</button>
           </footer>
         </div>
       </div>

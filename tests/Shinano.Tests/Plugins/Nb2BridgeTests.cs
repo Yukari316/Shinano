@@ -10,6 +10,7 @@ using Shinano.Framework.Plugins;
 using Shinano.Plugin.NB2Bridge.Milky;
 using Shinano.Plugin.NB2Bridge.PluginPackages;
 using Shinano.Plugin.NB2Bridge.Runtime;
+using Shinano.Plugin.NB2Bridge.Scope;
 using Shinano.Tool.Setup;
 using Sora.Core.Enums;
 using Sora.Core.Types;
@@ -201,6 +202,27 @@ public sealed class Nb2BridgeTests
         Assert.Null(MilkyEvents.Classify(message));
         Assert.Null(MilkyEvents.Classify(new MessageDeletedEvent { Api = api, SourceType = MessageSourceType.Temp }));
         Assert.Equal(Nb2EventKind.Notice, MilkyEvents.Classify(new MessageDeletedEvent { Api = api, SourceType = MessageSourceType.Friend }));
+    }
+
+    [Fact]
+    public void ScopeTarget_UsesGroupOrFriendPeerAndSkipsSessionlessRequests()
+    {
+        IBotApi api = RecordingBotApi.Create().Api;
+        // 机器人自己戳好友时，会话对方是被戳的一方。
+        NudgeEvent nudge = new()
+        {
+            Api        = api,
+            SelfId     = SELF_ID,
+            SourceType = MessageSourceType.Friend,
+            SenderId   = SELF_ID,
+            ReceiverId = SENDER
+        };
+
+        Assert.Equal((Nb2ScopeKind.Group, GROUP_ID), MilkyEvents.ScopeTarget(GroupMessage(api)));
+        Assert.Equal((Nb2ScopeKind.Private, SENDER), MilkyEvents.ScopeTarget(nudge));
+        Assert.Equal((Nb2ScopeKind.Group, GROUP_ID), MilkyEvents.ScopeTarget(new MemberJoinedEvent { Api = api, GroupId = GROUP_ID }));
+        Assert.Null(MilkyEvents.ScopeTarget(new FriendRequestEvent { Api = api, FromUserId = SENDER }));
+        Assert.Null(MilkyEvents.ScopeTarget(new GroupInvitationEvent { Api = api, GroupId = GROUP_ID }));
     }
 
     [Fact]
@@ -438,7 +460,7 @@ public sealed class Nb2BridgeTests
             MilkyActions actions = new(context, tracker, files, TimeProvider.System, NullLogger<MilkyActions>.Instance);
             MilkyServer server = await MilkyServer.StartAsync(actions, TOKEN, NullLogger.Instance, TestContext.Current.CancellationToken);
             // SAFE: 测试只调用 DeliverAsync，不经过用到进程守护的 HandleAsync。
-            Nb2EventRelay relay = new(context, null!, tracker, NullLogger<Nb2EventRelay>.Instance);
+            Nb2EventRelay relay = new(context, null!, tracker, new Nb2ScopeStore(context, NullLogger<Nb2ScopeStore>.Instance), NullLogger<Nb2EventRelay>.Instance);
             return new Harness(server, relay, recorder, api, accessor);
         }
 

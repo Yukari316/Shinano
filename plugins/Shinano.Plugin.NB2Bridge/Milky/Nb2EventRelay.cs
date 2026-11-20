@@ -2,12 +2,13 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Shinano.Framework.Plugins;
 using Shinano.Plugin.NB2Bridge.Runtime;
+using Shinano.Plugin.NB2Bridge.Scope;
 using Sora.Entities.Events;
 
 namespace Shinano.Plugin.NB2Bridge.Milky;
 
 /// <summary>
-/// 作为宿主普通事件订阅链中的一员，把配置选中的事件交付给 NB2 并等待消息处理的继续/终止：NB2 有 matcher 确实开始处理（全部运行前处理器
+/// 作为宿主普通事件订阅链中的一员，把配置选中、且在 NB2 响应范围内的事件交付给 NB2 并等待消息处理的继续/终止：NB2 有 matcher 确实开始处理（全部运行前处理器
 /// 已放行）时立即回报终止，不等处理结束；没有 matcher 开始处理、未连接、交付失败或等待超时都继续，超时后的回报只记警告日志，不重新交付。
 /// </summary>
 public sealed class Nb2EventRelay
@@ -15,14 +16,21 @@ public sealed class Nb2EventRelay
     private readonly IPluginInitializationContext _context;
     private readonly Nb2Runner                    _runner;
     private readonly EventTracker                 _tracker;
+    private readonly Nb2ScopeStore                _scope;
     private readonly ILogger<Nb2EventRelay>       _logger;
 
     /// <summary>创建中继。</summary>
-    public Nb2EventRelay(IPluginInitializationContext context, Nb2Runner runner, EventTracker tracker, ILogger<Nb2EventRelay> logger)
+    public Nb2EventRelay(
+        IPluginInitializationContext context,
+        Nb2Runner                    runner,
+        EventTracker                 tracker,
+        Nb2ScopeStore                scope,
+        ILogger<Nb2EventRelay>       logger)
     {
         _context = context;
         _runner  = runner;
         _tracker = tracker;
+        _scope   = scope;
         _logger  = logger;
     }
 
@@ -39,6 +47,7 @@ public sealed class Nb2EventRelay
             _                           => config.DeliverRequests
         };
         if (!wanted || !_runner.IsReady || _runner.Server is not { } server) return;
+        if (MilkyEvents.ScopeTarget(e) is { } target && !_scope.Allows(target.Kind, target.Id)) return;
 
         await DeliverAsync(server, e, TimeSpan.FromSeconds(config.EventTimeoutSeconds));
     }
