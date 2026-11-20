@@ -1,5 +1,6 @@
 using Npgsql;
 using Shinano.Monitor.Web;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -28,12 +29,17 @@ public sealed class ServiceProber : IDisposable
     private readonly HttpClient      _hostClient;
     private readonly HttpClient      _client;
     private readonly TimeProvider    _time;
+    private readonly ILogger         _logger;
 
-    /// <summary>创建探测器；主进程地址按部署配置中的面板监听规则解析。</summary>
-    public ServiceProber(MonitorSettings settings, TimeProvider time)
+    // 各项服务最近一次意外异常的类型，并行探测的各项同时写入。
+    private readonly ConcurrentDictionary<MonitoredService, Type> _unexpected = [];
+
+    /// <summary>创建探测器；主进程地址按部署配置中的面板监听规则解析，监听配置无效（如证书无法加载）时抛出异常。</summary>
+    public ServiceProber(MonitorSettings settings, TimeProvider time, ILogger logger)
     {
         _settings = settings;
         _time     = time;
+        _logger   = logger;
         ListenEndpoint endpoint = ListenEndpoint.Resolve(settings.HostWeb, MonitorSettings.DEFAULT_HOST_PORT, settings.DataDirectory);
         _hostBaseUrl = endpoint.BaseUrl;
         string? thumbprint = endpoint.Thumbprint;
@@ -50,6 +56,7 @@ public sealed class ServiceProber : IDisposable
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
         Outcome outcome;
+        Type? unexpected = null;
         try
         {
             outcome = service switch
@@ -76,7 +83,14 @@ public sealed class ServiceProber : IDisposable
         {
             outcome = Outcome.Failed(ProbeFailure.Error);
         }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 配置格式错误（如无效的主机名、DSN）等意外异常也只归类为错误，不能让探测循环与监控进程退出。
+            outcome = Outcome.Failed(ProbeFailure.Error);
+            unexpected = exception.GetType();
+        }
 
+        ReportUnexpected(service, unexpected);
         return new ProbeRecord
         {
             Time       = start,
@@ -155,6 +169,20 @@ public sealed class ServiceProber : IDisposable
             _ when response.IsSuccessStatusCode                    => Outcome.Healthy,
             _                                                      => Outcome.Http(response.StatusCode)
         };
+    }
+
+    // 只记异常类型，不记消息（可能含地址或凭据）；同一项服务的异常类型不变时不重复记录，避免每轮刷日志。
+    private void ReportUnexpected(MonitoredService service, Type? unexpected)
+    {
+        if (unexpected is null)
+        {
+            _unexpected.TryRemove(service, out _);
+            return;
+        }
+
+        if (_unexpected.TryGetValue(service, out Type? previous) && previous == unexpected) return;
+        _unexpected[service] = unexpected;
+        _logger.LogWarning("探测 {Service} 时出现意外异常 {ExceptionType}，记为错误；请检查部署配置中该服务的设置", service, unexpected.Name);
     }
 
     private static ProbeFailure Classify(NpgsqlException exception) =>
