@@ -298,6 +298,11 @@ public sealed class ImageSearchTests
         // 都查不到或上限为 0 时没有 TAG 行。
         Assert.DoesNotContain(SearchCards.Illustration(hit, ImageResolution.None, 60, false, 20).Rows, row => row.Style == CardRowStyle.Items);
         Assert.DoesNotContain(SearchCards.Illustration(hit, booru, 60, false, 0).Rows, row => row.Style == CardRowStyle.Items);
+
+        // 绘制失败时的文字：标题、各行、相似度。
+        Assert.Equal(
+            "Pixiv\n标题：夏の終わり\n作者：再音さく\n作品号：127307417\nTAG：オリジナル\n相似度：95%",
+            fromPixiv.ToText());
     }
 
     [Fact]

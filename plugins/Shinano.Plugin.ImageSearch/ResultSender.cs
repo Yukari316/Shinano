@@ -4,7 +4,6 @@ using Shinano.Framework.Plugins;
 using Shinano.Framework.Rendering;
 using Shinano.Plugin.ImageSources;
 using Shinano.Plugin.ImageSources.Gateway;
-using Sora.Core.Enums;
 using Sora.Core.Types;
 using Sora.Entities.Events;
 using Sora.Entities.Message;
@@ -24,7 +23,6 @@ public sealed class ResultSender : IDisposable
     public const string BUCKET_PURPOSE = "search";
 
     private const long   MIB              = 1024 * 1024;
-    private const long   IMAGE_LIMIT      = 20 * MIB;
     private const string BASE64_PREFIX    = "base64://";
     private const string OCTET_STREAM     = "application/octet-stream";
     private const string FILE_NAME_PREFIX = "search";
@@ -113,22 +111,7 @@ public sealed class ResultSender : IDisposable
     /// <inheritdoc />
     public void Dispose() => _http.Dispose();
 
-    private async Task SendCardAsync(MessageReceivedEvent e, InfoCard card)
-    {
-        MessageBody body;
-        try
-        {
-            body = new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(_context.Images.RenderInfo(card)));
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "绘制搜图卡片失败，改发文字");
-            body = new MessageBody(SearchCards.ToText(card));
-        }
-
-        SendMessageResult result = await e.ReplyAsync(body);
-        if (!result.IsSuccess) _logger.LogWarning("发送搜图卡片失败：{Code} {Error}", result.Code, result.ErrorMessage);
-    }
+    private Task SendCardAsync(MessageReceivedEvent e, InfoCard card) => ImageReplies.SendCardAsync(e, _context.Images, card, _logger);
 
     private async Task SendAdultImageAsync(MessageReceivedEvent e)
     {
@@ -175,9 +158,13 @@ public sealed class ResultSender : IDisposable
                 mediaType,
                 ImageInspector.FormatSize(size));
 
-            bool asFile = size > IMAGE_LIMIT;
+            bool asFile = size > ImageReplies.IMAGE_LIMIT;
             sent = asFile
-                ? await UploadFileAsync(e, await bucket.CreateImUrlAsync(key), $"{FILE_NAME_PREFIX}-{source.Site.ToString().ToLowerInvariant()}-{source.Id}{Extension(mediaType)}")
+                ? await ImageReplies.UploadFileAsync(
+                    e,
+                    await bucket.CreateImUrlAsync(key),
+                    $"{FILE_NAME_PREFIX}-{source.Site.ToString().ToLowerInvariant()}-{source.Id}{Extension(mediaType)}",
+                    _logger)
                 : await SendImageAsync(e, bucket, key);
             if (sent) LogRetained(bucket, key);
             else if (!asFile) sent = await ResendTweakedAsync(e, bucket, key, mediaType, limit, cancellationToken);
@@ -188,7 +175,7 @@ public sealed class ResultSender : IDisposable
         }
         finally
         {
-            if (!sent) await DeleteQuietlyAsync(bucket, key);
+            if (!sent) await ImageReplies.DeleteQuietlyAsync(bucket, key, _logger);
         }
 
         if (sent) return;
@@ -196,7 +183,7 @@ public sealed class ResultSender : IDisposable
         await e.ReplyAsync(new MessageBody(ReplyTexts.SEND_FAILED));
     }
 
-    // 第一次发送被拒后调用：删除原对象，改动一个像素另存为新对象再发一次，仍失败就放弃。
+    // 第一次发送被拒后调用：读回并删除原对象，改动一个像素另存为新对象再发一次，仍失败就放弃。
     private async Task<bool> ResendTweakedAsync(
         MessageReceivedEvent e,
         IPluginBucket        bucket,
@@ -214,27 +201,9 @@ public sealed class ResultSender : IDisposable
             original = buffer.ToArray();
         }
 
-        await DeleteQuietlyAsync(bucket, key);
+        await ImageReplies.DeleteQuietlyAsync(bucket, key, _logger);
         _logger.LogInformation("原图被拒，修改随机像素后重发：{Info}，{Size}", ImageInspector.Describe(original), ImageInspector.FormatSize(original.Length));
-        if (PixelTweak.Apply(original, mediaType) is not { } tweaked)
-        {
-            _logger.LogInformation("{MediaType} 无法修改像素，不再重发", mediaType);
-            return false;
-        }
-
-        string retryKey = NewKey(mediaType);
-        using (MemoryStream content = new(tweaked))
-            await bucket.PutAsync(retryKey, content, mediaType, limit, cancellationToken);
-        _logger.LogInformation("修改后的原图已写入 bucket {Bucket}/{Key}：{Size}", bucket.Name, retryKey, ImageInspector.FormatSize(tweaked.Length));
-
-        bool sent = await SendImageAsync(e, bucket, retryKey);
-        _logger.LogInformation(
-            sent ? "图片重发成功 {Before} → {After}" : "图片重发失败 {Before} → {After}",
-            ImageInspector.Sha256(original),
-            ImageInspector.Sha256(tweaked));
-        if (sent) LogRetained(bucket, retryKey);
-        else await DeleteQuietlyAsync(bucket, retryKey);
-        return sent;
+        return await ImageReplies.SendTweakedAsync(e, bucket, original, mediaType, NewKey(mediaType), limit, _logger, cancellationToken);
     }
 
     private async Task<bool> SendImageAsync(MessageReceivedEvent e, IPluginBucket bucket, string key)
@@ -242,28 +211,6 @@ public sealed class ResultSender : IDisposable
         SendMessageResult result = await e.ReplyAsync(new MessageBody().AddImage(await bucket.CreateImUrlAsync(key)));
         if (!result.IsSuccess) _logger.LogWarning("发送原图失败：{Code} {Error}", result.Code, result.ErrorMessage);
         return result.IsSuccess;
-    }
-
-    private async Task<bool> UploadFileAsync(MessageReceivedEvent e, string url, string fileName)
-    {
-        ApiResult<string> result = e.Message.SourceType == MessageSourceType.Group
-            ? await e.Api.UploadGroupFileAsync(e.Message.GroupId, url, fileName)
-            : await e.Api.UploadPrivateFileAsync(e.Message.SenderId, url, fileName);
-        if (!result.IsSuccess) _logger.LogWarning("上传原图文件失败：{Code} {Message}", result.Code, result.Message);
-        return result.IsSuccess;
-    }
-
-    private async Task DeleteQuietlyAsync(IPluginBucket bucket, string key)
-    {
-        try
-        {
-            await bucket.DeleteObjectAsync(key, CancellationToken.None);
-            _logger.LogInformation("已从 bucket {Bucket} 删除未发出的原图 {Key}", bucket.Name, key);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning("删除搜图的临时原图 {Key} 失败：{Error}", key, exception.Message);
-        }
     }
 
     private void LogRetained(IPluginBucket bucket, string key) =>

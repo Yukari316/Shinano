@@ -121,7 +121,7 @@ public sealed class HsoTests
         CardRow tags = card.Rows[^1];
         Assert.Equal((CardRowStyle.Items, true), (tags.Style, tags.ItemBorder));
         Assert.Equal(["オリジナル", "女の子"], tags.Items);
-        Assert.Equal("夏の終わり\n作者：再音さく\nUID：11246082\nPID：127307417\nTAG：オリジナル 女の子", HsoSender.ToText(card));
+        Assert.Equal("夏の終わり\n作者：再音さく\nUID：11246082\nPID：127307417\nTAG：オリジナル 女の子", card.ToText());
     }
 
     [Fact]
