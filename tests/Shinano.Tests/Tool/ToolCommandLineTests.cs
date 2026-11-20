@@ -1,10 +1,12 @@
 using Shinano.Tool.Cli;
+using Shinano.Tool.Deployment;
 using Shinano.Tool.Run;
 using Shinano.Tool.Services;
+using Shinano.Tool.Setup;
 
 namespace Shinano.Tests.Tool;
 
-/// <summary>参数解析、Windows 命令行引号与守护者决定。</summary>
+/// <summary>参数解析、Windows 命令行引号、重新配置时的服务重装判断与守护者决定。</summary>
 public sealed class ToolCommandLineTests
 {
     [Fact]
@@ -18,6 +20,29 @@ public sealed class ToolCommandLineTests
         Assert.True(arguments.Switch("accept-defaults"));
         Assert.Throws<ToolException>(() => arguments.RequireKnown(["db-port", "accept-defaults"]));
         Assert.Throws<ToolException>(() => CommandArguments.Parse(["init", "--db-port"]));
+    }
+
+    // 重跑 init 时运行用户的变化曾不触发重装，部署状态与服务实际的运行用户不再一致。
+    [Fact]
+    public void InstalledServices_RequireReinstallWhenModeNameOrUserChanges()
+    {
+        DeploymentState state = new()
+        {
+            RunMode           = RunMode.Service,
+            ServicesInstalled = true,
+            ServiceUser       = "shinano"
+        };
+        InstalledServices installed = InstalledServices.Of(state);
+
+        Assert.True(installed.Matches(state));
+        state.ServiceUser = null;
+        Assert.False(installed.Matches(state));
+        state.ServiceUser = "shinano";
+        state.HostServiceName = "Other";
+        Assert.False(installed.Matches(state));
+        state.HostServiceName = DeploymentState.DEFAULT_HOST_SERVICE_NAME;
+        state.RunMode = RunMode.Direct;
+        Assert.False(installed.Matches(state));
     }
 
     [Theory]
