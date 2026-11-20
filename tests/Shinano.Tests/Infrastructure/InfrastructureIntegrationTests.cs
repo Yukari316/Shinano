@@ -121,7 +121,7 @@ public sealed class InfrastructureIntegrationTests
             LastReferencedAt = longAgo,
             CreatedAt        = longAgo
         };
-        long id = await infrastructure.Database.Global.Insertable(record).ExecuteReturnBigIdentityAsync();
+        long id = await infrastructure.Database.Global.Insertable(record).ExecuteReturnBigIdentityAsync(Token);
         using ObjectStorage offline = new(
             new RustFsOptions
             {
