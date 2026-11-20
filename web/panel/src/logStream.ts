@@ -30,6 +30,12 @@ let lastSequence = 0
 
 function connect(): void {
   source = new EventSource('/api/logs/stream')
+  // 服务端每次连接都会重发全部缓冲（与本地上限同为 1000 条），所以连上时清空重收；
+  // 宿主重启后序号从 1 重新开始，不清空就会把新进程的日志当作重复全部丢弃。
+  source.onopen = () => {
+    lastSequence = 0
+    logEntries.value = []
+  }
   source.onmessage = (event: MessageEvent<string>) => {
     const entry = JSON.parse(event.data) as LogEntry
     if (entry.sequence <= lastSequence) return

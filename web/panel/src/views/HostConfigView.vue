@@ -6,6 +6,7 @@ import PageFooter from '../components/PageFooter.vue'
 import SecretInput from '../components/SecretInput.vue'
 import SecretStatus from '../components/SecretStatus.vue'
 import { openRestartDialog } from '../restart'
+import { startOverviewPolling, stopOverviewPolling } from '../status'
 import type { HostConfigEntry } from '../types'
 
 const SECTION_TITLES: Record<string, string> = {
@@ -127,13 +128,17 @@ async function save(): Promise<void> {
   }
 }
 
+// 重新生成后当前会话立即失效；先停掉总览轮询，否则它收到 401 就跳转登录页，只显示一次的新 Token 随之丢失。
+// 重新登录后由 App 重新开始轮询。
 async function regenerateToken(): Promise<void> {
   confirmDialog.value?.close()
+  stopOverviewPolling()
   try {
     const result = await api.post<{ token: string }>('/api/auth/token')
     newToken.value = result.token
   } catch (e) {
     error.value = describeError(e)
+    startOverviewPolling()
   }
 }
 
