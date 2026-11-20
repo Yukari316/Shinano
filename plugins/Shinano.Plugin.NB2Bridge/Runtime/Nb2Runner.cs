@@ -45,6 +45,8 @@ public sealed class Nb2Runner : IDisposable
     private readonly TimeProvider                 _time;
     private readonly ILogger<Nb2Runner>           _logger;
     private readonly SemaphoreSlim                _gate    = new(1, 1);
+    private readonly Lock                         _enabledLock = new();
+    private          Task                         _enabledChanges = Task.CompletedTask;
 
     // 以下三项只在持有 _gate 时修改（_autoRestarts 在就绪时清零除外，只是一次整数写入）。
     // _generation 在手动启动、停止、重启与包变更时递增，等待中的自动重启发现它变化就放弃。
@@ -188,20 +190,28 @@ public sealed class Nb2Runner : IDisposable
         }
     }
 
-    /// <summary>插件启停回调：启用时在后台启动 NB2，停用时在后台停止。</summary>
-    public void OnEnabledChanged(bool enabled) =>
-        _ = Task.Run(async () =>
+    /// <summary>
+    /// 插件启停回调：启用时在后台启动 NB2，停用时在后台停止。回调按到达顺序依次执行，
+    /// 快速先启用再停用时不会因后台任务交错而在插件已停用后仍运行 NB2。
+    /// </summary>
+    public void OnEnabledChanged(bool enabled)
+    {
+        lock (_enabledLock)
+            _enabledChanges = _enabledChanges.ContinueWith(_ => ApplyEnabledAsync(enabled), TaskScheduler.Default).Unwrap();
+    }
+
+    private async Task ApplyEnabledAsync(bool enabled)
+    {
+        try
         {
-            try
-            {
-                if (enabled) await StartAsync(CancellationToken.None);
-                else await StopAsync(CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(exception, "随插件{Action} NB2 失败", enabled ? "启用启动" : "停用停止");
-            }
-        });
+            if (enabled) await StartAsync(CancellationToken.None);
+            else await StopAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "随插件{Action} NB2 失败", enabled ? "启用启动" : "停用停止");
+        }
+    }
 
     /// <summary>就绪时把当前的禁用集合推送给 NB2；未就绪时连上后会推送。</summary>
     /// <exception cref="HttpRequestException">NB2 拒绝或不可达。</exception>

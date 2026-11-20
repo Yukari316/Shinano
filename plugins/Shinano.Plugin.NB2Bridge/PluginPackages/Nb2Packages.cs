@@ -9,12 +9,16 @@ namespace Shinano.Plugin.NB2Bridge.PluginPackages;
 /// <summary>
 /// NB2 插件包的安装与卸载：停止 NB2 后用 uv 在 venv 中执行，安装后确认模块可导入，成功则更新插件清单与依赖锁定文件；
 /// 任一步失败按锁定文件还原依赖（<c>uv pip sync</c>）。完成后恢复 NB2 原来的运行状态。卸载不清理其他插件可能共用的依赖。
+/// 包变更一旦开始就不随请求取消（管理员关闭页面），只受固定超时限制；超时结束 uv 进程树并还原依赖。
 /// </summary>
 public sealed partial class Nb2Packages
 {
     private const string UV                 = "uv";
     private const int    OUTPUT_TAIL        = 800;
     private const string FIND_MODULE_SCRIPT = "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)";
+
+    /// <summary>一次包变更（含失败后的还原）的时长上限。</summary>
+    private static readonly TimeSpan ChangeTimeout = TimeSpan.FromMinutes(10);
 
     private readonly Nb2Layout            _layout;
     private readonly Nb2Catalog           _catalog;
@@ -46,7 +50,7 @@ public sealed partial class Nb2Packages
         if (!ModulePattern().IsMatch(moduleName)) return Task.FromResult<string?>("模块名必须是 Python 标识符");
 
         return _runner.ExclusiveAsync(
-            token => InstallCoreAsync($"{package}=={version}", package, version, moduleName, null, token),
+            _ => ChangeAsync(token => InstallCoreAsync($"{package}=={version}", package, version, moduleName, null, token), $"安装 {package}"),
             cancellationToken);
     }
 
@@ -76,10 +80,10 @@ public sealed partial class Nb2Packages
         }
 
         return await _runner.ExclusiveAsync(
-            async token =>
+            async _ =>
             {
                 File.Move(temporary, path, overwrite: true);
-                string? error = await InstallCoreAsync(path, package, version, moduleName, name, token);
+                string? error = await ChangeAsync(token => InstallCoreAsync(path, package, version, moduleName, name, token), $"安装 {package}");
                 if (error is not null) File.Delete(path);
                 return error;
             },
@@ -92,25 +96,52 @@ public sealed partial class Nb2Packages
     {
         if (_catalog.Find(module) is not { } entry) return Task.FromResult<string?>($"没有安装模块为 {module} 的插件");
 
-        return _runner.ExclusiveAsync<string?>(
-            async token =>
-            {
-                if (EnvironmentError() is { } missing) return missing;
-                _logger.LogInformation("卸载 NB2 插件 {Package}（{Module}）", entry.Package, entry.Module);
-                (int exitCode, string output) = await RunAsync(UV, ["pip", "uninstall", "--python", _layout.Python, entry.Package], token);
-                if (exitCode != 0)
+        return _runner.ExclusiveAsync(
+            _ => ChangeAsync(
+                async token =>
                 {
-                    await RestoreAsync(token);
-                    return Failed($"卸载 {entry.Package} 失败", output);
-                }
+                    if (EnvironmentError() is { } missing) return missing;
+                    _logger.LogInformation("卸载 NB2 插件 {Package}（{Module}）", entry.Package, entry.Module);
+                    (int exitCode, string output) = await RunAsync(UV, ["pip", "uninstall", "--python", _layout.Python, entry.Package], token);
+                    if (exitCode != 0)
+                    {
+                        await RestoreAsync(token);
+                        return Failed($"卸载 {entry.Package} 失败", output);
+                    }
 
-                _catalog.Remove(module);
-                if (entry.Wheel is { } wheel) File.Delete(Path.Combine(_layout.WheelsDirectory, wheel));
-                await FreezeAsync(token);
-                _logger.LogInformation("已卸载 NB2 插件 {Package}", entry.Package);
-                return null;
-            },
+                    _catalog.Remove(module);
+                    if (entry.Wheel is { } wheel) File.Delete(Path.Combine(_layout.WheelsDirectory, wheel));
+                    await FreezeAsync(token);
+                    _logger.LogInformation("已卸载 NB2 插件 {Package}", entry.Package);
+                    return null;
+                },
+                $"卸载 {entry.Package}"),
             cancellationToken);
+    }
+
+    // 执行一次包变更：不随请求取消，超过时长上限时 RunAsync 结束 uv 进程树，再按锁定文件还原依赖。
+    private async Task<string?> ChangeAsync(Func<CancellationToken, Task<string?>> change, string what)
+    {
+        using CancellationTokenSource timeout = new(ChangeTimeout);
+        try
+        {
+            return await change(timeout.Token);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            _logger.LogError("{What}超过 {Minutes} 分钟未完成，已结束 uv，按锁定文件还原依赖", what, ChangeTimeout.TotalMinutes);
+            using CancellationTokenSource restoreTimeout = new(ChangeTimeout);
+            try
+            {
+                await RestoreAsync(restoreTimeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogError("还原 NB2 依赖同样超时，NB2 运行环境可能不完整，请在部署机重新运行 nb2-setup");
+            }
+
+            return $"{what}超过 {ChangeTimeout.TotalMinutes:0} 分钟未完成，已中止并还原依赖";
+        }
     }
 
     private static string DefaultModule(string package) => package.Replace('-', '_').Replace('.', '_').ToLowerInvariant();
@@ -214,7 +245,17 @@ public sealed partial class Nb2Packages
         using Process process = Process.Start(start) ?? throw new InvalidOperationException($"无法启动 {fileName}");
         Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
         Task<string> error  = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // 超时放弃时结束整个进程树，不留下仍在改写 venv 的 uv。
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
         string text = includeErrors ? (await output + await error).Trim() : await output;
         return (process.ExitCode, text);
     }

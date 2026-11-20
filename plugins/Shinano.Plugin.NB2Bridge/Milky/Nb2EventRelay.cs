@@ -52,7 +52,9 @@ public sealed class Nb2EventRelay
         _tracker.Register(key);
         try
         {
-            await server.SendAsync(payload, CancellationToken.None);
+            // NB2 卡住而连接未断时发送会一直挂起并占住发送锁，之后的事件都会被堵住；发送同样以等待判定的时长为上限。
+            using CancellationTokenSource sendTimeout = new(timeout);
+            await server.SendAsync(payload, sendTimeout.Token);
         }
         catch (Exception exception)
         {
