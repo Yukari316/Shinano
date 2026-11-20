@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhArrowsClockwise, PhCaretLeft, PhCaretRight, PhListChecks, PhProhibit, PhTrash, PhUploadSimple } from '@phosphor-icons/vue'
-import { PLUGIN_API_PREFIX, type PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, jsonBody, pluginApiBase, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, watch } from 'vue'
 import { formatSize } from './format'
 import ReviewDialog from './ReviewDialog.vue'
@@ -45,15 +45,12 @@ const reviewing = ref(false)
 
 const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const imported = computed(() => results.value.filter((result) => result.outcome === 'Imported').length)
-const apiBase = computed(() => `${PLUGIN_API_PREFIX}/${encodeURIComponent(props.context.pluginId)}`)
+const apiBase = computed(() => pluginApiBase(props.context.pluginId))
 
 async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
-  error.value = ''
-  const response = await props.context.api(path, init)
-  if (response.ok) return response.status === 204 ? null : ((await response.json()) as T)
-  const body = (await response.json().catch(() => ({}))) as { error?: string }
-  error.value = body.error ?? `请求失败（${response.status}）`
-  return null
+  const result = await callApi<T>(props.context, path, init)
+  error.value = result.error ?? ''
+  return result.ok ? result.body : null
 }
 
 async function upload(event: Event) {
@@ -74,11 +71,7 @@ async function loadGroups() {
 }
 
 async function saveGroup(group: Group) {
-  await call(`/groups/${group.groupId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ blocked: group.blocked, allowNsfw: group.allowNsfw })
-  })
+  await call(`/groups/${group.groupId}`, jsonBody('PUT', { blocked: group.blocked, allowNsfw: group.allowNsfw }))
   if (error.value) await loadGroups()
 }
 
@@ -103,11 +96,7 @@ function closeReview() {
 }
 
 async function setNsfw(image: GalleryImage, value: boolean) {
-  await call(`/images/${image.id}/nsfw`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nsfw: value })
-  })
+  await call(`/images/${image.id}/nsfw`, jsonBody('PUT', { nsfw: value }))
   await loadImages()
 }
 
@@ -155,7 +144,7 @@ onMounted(async () => {
       <p class="text-sm opacity-70">查到的来源原图与图库图片不一致或下载失败时，作品信息进入审核队列；审核前抽到这张图只发图片，不发信息卡。</p>
       <button class="btn btn-primary btn-sm ml-auto shrink-0" @click="reviewing = true"><PhListChecks class="size-4" />审核队列（{{ reviewCount }}）</button>
     </div>
-    <ReviewDialog v-if="reviewing" :context="context" :api-base="apiBase" @changed="reviewCount = Math.max(0, reviewCount - 1)" @close="closeReview" />
+    <ReviewDialog v-if="reviewing" :context="context" @changed="reviewCount = Math.max(0, reviewCount - 1)" @close="closeReview" />
 
     <section class="flex flex-col gap-3">
       <h3 class="font-semibold">上传</h3>

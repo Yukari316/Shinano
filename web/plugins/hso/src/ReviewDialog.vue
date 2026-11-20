@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { PhX } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { type ApiResult, callApi, formatTime, jsonBody, pluginApiBase, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { formatSize } from './format'
 import type { ManualInfo, Review, ReviewImage } from './types'
 
-const props = defineProps<{ context: PluginPageContext; apiBase: string }>()
+const props = defineProps<{ context: PluginPageContext }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 type Action = 'replace' | 'accept' | 'reject'
@@ -36,18 +36,18 @@ const source = computed(() => {
   return `SauceNAO 以图搜图${similarity}`
 })
 
-async function call<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; body: T | null }> {
-  error.value = ''
-  const response = await props.context.api(path, init)
-  if (response.ok) return { ok: true, body: response.status === 204 ? null : ((await response.json()) as T) }
-  const body = (await response.json().catch(() => ({}))) as { error?: string }
-  error.value = body.error ?? `请求失败（${response.status}）`
-  return { ok: false, body: null }
+const apiBase = computed(() => pluginApiBase(props.context.pluginId))
+
+async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const result = await callApi<T>(props.context, path, init)
+  error.value = result.error ?? ''
+  return result
 }
 
 async function loadQueue() {
   loading.value = true
-  ids.value = (await call<number[]>('/reviews')).body ?? []
+  const result = await call<number[]>('/reviews')
+  ids.value = result.ok ? (result.body ?? []) : []
   await showNext()
   loading.value = false
 }
@@ -64,8 +64,14 @@ async function showNext() {
     }
 
     const result = await call<Review>(`/reviews/${next}`)
-    if (result.body) {
+    if (result.ok && result.body) {
       review.value = result.body
+      return
+    }
+
+    // 其他失败（如请求未送达）不能当作已处理而移出队列，停下并显示错误。
+    if (result.status !== 404) {
+      review.value = null
       return
     }
 
@@ -78,9 +84,7 @@ async function act(action: Action) {
   const current = review.value
   if (!current || busy.value) return
   busy.value = true
-  const init: RequestInit = action === 'reject'
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(manualInfo()) }
-    : { method: 'POST' }
+  const init: RequestInit = action === 'reject' ? jsonBody('POST', manualInfo()) : { method: 'POST' }
   const result = await call(`/reviews/${current.imageId}/${action}`, init)
   if (result.ok) {
     ids.value = ids.value.filter((id) => id !== current.imageId)
@@ -129,10 +133,6 @@ function work(value: Review): string {
   return value.workPage === null ? `${value.workSite} ${value.workId}` : `${value.workSite} ${value.workId} 第 ${value.workPage} 页`
 }
 
-function time(text: string): string {
-  return new Date(text).toLocaleString('zh-CN', { hour12: false })
-}
-
 onMounted(() => void loadQueue())
 </script>
 
@@ -168,7 +168,7 @@ onMounted(() => void loadQueue())
                 <dt class="opacity-60">格式</dt><dd class="tabular-nums">{{ describe(review.current) }}</dd>
                 <dt class="opacity-60">SHA256</dt><dd class="font-mono text-xs break-all">{{ review.current.sha256 }}</dd>
                 <dt class="opacity-60">文件名</dt><dd class="[overflow-wrap:anywhere]">{{ review.fileName ?? '（无）' }}</dd>
-                <dt class="opacity-60">导入</dt><dd>{{ ORIGIN_LABEL[review.origin] }} · {{ time(review.importedAt) }}</dd>
+                <dt class="opacity-60">导入</dt><dd>{{ ORIGIN_LABEL[review.origin] }} · {{ formatTime(review.importedAt) }}</dd>
               </dl>
             </figure>
 
@@ -190,7 +190,7 @@ onMounted(() => void loadQueue())
                   <dt class="opacity-60">SHA256</dt><dd class="font-mono text-xs break-all" :class="sameSha ? '' : 'text-warning-strong'">{{ review.candidate.sha256 }}</dd>
                 </template>
                 <dt class="opacity-60">来源</dt><dd>{{ work(review) }}</dd>
-                <dt class="opacity-60">查询于</dt><dd>{{ time(review.createdAt) }}</dd>
+                <dt class="opacity-60">查询于</dt><dd>{{ formatTime(review.createdAt) }}</dd>
               </dl>
             </figure>
           </div>

@@ -343,6 +343,11 @@ context.Panel.MapApi(api => api.MapGet("/stats", () => Results.Ok(new { Count = 
 - **页面模块**：默认导出一个 Vue 组件，宿主以 `context` 属性传入 `PluginPageContext`（来自 `@shinano/plugin-sdk`）。它包含：
   - `pluginId`；
   - `api(path, init)`：`path` 相对插件 API 前缀，以 `/` 开头；请求携带面板会话，会话失效时宿主跳转登录页。
+- **SDK 辅助函数**（同样来自 `@shinano/plugin-sdk`）：
+  - `callApi(context, path, init)`：调用插件 API 并解析 JSON，返回 `{ ok, status, body, error }`，不抛出异常；请求未送达时 `status` 为 0。`error` 优先取响应的 `error`，其次 `detail`。页面用它调用 API，加载中、上传中等状态才能在网络错误后复位；
+  - `jsonBody(method, body)`：以 JSON 为请求体的请求选项；
+  - `formatTime(value)`：把 ISO 时间显示为本地时间（24 小时制），没有值时为「—」；
+  - `pluginApiBase(pluginId)`：插件 API 的完整前缀，用于页面中直接引用的链接与图片地址。
 - **共享依赖**：`vue` 与 `@shinano/plugin-sdk` 由面板的 import map 提供，构建时必须声明为外部依赖，不能自带 Vue 运行时。其他依赖（如图标库）打进插件的模块。
 - **样式**：页面不加载单独的 CSS 文件。面板的 Tailwind 与 daisyUI 样式在构建面板时，从本仓库 `web/plugins/` 的源码一并生成。因此仓库外的插件只能使用面板已经生成的类，或使用行内样式。
 - **示例**：自带插件的页面源码在 `web/plugins/<名称>/`，是 pnpm 工作区包，用 Vue 单文件组件与 TypeScript 编写，用 Vite 以库模式构建为单个 ES 模块，输出到插件工程的 `web/`。`web/plugins/qa/vite.config.ts` 可以作为模板：
@@ -361,15 +366,15 @@ export default defineConfig({
 
 ```vue
 <script setup lang="ts">
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, type PluginPageContext } from '@shinano/plugin-sdk'
 import { onMounted, ref } from 'vue'
 
 const props = defineProps<{ context: PluginPageContext }>()
 const count = ref(0)
 
 onMounted(async () => {
-  const response = await props.context.api('/stats')
-  if (response.ok) count.value = ((await response.json()) as { count: number }).count
+  const result = await callApi<{ count: number }>(props.context, '/stats')
+  if (result.ok && result.body) count.value = result.body.count
 })
 </script>
 

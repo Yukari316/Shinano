@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhArrowsClockwise, PhGear, PhPlay, PhStop, PhTrash, PhUploadSimple, PhX } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { type ApiResult, callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ConfigSchema, ConfigView, Plugin, ProcessState, SchemaProperty, Status } from './types'
 
@@ -58,18 +58,11 @@ let refreshTimer: number | undefined
 
 const running = computed(() => status.value?.state === 'Running')
 
-async function call<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T | null }> {
-  const response = await props.context.api(path, init)
-  const body = response.status === 204 ? null : ((await response.json().catch(() => null)) as T | null)
-  if (!response.ok) {
-    const message = (body as { error?: string; detail?: string } | null) ?? {}
-    error.value = message.error ?? message.detail ?? `请求失败（${response.status}）`
-  }
-  return { ok: response.ok, status: response.status, body }
-}
-
-function jsonBody(method: string, body: unknown): RequestInit {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+// 只在失败时写入错误；清除由各操作在开始时自行处理，定时刷新不清掉操作的错误。
+async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const result = await callApi<T>(props.context, path, init)
+  if (result.error) error.value = result.error
+  return result
 }
 
 async function refresh() {
@@ -247,12 +240,8 @@ async function saveConfig() {
   restartHint.value = true
 }
 
-function formatTime(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : '—'
-}
-
 function formatUnix(value: number): string {
-  return new Date(value * 1000).toLocaleString()
+  return formatTime(new Date(value * 1000).toISOString())
 }
 
 onMounted(async () => {

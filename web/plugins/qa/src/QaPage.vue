@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhCaretUp, PhPlus, PhTrash } from '@phosphor-icons/vue'
-import type { PluginPageContext } from '@shinano/plugin-sdk'
+import { callApi, formatTime, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, watch } from 'vue'
 import AnswerPreview from './AnswerPreview.vue'
 import EntryForm from './EntryForm.vue'
@@ -22,12 +22,9 @@ const error = ref('')
 const groupNames = computed(() => new Map(groups.value.map((group) => [group.groupId, group.name])))
 
 async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
-  error.value = ''
-  const response = await props.context.api(path, init)
-  if (response.ok) return response.status === 204 ? null : ((await response.json()) as T)
-  const body = (await response.json().catch(() => ({}))) as { error?: string }
-  error.value = body.error ?? `请求失败（${response.status}）`
-  return null
+  const result = await callApi<T>(props.context, path, init)
+  error.value = result.error ?? ''
+  return result.ok ? result.body : null
 }
 
 async function loadEntries() {
@@ -50,11 +47,7 @@ async function removeEntry(entry: Entry) {
 
 async function addForbidden() {
   if (!newForbidden.value.trim()) return
-  await call('/forbidden', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: newForbidden.value.trim() })
-  })
+  await call('/forbidden', jsonBody('POST', { question: newForbidden.value.trim() }))
   if (!error.value) newForbidden.value = ''
   await loadForbidden()
 }
@@ -67,10 +60,6 @@ async function removeForbidden(item: ForbiddenQuestion) {
 function onSaved() {
   showForm.value = false
   void loadEntries()
-}
-
-function formatTime(value: string): string {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
 let keywordTimer: number | undefined
