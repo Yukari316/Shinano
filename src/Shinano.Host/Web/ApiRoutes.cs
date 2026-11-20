@@ -98,6 +98,7 @@ public static class ApiRoutes
         ((IEndpointRouteBuilder)app).DataSources.Add(app.Services.GetRequiredService<PluginEndpointDataSource>());
         // 未匹配的 API 路径返回 404，而不是单页应用。
         app.Map("/api/{**rest}", () => Results.NotFound());
-        app.MapFallbackToFile("index.html");
+        // 单页应用的各路由都返回入口 HTML，同样要求浏览器每次验证缓存。
+        app.MapFallbackToFile("index.html", PanelStaticFiles.Options);
     }
 }
