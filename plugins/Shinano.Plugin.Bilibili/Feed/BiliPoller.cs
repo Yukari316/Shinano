@@ -186,18 +186,42 @@ public sealed class BiliPoller
             }
 
             long oldest = watched.Where(target => target.PushedAt > 0).Select(target => target.PushedAt ?? 0).DefaultIfEmpty(0).Min();
-            IReadOnlyList<BiliDynamic> feed = await ReadFeedAsync(oldest, cancellationToken);
+            (IReadOnlyList<BiliDynamic> feed, string? nextBaseline) = await ReadFeedAsync(oldest, cancellationToken);
             _session.ReportRecovered();
 
+            // 一个 UP、一个群的失败不影响其他推送；B站接口异常（风控、未登录等）属于整个账号，交给外层处理。
+            bool delivered = true;
             Dictionary<string, BiliCard?> cards = [];
             foreach (long uid in uids)
             {
                 List<BiliDynamic> own = [.. feed.Where(dynamic => dynamic.AuthorId == uid)];
-                if (BiliRules.Latest(own) is { } latest) await _store.RecordLatestDynamicAsync(accountUid, uid, latest.PublishedAt);
                 string name = follows[uid].Name;
+                try
+                {
+                    if (BiliRules.Latest(own) is { } latest) await _store.RecordLatestDynamicAsync(accountUid, uid, latest.PublishedAt);
+                }
+                catch (Exception exception) when (exception is not BiliApiException && !cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogError(exception, "记录 UP {Name}（{Uid}）的最近动态时间失败", name, uid);
+                }
+
                 foreach (BiliTargetRecord target in targets[uid])
-                    await PushAsync(uid, name, target, own, cards, cancellationToken);
+                {
+                    try
+                    {
+                        if (!await PushAsync(uid, name, target, own, cards, cancellationToken)) delivered = false;
+                    }
+                    catch (Exception exception) when (exception is not BiliApiException && !cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogError(exception, "向群 {GroupId} 推送 UP {Name}（{Uid}）的动态失败，下一轮重试", target.GroupId, name, uid);
+                        delivered = false;
+                    }
+                }
             }
+
+            // 有目标未送达时保留旧基线：否则下一轮"有无更新"返回 0，要等有人再发动态才会补发。各群的推送进度保证已送达的不会重发。
+            if (delivered) _baseline = nextBaseline ?? _baseline;
+            else _logger.LogInformation("本轮有动态未送达，保留关注流基线，下一轮重新读取");
         }
         catch (BiliApiException exception) when (exception.IsRiskControl)
         {
@@ -229,10 +253,11 @@ public sealed class BiliPoller
     }
 
     // 读到比最旧的推送进度更早的动态为止，最多 3 页；新订阅只需要第一页（或该 UP 的动态空间）。
-    private async Task<IReadOnlyList<BiliDynamic>> ReadFeedAsync(long oldest, CancellationToken cancellationToken)
+    // 同时返回第一页给出的新基线，由调用方在本轮全部送达后才采用。
+    private async Task<(IReadOnlyList<BiliDynamic> Items, string? Baseline)> ReadFeedAsync(long oldest, CancellationToken cancellationToken)
     {
         BiliFeedPage page = await _http.FeedAsync(null, cancellationToken);
-        _baseline = page.UpdateBaseline ?? _baseline;
+        string? baseline = page.UpdateBaseline;
         List<BiliDynamic> items = [.. page.Items];
         for (int count = 1; count < MAX_FEED_PAGES && page.NextOffset is { } offset; count++)
         {
@@ -241,10 +266,11 @@ public sealed class BiliPoller
             items.AddRange(page.Items);
         }
 
-        return items;
+        return (items, baseline);
     }
 
-    private async Task PushAsync(
+    // 返回该群是否已无待推送的动态（没有新动态或已送达）。
+    private async Task<bool> PushAsync(
         long                          uid,
         string                        name,
         BiliTargetRecord              target,
@@ -261,7 +287,7 @@ public sealed class BiliPoller
             {
                 _logger.LogInformation("UP {Name}（{Uid}）没有可推送的动态，群 {GroupId} 从之后的新动态开始推送", name, uid, target.GroupId);
                 await _store.SavePushedAsync(uid, target.GroupId, 0, null);
-                return;
+                return true;
             }
 
             pending = [latest];
@@ -273,14 +299,15 @@ public sealed class BiliPoller
                 _logger.LogWarning("UP {Name}（{Uid}）本轮新动态超过 {Max} 条，群 {GroupId} 跳过较早的 {Skipped} 条", name, uid, BiliRules.MAX_PER_ROUND, target.GroupId, skipped);
         }
 
-        if (pending.Count == 0) return;
+        if (pending.Count == 0) return true;
         List<(BiliDynamic Dynamic, BiliCard? Card)> items = [];
         foreach (BiliDynamic dynamic in pending)
             items.Add((dynamic, await CardAsync(dynamic, cards, cancellationToken)));
 
-        if (!await _pusher.PushDynamicsAsync(target.GroupId, name, items)) return;
+        if (!await _pusher.PushDynamicsAsync(target.GroupId, name, items)) return false;
         BiliDynamic last = pending[^1];
         await _store.SavePushedAsync(uid, target.GroupId, last.PublishedAt.ToUnixTimeSeconds(), last.Id);
+        return true;
     }
 
     // 同一条动态推给多个群时只绘制一次；绘制失败时为 null，改发文字。
