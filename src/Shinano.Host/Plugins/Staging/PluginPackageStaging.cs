@@ -279,6 +279,9 @@ public sealed class PluginPackageStaging
                 if (total > MAX_EXTRACTED_BYTES)
                     throw new InvalidDataException($"插件包解压后超过 {MAX_EXTRACTED_BYTES / BYTES_PER_MIB} MiB");
                 Directory.CreateDirectory(Path.GetDirectoryName(path) ?? root);
+                // 重复条目（含 Windows 上只差大小写的条目）解压时会因文件已存在抛 IOException，按无效插件包报告。
+                if (File.Exists(path) || Directory.Exists(path))
+                    throw new InvalidDataException($"插件包中有重复的条目 {entry.FullName}");
                 entry.ExtractToFile(path);
             }
         }

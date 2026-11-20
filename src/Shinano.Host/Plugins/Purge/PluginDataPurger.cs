@@ -227,6 +227,10 @@ public sealed class PluginDataPurger : BackgroundService
             return;
         }
 
+        // 失败的步骤每次启动都会重试，通知只在这个清除任务第一次失败时发一次。
+        if (purge.FailureNotified) return;
+        purge.FailureNotified = true;
+        Save(purge);
         Notify(
             new SuperUserNotice
             {

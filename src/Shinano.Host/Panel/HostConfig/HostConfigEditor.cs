@@ -2,6 +2,7 @@ using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Rendering;
 using Shinano.Host.Tools;
+using Shinano.Host.Web;
 using Shinano.Infrastructure.Storage;
 using System.Text.Json.Nodes;
 
@@ -238,6 +239,9 @@ public sealed class HostConfigEditor
                 if (content.Length == 0 && !field.Optional) return "不能为空";
                 if (field is { Section: "Deployment", Key: "TimeZone" } && !TimeZoneInfo.TryFindSystemTimeZoneById(content, out _))
                     return $"找不到时区 {content}";
+                // 与启动时的解析一致：保存了启动时会被拒绝的地址，重启后面板只监听回环地址，管理员会被锁在外面。
+                if (field is { Section: "Web" or "Monitor", Key: "ListenAddress" } && WebEndpointResolver.ParseListenAddress(content, out string? problem) is null)
+                    return problem;
                 return null;
             case HostConfigFieldKind.Integer when value is JsonValue number && number.TryGetValue(out long integer):
                 return integer < field.Minimum || integer > field.Maximum ? $"必须在 {field.Minimum} 到 {field.Maximum} 之间" : null;

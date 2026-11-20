@@ -32,6 +32,9 @@ public sealed class PluginPurge
 
     /// <summary>管理员是否已关闭显示；重试后重新显示。</summary>
     public bool Dismissed { get; set; }
+
+    /// <summary>是否已就失败通知过 Super User；每个清除任务只通知一次。</summary>
+    public bool FailureNotified { get; set; }
 }
 
 /// <summary>一次插件数据清除的进度。</summary>

@@ -397,11 +397,12 @@ public sealed class PluginRuntime : IDisposable
         {
             if (Find(pluginId) is not { Context: { SecretsType: { } type } context }) return null;
 
-            IPluginSecretsHolder holder = context.SecretsHolder(type);
-            object? secrets = PluginSecretsSchema.Apply(type, holder.Current, changes, out IReadOnlyList<string> errors);
-            if (secrets is null) return errors;
+            IReadOnlyList<string> errors = [];
+            bool saved = await context.SecretsHolder(type).UpdateAsync(
+                current => PluginSecretsSchema.Apply(type, current, changes, out errors),
+                cancellationToken);
+            if (!saved) return errors;
 
-            await holder.SaveAsync(secrets, cancellationToken);
             _logger.LogInformation("插件 {PluginId} 的机密已更新：{Keys}", pluginId, string.Join("、", changes.Select(change => change.Key)));
             return [];
         }

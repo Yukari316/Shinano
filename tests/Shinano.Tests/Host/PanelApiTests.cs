@@ -177,12 +177,14 @@ public sealed class PanelApiTests
             new JsonObject
             {
                 ["LlBot"]    = new JsonObject { ["Port"] = 70000 },
-                ["Web"]      = new JsonObject { ["Token"] = "x" },
+                ["Web"]      = new JsonObject { ["Token"] = "x", ["ListenAddress"] = "0.0.0.0" },
+                ["Monitor"]  = new JsonObject { ["ListenAddress"] = "not-an-ip" },
                 ["Database"] = new JsonObject { ["Dsn"] = null }
             },
             Token);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-        Assert.Equal(3, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
+        // 启动时会被拒绝的监听地址（全部网卡、无法解析）在保存时就拒绝，避免重启后管理员被锁在外面。
+        Assert.Equal(5, (await invalid.Content.ReadFromJsonAsync<JsonObject>(Token))?["errors"]?.AsArray().Count);
 
         // 修改数据库 DSN 时先实际连接，连不上则不写入。
         HttpResponseMessage unreachable = await client.PutAsJsonAsync(

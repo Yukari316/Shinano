@@ -35,8 +35,21 @@ internal sealed class PluginSecrets<T> : IPluginSecrets<T>, IPluginSecretsHolder
     public object Current => _value;
 
     /// <inheritdoc />
-    // SAFE: 面板只按声明的机密类型构造替换值。
-    public Task SaveAsync(object value, CancellationToken cancellationToken) => SaveAsync((T)value, cancellationToken);
+    public async Task<bool> UpdateAsync(Func<object, object?> apply, CancellationToken cancellationToken)
+    {
+        await _writeGate.WaitAsync(cancellationToken);
+        try
+        {
+            // SAFE: 面板只按声明的机密类型构造新值。
+            if (apply(_value) is not { } next) return false;
+            Write((T)next);
+            return true;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
 
     /// <inheritdoc />
     public async Task SaveAsync(T value, CancellationToken cancellationToken)
@@ -44,13 +57,19 @@ internal sealed class PluginSecrets<T> : IPluginSecrets<T>, IPluginSecretsHolder
         await _writeGate.WaitAsync(cancellationToken);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path) ?? ".");
-            PrivateFile.Write(_path, JsonSerializer.Serialize(value, JsonOptions));
-            _value = value;
+            Write(value);
         }
         finally
         {
             _writeGate.Release();
         }
+    }
+
+    // 调用方持有写入锁。
+    private void Write(T value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_path) ?? ".");
+        PrivateFile.Write(_path, JsonSerializer.Serialize(value, JsonOptions));
+        _value = value;
     }
 }
