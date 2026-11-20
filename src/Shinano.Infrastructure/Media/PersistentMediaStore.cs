@@ -130,44 +130,57 @@ public sealed class PersistentMediaStore
     }
 
     /// <summary>
-    /// 删除宽限期已过且仍无引用的媒体：先删除数据库行，再删除对象。对象删除失败只记录警告。
+    /// 删除宽限期已过且仍无引用的媒体（每次最多一批）。先删除对象，只删除对象已删除的记录；对象删除失败（如 RustFS 离线）时
+    /// 停止本批，其余记录保留到下一次，不会留下没有记录的对象。
     /// </summary>
     /// <returns>删除的媒体数。</returns>
     public async Task<int> CollectOrphansAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         DateTimeOffset cutoff = now - _orphanGrace;
-        // SQL_NEED: 需要 for update skip locked 跳过正被引用而锁定的行，并以 returning 取回待删除对象；SqlSugar 不支持。
-        List<string> keys = await Db.InTransactionAsync(async () =>
-            await Db.Ado.SqlQueryAsync<string>(
+        (int deleted, bool failed) = await Db.InTransactionAsync(async () =>
+        {
+            // SQL_NEED: 需要 for update skip locked 跳过正被引用而锁定的行；SqlSugar 不支持。锁定的行在事务结束前不会被重新引用。
+            List<StoredKey> rows = await Db.Ado.SqlQueryAsync<StoredKey>(
                 """
-                delete from media_object
-                where id in (
-                    select m.id from media_object m
-                    where m.orphaned_at < @cutoff
-                      and not exists (select 1 from media_ref r where r.media_id = m.id)
-                    order by m.orphaned_at
-                    limit @limit
-                    for update skip locked)
-                returning object_key
+                select m.id as "Id", m.object_key as "ObjectKey"
+                from media_object m
+                where m.orphaned_at < @cutoff
+                  and not exists (select 1 from media_ref r where r.media_id = m.id)
+                order by m.orphaned_at
+                limit @limit
+                for update skip locked
                 """,
                 new
                 {
                     cutoff,
                     limit = COLLECT_BATCH_SIZE
-                }));
+                });
+            List<long> removed = [];
+            bool stopped = false;
+            foreach (StoredKey row in rows)
+            {
+                if (!await DeleteObjectQuietlyAsync(row.ObjectKey))
+                {
+                    stopped = true;
+                    break;
+                }
 
-        int deleted = 0;
-        foreach (string key in keys)
-            if (await DeleteObjectQuietlyAsync(key)) deleted++;
+                removed.Add(row.Id);
+            }
+
+            if (removed.Count > 0) await Db.Deleteable<MediaObjectRecord>().In(removed).ExecuteCommandAsync();
+            return (removed.Count, stopped);
+        });
+
         _logger.LogInformation(
-            "持久媒体回收（无引用且早于 {Cutoff}）：数据库 media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Deleted} 个对象，失败 {Failed} 个",
+            "持久媒体回收（无引用且早于 {Cutoff}）：数据库 media_object 删除 {Rows} 行，bucket {Bucket} 删除 {Objects} 个对象",
             cutoff,
-            keys.Count,
-            _bucket,
             deleted,
-            keys.Count - deleted);
+            _bucket,
+            deleted);
+        if (failed) _logger.LogWarning("持久媒体对象删除失败，本次回收中止，其余无引用媒体下一次重试");
         cancellationToken.ThrowIfCancellationRequested();
-        return keys.Count;
+        return deleted;
     }
 
     private async Task<long?> TryReferenceExistingAsync(string sha256, MediaReference reference) =>

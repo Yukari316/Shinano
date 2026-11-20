@@ -76,7 +76,14 @@ public sealed partial class ChatPartitionMaintainer
     }
 
     /// <summary>
-    /// 删除上界不晚于"今天往前 <paramref name="retentionDays" /> 天的零点"的分区。
+    /// 聊天记录的过期截止时刻：今天往前 <paramref name="retentionDays" /> 天的零点（按 <paramref name="timeZone" />）。
+    /// 聊天分区与聊天媒体共用这一时刻，保证还在库中的消息引用的媒体不会先被删除。
+    /// </summary>
+    public static DateTimeOffset RetentionCutoff(DateTimeOffset now, TimeZoneInfo timeZone, int retentionDays) =>
+        StartOfDay(LocalDate(now, timeZone).AddDays(-retentionDays), timeZone);
+
+    /// <summary>
+    /// 删除上界不晚于 <see cref="RetentionCutoff" /> 的分区。
     /// </summary>
     /// <returns>删除的分区数。</returns>
     public async Task<int> DropExpiredAsync(
@@ -88,7 +95,7 @@ public sealed partial class ChatPartitionMaintainer
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(retentionDays);
         string schema = SchemaNames.RequireIdentifier(_database.Schemas.Account(selfId));
-        DateTimeOffset cutoff = StartOfDay(LocalDate(now, timeZone).AddDays(-retentionDays), timeZone);
+        DateTimeOffset cutoff = RetentionCutoff(now, timeZone, retentionDays);
         await using NpgsqlConnection connection = await _database.OpenConnectionAsync(cancellationToken);
         int dropped = 0;
         foreach (ChatPartition partition in await ListAsync(connection, schema, cancellationToken))
