@@ -321,4 +321,14 @@ scripts/service.sh install|uninstall
 | `Monitor:MaxLogSizeMiB` | `256` | 状态页日志目录上限；修改后重启状态页 |
 | `Monitor:ServiceName` | `ShinanoMonitor` | 状态页服务名，由初始化写入 |
 
+`Database:Dsn` 的写法（示例中的地址与密码均为虚构）：
+
+- 可以接受：
+  - `postgres://shinano:密码@db.example.com:5432/shinano`（`postgresql://` 亦可）；
+  - `postgres://shinano:p%23ss@db.example.com/shinano`：密码含 `#`、`?`、`@`、`/`、`:` 时需百分号编码，`#` 写作 `%23`，端口省略时为 5432；
+  - `Host=db.example.com;Port=5432;Username=shinano;Password=密码;Database=shinano;SSL Mode=VerifyFull`：需要 SSL 等连接参数时用 Npgsql 键值对写法。
+- 不接受（宿主、工具与状态页都会报错，不会静默忽略）：
+  - `postgres://shinano:密码@db.example.com/shinano?sslmode=verify-full`：URI 写法不支持 `?` 之后的连接参数；
+  - `postgres://shinano:p#ss@db.example.com/shinano`：未编码的 `#` 会截断 URI，导致无法解析或连到错误的地址。
+
 插件的配置保存在数据库中，在各插件页面修改。插件的机密保存在 `data/secrets/<插件 ID>.json`；直接编辑这个文件也可以，重启后生效。

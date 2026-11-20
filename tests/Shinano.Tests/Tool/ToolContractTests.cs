@@ -11,6 +11,7 @@ using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Storage;
 using Shinano.Monitor.Web;
 using Shinano.Tests.Host.Restart;
+using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
 using Shinano.Tool.Deployment;
 using Shinano.Tool.Plugins;
@@ -99,6 +100,16 @@ public sealed class ToolContractTests : IDisposable
         Npgsql.NpgsqlConnectionStringBuilder tool = DsnFormat.Parse(dsn);
 
         Assert.Equal((host.Host, host.Port, host.Database, host.Username, host.Password), (tool.Host, tool.Port, tool.Database, tool.Username, tool.Password));
+    }
+
+    // URI 写法的查询参数与 # 片段曾被静默丢弃（如 sslmode），宿主与工具都改为拒绝。
+    [Theory]
+    [InlineData("postgres://role:pass@db.local:5433/shinano?sslmode=verify-full")]
+    [InlineData("postgres://role:pass@db.local:5433/shinano#ss")]
+    public void DsnFormat_RejectsUriQueryLikeHost(string dsn)
+    {
+        Assert.Throws<NotSupportedException>(() => PostgresConnectionString.Parse(dsn));
+        Assert.Throws<ToolException>(() => DsnFormat.Parse(dsn));
     }
 
     [Fact]

@@ -148,7 +148,7 @@ public sealed class ChatMediaArchiver
             {
                 _logger.LogWarning(exception, "保存聊天媒体失败（消息 {MessageId}）", entry.Message.MessageId);
                 // 连接故障是 S3 客户端重试后仍失败，立即标记 RustFS 不可用，不等节流的探测；其他失败（如数据库写入）交给探测确认。
-                if (IsConnectionFault(exception)) _storageAvailability.ReportFailure(exception);
+                if (IsConnectionFault(exception)) await _storageAvailability.ReportFailureAsync(exception);
                 else _ = _storageAvailability.CheckAsync(force: false, CancellationToken.None);
                 return null;
             }

@@ -203,6 +203,9 @@ public sealed class ServiceProber : IDisposable
             return new NpgsqlConnectionStringBuilder(dsn);
 
         Uri uri = new(dsn);
+        // 与主进程一致：查询参数与 # 之后的内容不支持，探测记为错误，不静默丢弃后按另一种方式连接。
+        if (uri.Query.Length > 0 || uri.Fragment.Length > 0) throw new ArgumentException("DSN 的 URI 写法不支持查询参数");
+
         string[] userInfo = uri.UserInfo.Split(':', 2);
         return new NpgsqlConnectionStringBuilder
         {

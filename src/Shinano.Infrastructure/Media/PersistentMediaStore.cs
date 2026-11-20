@@ -234,10 +234,10 @@ public sealed class PersistentMediaStore
 
             int removed = await Db.Deleteable<MediaReferenceRecord>().Where(condition).ExecuteCommandAsync();
             DateTimeOffset now = DateTimeOffset.UtcNow;
+            // 每次删除最后的引用都重新开始宽限期：并发增删引用时 orphaned_at 可能残留旧值，不刷新就会提前回收。
             await Db.Updateable<MediaObjectRecord>()
                     .SetColumns(item => new MediaObjectRecord { OrphanedAt = now })
                     .Where(item => mediaIds.Contains(item.Id)
-                                   && item.OrphanedAt == null
                                    && !SqlFunc.Subqueryable<MediaReferenceRecord>()
                                               .Where(reference => reference.MediaId == item.Id)
                                               .Any())

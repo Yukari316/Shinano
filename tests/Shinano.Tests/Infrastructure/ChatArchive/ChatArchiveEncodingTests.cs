@@ -21,8 +21,17 @@ public sealed class ChatArchiveEncodingTests
     [InlineData("e\u0301", 1)]
     [InlineData(" \t\r\n\u3000", 0)]
     [InlineData("", 0)]
+    // 零宽空格、词连接符与单独的变体选择符不可见，不计入；跟在 emoji 后的变体选择符属于同一个字素。
+    [InlineData("a\u200Bb\u2060c", 3)]
+    [InlineData("\uFE0F", 0)]
+    [InlineData("❤\uFE0F", 1)]
     public void CountVisibleCharacters_CountsGraphemesWithoutWhitespace(string text, int expected) =>
         Assert.Equal(expected, ChatTextMetrics.CountVisibleCharacters(text));
+
+    // 孤立代理项曾让 Rune.GetRuneAt 抛异常；现在按 1 个字符计。特性参数无法保存孤立代理项，在方法内构造。
+    [Fact]
+    public void CountVisibleCharacters_CountsLoneSurrogateAsOne() =>
+        Assert.Equal(2, ChatTextMetrics.CountVisibleCharacters(new string([(char)0xD800, 'x'])));
 
     [Fact]
     public void Counts_OnlyTopLevel_MediaPerOccurrence_NonTextSegmentsHaveNoChars()
