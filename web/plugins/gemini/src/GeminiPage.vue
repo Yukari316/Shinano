@@ -27,6 +27,15 @@ const EFFORT_LABELS: Record<string, string> = {
   xhigh: 'XHigh（极高）'
 }
 
+const ALL_EFFORTS = ['default', 'minimal', 'low', 'medium', 'high', 'xhigh']
+const EFFORT_RULES: { prefixes: string[]; efforts: string[] }[] = [
+  { prefixes: ['gemini-4-hydrogen', 'gemini-4-neon'], efforts: ['default', 'low', 'medium', 'high', 'xhigh'] },
+  { prefixes: ['gemini-4-', 'gemini-4.'], efforts: ['default', 'low', 'medium', 'high'] },
+  { prefixes: ['gemini-3-', 'gemini-3.'], efforts: ['default', 'minimal', 'low', 'medium', 'high'] },
+  { prefixes: ['gemini-2.5-'], efforts: ['default'] },
+  { prefixes: ['gemini-2.0-', 'gemini-1.5-', 'gemini-1.0-'], efforts: [] }
+]
+
 const SYSTEM_PROMPT_MAX_LENGTH = 8000
 const error = ref('')
 const notice = ref('')
@@ -93,15 +102,18 @@ function normalizeModelId(value: string): string {
 
 function inferAllowedEfforts(modelId: string): string[] {
   const id = normalizeModelId(modelId).toLowerCase()
-  if (!id) return ['default', 'minimal', 'low', 'medium', 'high', 'xhigh']
-  if (id.startsWith('gemini-4-hydrogen') || id.startsWith('gemini-4-neon')) {
-    return ['default', 'low', 'medium', 'high', 'xhigh']
+  if (!id) return ALL_EFFORTS
+  let matched: string[] | null = null
+  let bestPrefixLength = -1
+  for (const rule of EFFORT_RULES) {
+    for (const prefix of rule.prefixes) {
+      if (prefix.length > bestPrefixLength && id.startsWith(prefix)) {
+        matched = rule.efforts
+        bestPrefixLength = prefix.length
+      }
+    }
   }
-  if (id.startsWith('gemini-4-') || id.startsWith('gemini-4.')) return ['default', 'low', 'medium', 'high']
-  if (id.startsWith('gemini-3-') || id.startsWith('gemini-3.')) return ['default', 'minimal', 'low', 'medium', 'high']
-  if (id.startsWith('gemini-2.5-')) return ['default']
-  if (id.startsWith('gemini-2.0-') || id.startsWith('gemini-1.5-') || id.startsWith('gemini-1.0-')) return []
-  return ['default', 'minimal', 'low', 'medium', 'high', 'xhigh']
+  return matched ?? ALL_EFFORTS
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {

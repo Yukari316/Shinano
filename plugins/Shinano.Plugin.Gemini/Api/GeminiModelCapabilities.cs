@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace Shinano.Plugin.Gemini.Api;
 
 /// <summary>
@@ -39,6 +41,46 @@ public static class GeminiModelCapabilities
     private static readonly string[] LegacyThinkingOnly  = [EFFORT_DEFAULT];
     private static readonly string[] AllEfforts          = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH, EFFORT_XHIGH];
 
+    private static readonly FrozenSet<string> ExplicitThinkingLevels = new[]
+    {
+        EFFORT_MINIMAL,
+        EFFORT_LOW,
+        EFFORT_MEDIUM,
+        EFFORT_HIGH,
+        EFFORT_XHIGH
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly EffortRule[] EffortRules =
+    [
+        new()
+        {
+            Prefixes = ["gemini-4-hydrogen", "gemini-4-neon"],
+            Efforts  = Gemini4UltraEfforts
+        },
+        new()
+        {
+            Prefixes = ["gemini-4-", "gemini-4."],
+            Efforts  = Gemini4Efforts
+        },
+        new()
+        {
+            Prefixes = ["gemini-3-", "gemini-3."],
+            Efforts  = Gemini3Efforts
+        },
+        // Gemini 2.5 使用旧版 thinkingBudget 而非 thinkingLevel，只提供「默认（不传 thinkingLevel）」避免触发 400。
+        new()
+        {
+            Prefixes = ["gemini-2.5-"],
+            Efforts  = LegacyThinkingOnly
+        },
+        new()
+        {
+            Prefixes                = ["gemini-2.0-", "gemini-1.5-", "gemini-1.0-"],
+            Efforts                 = [],
+            OnlyWhenThinkingUnknown = true
+        }
+    ];
+
     /// <summary>去掉模型名可能带有的 <c>models/</c> 前缀并清理首尾空白。</summary>
     public static string NormalizeModelId(string? modelId)
     {
@@ -49,7 +91,7 @@ public static class GeminiModelCapabilities
             : trimmed;
     }
 
-    /// <summary>返回指定模型允许选择的 effort 档位列表；空数组表示该模型不支持思考配置。</summary>
+    /// <summary>按最长前缀匹配返回指定模型允许选择的 effort 档位列表；空数组表示该模型不支持思考配置。</summary>
     public static IReadOnlyList<string> GetAllowedEfforts(string modelId, bool? thinking = null)
     {
         if (thinking == false) return [];
@@ -57,29 +99,24 @@ public static class GeminiModelCapabilities
         string id = NormalizeModelId(modelId);
         if (id.Length == 0) return AllEfforts;
 
-        if (id.StartsWith("gemini-4-hydrogen", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-4-neon", StringComparison.OrdinalIgnoreCase))
-            return Gemini4UltraEfforts;
+        EffortRule? matched = null;
+        int bestPrefixLength = -1;
 
-        if (id.StartsWith("gemini-4-", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-4.", StringComparison.OrdinalIgnoreCase))
-            return Gemini4Efforts;
+        foreach (EffortRule rule in EffortRules)
+        {
+            if (rule.OnlyWhenThinkingUnknown && thinking is not null) continue;
+            foreach (string prefix in rule.Prefixes)
+            {
+                if (prefix.Length > bestPrefixLength
+                    && id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = rule;
+                    bestPrefixLength = prefix.Length;
+                }
+            }
+        }
 
-        if (id.StartsWith("gemini-3-", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-3.", StringComparison.OrdinalIgnoreCase))
-            return Gemini3Efforts;
-
-        // Gemini 2.5 使用旧版 thinkingBudget 而非 thinkingLevel，只提供「默认（不传 thinkingLevel）」避免触发 400。
-        if (id.StartsWith("gemini-2.5-", StringComparison.OrdinalIgnoreCase))
-            return LegacyThinkingOnly;
-
-        if (thinking is null
-            && (id.StartsWith("gemini-2.0-", StringComparison.OrdinalIgnoreCase)
-                || id.StartsWith("gemini-1.5-", StringComparison.OrdinalIgnoreCase)
-                || id.StartsWith("gemini-1.0-", StringComparison.OrdinalIgnoreCase)))
-            return [];
-
-        return AllEfforts;
+        return matched?.Efforts ?? AllEfforts;
     }
 
     /// <summary>为指定模型计算默认 effort；不支持思考时返回空字符串。</summary>
@@ -108,14 +145,16 @@ public static class GeminiModelCapabilities
 
     /// <summary>判断该 effort 是否需要作为显式 <c>thinkingLevel</c> 传给 Gemini API。</summary>
     public static bool IsExplicitThinkingLevel(string? effort) =>
-        effort is not null
-        && (string.Equals(effort, EFFORT_MINIMAL, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(effort, EFFORT_LOW, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(effort, EFFORT_MEDIUM, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(effort, EFFORT_HIGH, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(effort, EFFORT_XHIGH, StringComparison.OrdinalIgnoreCase));
+        effort is not null && ExplicitThinkingLevels.Contains(effort);
 
     /// <summary>该模型是否支持思考配置（含思考摘要与 effort）。</summary>
     public static bool SupportsThinking(string modelId, bool? thinking = null) =>
         GetAllowedEfforts(modelId, thinking).Count > 0;
+
+    private sealed class EffortRule
+    {
+        public required string[] Prefixes                { get; init; }
+        public required string[] Efforts                 { get; init; }
+        public          bool     OnlyWhenThinkingUnknown { get; init; }
+    }
 }

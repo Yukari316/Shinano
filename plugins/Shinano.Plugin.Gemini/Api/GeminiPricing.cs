@@ -9,6 +9,28 @@ public static class GeminiPricing
     private const decimal TOKENS_PER_MILLION = 1_000_000m;
     private const int     LONG_CONTEXT_LIMIT = 200_000;
 
+    private static readonly PricingRule[] Rules =
+    [
+        Rule(["gemini-4-neon"], Rates(3.00m, 0.15m, 15.00m)),
+        Rule(["gemini-4-hydrogen"], Rates(1.50m, 0.075m, 7.50m)),
+        Rule(["gemini-4-carbon", "gemini-4-argon"], Rates(2.00m, 0.10m, 10.00m)),
+        Rule(["gemini-3.8-flash"], Rates(0.75m, 0.075m, 3.75m)),
+        Rule(["gemini-3.6-flash"], Rates(1.50m, 0.075m, 7.50m)),
+        Rule(
+            ["gemini-3.1-pro", "gemini-3-pro"],
+            Rates(2.00m, 0.20m, 12.00m),
+            Rates(4.00m, 0.40m, 18.00m)),
+        Rule(["gemini-3-flash", "gemini-3."], Rates(0.50m, 0.05m, 3.00m)),
+        Rule(
+            ["gemini-2.5-pro"],
+            Rates(1.25m, 0.125m, 10.00m),
+            Rates(2.50m, 0.25m, 15.00m)),
+        Rule(["gemini-2.5-flash-lite"], Rates(0.10m, 0.01m, 0.40m)),
+        Rule(["gemini-2.5-flash"], Rates(0.30m, 0.03m, 2.50m)),
+        Rule(["gemini-2.0-flash-lite"], Rates(0.075m, 0.0075m, 0.30m)),
+        Rule(["gemini-2.0-flash"], Rates(0.10m, 0.025m, 0.40m))
+    ];
+
     /// <summary>按模型与本次 token 用量估算成本（USD）；未知模型或缺少用量时返回 0。</summary>
     public static decimal EstimateCostUsd(string modelId, GeminiUsageMetadata? usage)
     {
@@ -28,93 +50,59 @@ public static class GeminiPricing
         return Math.Round(cost, 6, MidpointRounding.AwayFromZero);
     }
 
-    /// <summary>尝试查找模型对应的百万 token 单价（USD）。</summary>
+    /// <summary>按最长前缀匹配查找模型对应的百万 token 单价（USD）。</summary>
     internal static bool TryGetRates(string modelId, int promptTokens, out ModelRates rates)
     {
         string id = GeminiModelCapabilities.NormalizeModelId(modelId);
-        bool longContext = promptTokens > LONG_CONTEXT_LIMIT;
+        PricingRule? matched = null;
+        int bestPrefixLength = -1;
 
-        if (id.StartsWith("gemini-4-neon", StringComparison.OrdinalIgnoreCase))
+        foreach (PricingRule rule in Rules)
         {
-            rates = new ModelRates { InputPerMillion = 3.00m, CachedInputPerMillion = 0.15m, OutputPerMillion = 15.00m };
-            return true;
+            foreach (string prefix in rule.Prefixes)
+            {
+                if (prefix.Length > bestPrefixLength
+                    && id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = rule;
+                    bestPrefixLength = prefix.Length;
+                }
+            }
         }
 
-        if (id.StartsWith("gemini-4-hydrogen", StringComparison.OrdinalIgnoreCase))
+        if (matched is null)
         {
-            rates = new ModelRates { InputPerMillion = 1.50m, CachedInputPerMillion = 0.075m, OutputPerMillion = 7.50m };
-            return true;
+            rates = default;
+            return false;
         }
 
-        if (id.StartsWith("gemini-4-carbon", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-4-argon", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 2.00m, CachedInputPerMillion = 0.10m, OutputPerMillion = 10.00m };
-            return true;
-        }
+        rates = promptTokens > LONG_CONTEXT_LIMIT && matched.LongContext is { } longRates
+            ? longRates
+            : matched.Standard;
+        return true;
+    }
 
-        if (id.StartsWith("gemini-3.8-flash", StringComparison.OrdinalIgnoreCase))
+    private static PricingRule Rule(string[] prefixes, ModelRates standard, ModelRates? longContext = null) =>
+        new()
         {
-            rates = new ModelRates { InputPerMillion = 0.75m, CachedInputPerMillion = 0.075m, OutputPerMillion = 3.75m };
-            return true;
-        }
+            Prefixes    = prefixes,
+            Standard    = standard,
+            LongContext = longContext
+        };
 
-        if (id.StartsWith("gemini-3.6-flash", StringComparison.OrdinalIgnoreCase))
+    private static ModelRates Rates(decimal input, decimal cachedInput, decimal output) =>
+        new()
         {
-            rates = new ModelRates { InputPerMillion = 1.50m, CachedInputPerMillion = 0.075m, OutputPerMillion = 7.50m };
-            return true;
-        }
+            InputPerMillion       = input,
+            CachedInputPerMillion = cachedInput,
+            OutputPerMillion      = output
+        };
 
-        if (id.StartsWith("gemini-3.1-pro", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-3-pro", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = longContext
-                ? new ModelRates { InputPerMillion = 4.00m, CachedInputPerMillion = 0.40m, OutputPerMillion = 18.00m }
-                : new ModelRates { InputPerMillion = 2.00m, CachedInputPerMillion = 0.20m, OutputPerMillion = 12.00m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-3-flash", StringComparison.OrdinalIgnoreCase)
-            || id.StartsWith("gemini-3.", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 0.50m, CachedInputPerMillion = 0.05m, OutputPerMillion = 3.00m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-2.5-pro", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = longContext
-                ? new ModelRates { InputPerMillion = 2.50m, CachedInputPerMillion = 0.25m, OutputPerMillion = 15.00m }
-                : new ModelRates { InputPerMillion = 1.25m, CachedInputPerMillion = 0.125m, OutputPerMillion = 10.00m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-2.5-flash-lite", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 0.10m, CachedInputPerMillion = 0.01m, OutputPerMillion = 0.40m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-2.5-flash", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 0.30m, CachedInputPerMillion = 0.03m, OutputPerMillion = 2.50m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-2.0-flash-lite", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 0.075m, CachedInputPerMillion = 0.0075m, OutputPerMillion = 0.30m };
-            return true;
-        }
-
-        if (id.StartsWith("gemini-2.0-flash", StringComparison.OrdinalIgnoreCase))
-        {
-            rates = new ModelRates { InputPerMillion = 0.10m, CachedInputPerMillion = 0.025m, OutputPerMillion = 0.40m };
-            return true;
-        }
-
-        rates = default;
-        return false;
+    private sealed class PricingRule
+    {
+        public required string[]    Prefixes    { get; init; }
+        public required ModelRates  Standard    { get; init; }
+        public          ModelRates? LongContext { get; init; }
     }
 
     /// <summary>单个模型的百万 token 美元单价。</summary>

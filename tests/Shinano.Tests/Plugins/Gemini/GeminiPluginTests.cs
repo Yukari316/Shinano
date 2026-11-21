@@ -26,6 +26,37 @@ public sealed class GeminiPluginTests
         Assert.Equal("medium", GeminiModelCapabilities.NormalizeEffort("gemini-4-carbon", "xhigh"));
         Assert.Equal("default", GeminiModelCapabilities.NormalizeEffort("gemini-2.5-flash", "high"));
         Assert.Equal(string.Empty, GeminiModelCapabilities.NormalizeEffort("gemini-2.0-flash", "medium"));
+        Assert.Equal(["default", "minimal", "low", "medium", "high", "xhigh"], GeminiModelCapabilities.GetAllowedEfforts("gemini-2.0-flash-thinking", thinking: true));
+        Assert.True(GeminiModelCapabilities.IsExplicitThinkingLevel("MEDIUM"));
+        Assert.False(GeminiModelCapabilities.IsExplicitThinkingLevel("default"));
+        Assert.False(GeminiModelCapabilities.IsExplicitThinkingLevel(null));
+    }
+
+    [Fact]
+    public void Pricing_MatchesLongestPrefixAndLongContextTier()
+    {
+        // 具体前缀优先于泛化前缀，不依赖规则排列顺序。
+        Assert.True(GeminiPricing.TryGetRates("gemini-2.5-flash-lite-preview", 1_000, out GeminiPricing.ModelRates flashLite25));
+        Assert.Equal(0.10m, flashLite25.InputPerMillion);
+        Assert.True(GeminiPricing.TryGetRates("gemini-2.5-flash", 1_000, out GeminiPricing.ModelRates flash25));
+        Assert.Equal(0.30m, flash25.InputPerMillion);
+
+        Assert.True(GeminiPricing.TryGetRates("gemini-2.0-flash-lite", 1_000, out GeminiPricing.ModelRates flashLite20));
+        Assert.Equal(0.075m, flashLite20.InputPerMillion);
+        Assert.True(GeminiPricing.TryGetRates("gemini-2.0-flash", 1_000, out GeminiPricing.ModelRates flash20));
+        Assert.Equal(0.10m, flash20.InputPerMillion);
+
+        Assert.True(GeminiPricing.TryGetRates("gemini-3.8-flash", 1_000, out GeminiPricing.ModelRates flash38));
+        Assert.Equal(0.75m, flash38.InputPerMillion);
+        Assert.True(GeminiPricing.TryGetRates("gemini-3.0-preview", 1_000, out GeminiPricing.ModelRates gen3Fallback));
+        Assert.Equal(0.50m, gen3Fallback.InputPerMillion);
+
+        // 超过 200K 上下文自动切换至长上下文阶梯价。
+        Assert.True(GeminiPricing.TryGetRates("gemini-3.1-pro", 200_000, out GeminiPricing.ModelRates pro31Standard));
+        Assert.Equal(2.00m, pro31Standard.InputPerMillion);
+        Assert.True(GeminiPricing.TryGetRates("gemini-3.1-pro", 200_001, out GeminiPricing.ModelRates pro31Long));
+        Assert.Equal(4.00m, pro31Long.InputPerMillion);
+        Assert.Equal(18.00m, pro31Long.OutputPerMillion);
     }
 
     [Fact]
