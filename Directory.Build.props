@@ -8,6 +8,6 @@
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         <InvariantGlobalization>false</InvariantGlobalization>
         <!-- 宿主、监控与工具共用的发布版本，发布包文件名同样取自这里；插件版本以各自的 plugin.json 为准。 -->
-        <Version>1.0.0</Version>
+        <Version>1.1.0</Version>
     </PropertyGroup>
 </Project>
