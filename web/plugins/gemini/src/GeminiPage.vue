@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PhArrowsClockwise, PhPencilSimple, PhX } from '@phosphor-icons/vue'
 import { type ApiResult, callApi, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ModelOption, ModelSettings, ScopeCandidate, ScopeKind, Scopes, UsageSummary } from './types'
 
 const props = defineProps<{ context: PluginPageContext }>()
@@ -147,6 +147,9 @@ async function fetchModels() {
   modelsLoading.value = false
   if (result.ok) {
     models.value = result.body ?? []
+    if (modelSettings.value && !modelSettings.value.hasApiKey) {
+      modelSettings.value = { ...modelSettings.value, hasApiKey: true }
+    }
     notice.value = `已拉取 ${models.value.length} 个可用模型`
   }
 }
@@ -219,12 +222,28 @@ function describeScope(kind: ScopeKind): string {
   return scope.ids.length === 0 ? '空白名单（全部不响应）' : `白名单 · ${scope.ids.length} 个${noun}`
 }
 
+async function onSecretsUpdated(event: Event) {
+  const detail = (event as CustomEvent<{ pluginId?: string }>).detail
+  if (detail?.pluginId && detail.pluginId !== props.context.pluginId) return
+  const hadKey = modelSettings.value?.hasApiKey ?? false
+  await loadModelSettings()
+  if (!hadKey && modelSettings.value?.hasApiKey && models.value.length === 0) {
+    await fetchModels()
+    notice.value = ''
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('shinano:plugin-secrets-updated', onSecretsUpdated)
   await Promise.all([loadUsage(), loadModelSettings(), refreshScopes()])
   if (modelSettings.value?.hasApiKey) {
     await fetchModels()
     notice.value = ''
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('shinano:plugin-secrets-updated', onSecretsUpdated)
 })
 </script>
 

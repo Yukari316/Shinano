@@ -50,6 +50,8 @@ async function save(): Promise<void> {
     await api.put(`/api/plugins/${props.pluginId}/secrets`, body)
     saved.value = true
     await load()
+    // 通知同页的插件专有页面立即刷新机密配置状态。
+    window.dispatchEvent(new CustomEvent('shinano:plugin-secrets-updated', { detail: { pluginId: props.pluginId } }))
   } catch (e) {
     error.value = describeError(e)
   }
