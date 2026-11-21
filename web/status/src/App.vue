@@ -51,7 +51,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
 
       <div v-if="failed" role="alert" class="alert alert-error">无法获取状态，监控进程可能已停止；页面会继续重试。</div>
       <div v-if="report && !report.configured" role="alert" class="alert alert-warning">
-        监控进程没有找到部署配置文件，各项显示为未配置。请设置环境变量 SHINANO_DATA_DIR 或监控 appsettings.json 中的 Monitor:DeploymentConfigPath。
+        监控进程没有找到部署配置文件，各项显示为未配置。请设置环境变量 SHINANO_DATA_DIR 指向部署数据目录。
       </div>
 
       <section class="surface card" aria-live="polite">

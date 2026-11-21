@@ -166,7 +166,7 @@ public sealed class MonitorTests : IDisposable
         closed.Stop();
         string configPath = Path.Combine(_directory, MonitorSettings.CONFIG_FILE_NAME);
         await File.WriteAllTextAsync(configPath, $$"""{ "Shinano": { "Web": { "Port": {{closedPort}} } } }""", TestContext.Current.CancellationToken);
-        MonitorSettings settings = MonitorSettings.Load(configPath, _directory);
+        MonitorSettings settings = MonitorSettings.Read(configPath, _directory);
         FakeTimeProvider time = new(Now);
         ProbeStore store = new(Path.Combine(_directory, "probes"), TimeZoneInfo.Utc, NullLogger<ProbeStore>.Instance);
         using ProbeService service = new(

@@ -13,7 +13,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(
         Args            = args,
         ContentRootPath = baseDirectory
     });
-MonitorSettings settings = MonitorSettings.Load(builder.Configuration["Monitor:DeploymentConfigPath"], baseDirectory);
+MonitorSettings settings = MonitorSettings.Load(baseDirectory);
 
 using MonitorLogging logging = MonitorLogging.Create(baseDirectory);
 builder.Logging.ClearProviders();
@@ -51,7 +51,7 @@ WebApplication app = builder.Build();
 ILogger startup = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Shinano.Monitor.Startup");
 if (settings.ConfigPath is null)
     startup.LogError(
-        "找不到部署配置文件：请设置环境变量 {Variable} 或 appsettings.json 中的 Monitor:DeploymentConfigPath，各项探测将显示为未配置",
+        "找不到部署配置文件：请设置环境变量 {Variable} 指向部署数据目录，各项探测将显示为未配置",
         MonitorSettings.DATA_DIRECTORY_VARIABLE);
 else
     startup.LogInformation("部署配置文件：{ConfigPath}", settings.ConfigPath);

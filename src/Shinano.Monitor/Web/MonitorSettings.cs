@@ -19,9 +19,9 @@ public sealed class MonitorSettings
     /// <summary>主进程面板的默认端口。</summary>
     public const int DEFAULT_HOST_PORT = 19100;
 
-    private const int    DEFAULT_INTERVAL_SECONDS = 30;
+    internal const int   DEFAULT_INTERVAL_SECONDS = 30;
     private const int    MIN_INTERVAL_SECONDS     = 5;
-    private const int    DEFAULT_MAX_LOG_MIB      = 256;
+    internal const int   DEFAULT_MAX_LOG_MIB      = 256;
     private const int    DEFAULT_LLBOT_PORT       = 3000;
     private const string DEFAULT_TIME_ZONE        = "Asia/Shanghai";
 
@@ -73,18 +73,14 @@ public sealed class MonitorSettings
     /// <summary>LLBot AccessToken；未配置时为 null。</summary>
     public string? LlBotAccessToken { get; init; }
 
-    /// <summary>
-    /// 定位并读取部署配置：优先使用环境变量 <see cref="DATA_DIRECTORY_VARIABLE" />，其次使用监控
-    /// <c>appsettings.json</c> 中的 <c>Monitor:DeploymentConfigPath</c>（相对路径基于程序目录）。
-    /// </summary>
-    /// <param name="configuredPath"><c>Monitor:DeploymentConfigPath</c> 的值。</param>
-    /// <param name="baseDirectory">监控程序目录。</param>
-    public static MonitorSettings Load(string? configuredPath, string baseDirectory)
+    /// <summary>按环境变量 <see cref="DATA_DIRECTORY_VARIABLE" /> 定位并读取部署配置；未设置或文件不存在时全部取默认值。</summary>
+    /// <param name="baseDirectory">监控程序目录，环境变量为相对路径时以它为基准。</param>
+    public static MonitorSettings Load(string baseDirectory)
     {
         string? dataDirectory = Environment.GetEnvironmentVariable(DATA_DIRECTORY_VARIABLE);
-        string? path = !string.IsNullOrWhiteSpace(dataDirectory)
-            ? Path.Combine(Path.GetFullPath(dataDirectory, baseDirectory), CONFIG_FILE_NAME)
-            : string.IsNullOrWhiteSpace(configuredPath) ? null : Path.GetFullPath(configuredPath, baseDirectory);
+        string? path = string.IsNullOrWhiteSpace(dataDirectory)
+            ? null
+            : Path.Combine(Path.GetFullPath(dataDirectory, baseDirectory), CONFIG_FILE_NAME);
         if (path is not null && !File.Exists(path)) path = null;
         return Read(path, baseDirectory);
     }
@@ -94,7 +90,8 @@ public sealed class MonitorSettings
     /// <exception cref="IOException">文件无法读取。</exception>
     public MonitorSettings Reload() => ConfigPath is null ? this : Read(ConfigPath, DataDirectory);
 
-    private static MonitorSettings Read(string? path, string baseDirectory)
+    /// <summary>读取指定的部署配置文件；<paramref name="path" /> 为 null 时全部取默认值。</summary>
+    internal static MonitorSettings Read(string? path, string baseDirectory)
     {
         IConfiguration configuration = path is null
             ? new ConfigurationBuilder().Build()

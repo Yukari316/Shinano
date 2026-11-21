@@ -172,6 +172,16 @@ public sealed class PanelApiTests
         Assert.DoesNotContain(fields ?? [], item => item?["field"]?["key"]?.GetValue<string>() == "Token");
         Assert.DoesNotContain(panel.Token, fields?.ToJsonString() ?? string.Empty);
 
+        // 部署配置未写出的项显示 Options 类的默认值。
+        string? ValueOf(string section, string key) =>
+            fields?.FirstOrDefault(item => item?["field"]?["section"]?.GetValue<string>() == section
+                                           && item["field"]?["key"]?.GetValue<string>() == key)?["value"]?.ToString();
+        Assert.Equal("10000", ValueOf("ChatArchive", "BufferCapacity"));
+        Assert.Equal("Latest", ValueOf("Browser", "VersionMode"));
+        Assert.Equal("Information", ValueOf("Logging", "MinimumLevel"));
+        Assert.Equal("30", ValueOf("Monitor", "IntervalSeconds"));
+        Assert.Equal("true", ValueOf("Restart", "KeepBackup"));
+
         HttpResponseMessage invalid = await client.PutAsJsonAsync(
             "/api/config",
             new JsonObject

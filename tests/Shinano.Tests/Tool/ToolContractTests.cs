@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
+using Shinano.Host.Panel;
 using Shinano.Host.Panel.Auth;
 using Shinano.Host.Plugins;
 using Shinano.Host.Plugins.Staging;
@@ -86,11 +87,23 @@ public sealed class ToolContractTests : IDisposable
         Assert.Equal(ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, new PluginOptions().Directory);
         Assert.Equal("plugins-a", Bind<PluginOptions>(root, PluginOptions.SECTION_NAME).Directory);
 
-        MonitorSettings monitor = MonitorSettings.Load(path, _directory);
+        MonitorSettings monitor = MonitorSettings.Read(path, _directory);
         Assert.Equal(("10.0.0.6", 19201), (monitor.Listen.ListenAddress, monitor.Listen.Port));
         Assert.Equal("ShinanoMonitorA", monitor.ServiceName);
         Assert.Equal(ConfigKeys.DEFAULT_PANEL_PORT, WebOptions.DEFAULT_PORT);
         Assert.Equal(ConfigKeys.DEFAULT_STATUS_PORT, MonitorSettings.DEFAULT_PORT);
+    }
+
+    // 宿主配置页显示的监控默认值必须与监控实际使用的一致：两边互不引用，各自维护一份。
+    [Fact]
+    public void MonitorDefaults_MatchHostView()
+    {
+        MonitorSettings monitor = MonitorSettings.Read(null, _directory);
+        MonitorOptions host = new();
+
+        Assert.Equal((monitor.Listen.ListenAddress, monitor.Listen.Port), (host.ListenAddress, host.Port));
+        Assert.Equal(MonitorSettings.DEFAULT_INTERVAL_SECONDS, host.IntervalSeconds);
+        Assert.Equal(MonitorSettings.DEFAULT_MAX_LOG_MIB, host.MaxLogSizeMiB);
     }
 
     [Theory]

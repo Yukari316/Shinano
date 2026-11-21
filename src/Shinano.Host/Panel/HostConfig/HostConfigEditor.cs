@@ -1,22 +1,30 @@
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
+using Shinano.Host.Plugins;
 using Shinano.Host.Rendering;
+using Shinano.Host.Restart;
 using Shinano.Host.Tools;
 using Shinano.Host.Web;
+using Shinano.Infrastructure.ChatArchive;
+using Shinano.Infrastructure.Database;
+using Shinano.Infrastructure.Hosting;
+using Shinano.Infrastructure.Logging;
+using Shinano.Infrastructure.Media;
 using Shinano.Infrastructure.Storage;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Shinano.Host.Panel.HostConfig;
 
 /// <summary>
-/// 面板中的宿主配置：读取 <c>appsettings.json</c> 与本地配置文件合并后的值（包括已保存但尚未重启生效的修改），
-/// 把修改写入本地配置文件。全部宿主配置只在启动时读取，保存后需要重启生效。
+/// 面板中的宿主配置：读取部署配置文件的值（包括已保存但尚未重启生效的修改），未写出的项显示 Options 类的默认值；
+/// 把修改写入部署配置文件。全部宿主配置只在启动时读取，保存后需要重启生效。
 /// 敏感项只写：读取时只报告是否已配置，保存时接受新值，不回显。面板 Token 由重新生成接口单独管理，不在此列出。
 /// </summary>
 public sealed class HostConfigEditor
 {
     private const string ROOT_SECTION        = "Shinano";
-    private const string APPSETTINGS         = "appsettings.json";
     private const int    MAX_PORT            = 65535;
     private const int    MAX_DAYS            = 3650;
     private const int    MAX_BROWSER_VERSION = 999;
@@ -35,6 +43,31 @@ public sealed class HostConfigEditor
     private static readonly string[] BrowserVersionModes = Enum.GetNames<BrowserVersionMode>();
 
     private static readonly string[] FfmpegModes = Enum.GetNames<FfmpegMode>();
+
+    private static readonly JsonSerializerOptions DefaultsJson = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters             = { new JsonStringEnumConverter() }
+    };
+
+    // 未写入部署配置的项取各 Options 类的默认值，作为合并时优先级最低的一层；须声明在 DefaultsJson 之后（静态字段按顺序初始化）。
+    private static readonly KeyValuePair<string, string?>[] Defaults =
+    [
+        .. DefaultsOf(DeploymentOptions.SECTION_NAME, new DeploymentOptions()),
+        .. DefaultsOf(DatabaseOptions.SECTION_NAME, new DatabaseOptions()),
+        .. DefaultsOf(LlBotOptions.SECTION_NAME, new LlBotOptions()),
+        .. DefaultsOf(RustFsOptions.SECTION_NAME, new RustFsOptions()),
+        .. DefaultsOf(MediaOptions.SECTION_NAME, new MediaOptions()),
+        .. DefaultsOf(ChatArchiveOptions.SECTION_NAME, new ChatArchiveOptions()),
+        .. DefaultsOf(LoggingOptions.SECTION_NAME, new LoggingOptions()),
+        .. DefaultsOf(WebOptions.SECTION_NAME, new WebOptions()),
+        .. DefaultsOf(RenderingOptions.SECTION_NAME, new RenderingOptions()),
+        .. DefaultsOf(PluginOptions.SECTION_NAME, new PluginOptions()),
+        .. DefaultsOf(BrowserOptions.SECTION_NAME, new BrowserOptions()),
+        .. DefaultsOf(FfmpegOptions.SECTION_NAME, new FfmpegOptions()),
+        .. DefaultsOf(RestartOptions.SECTION_NAME, new RestartOptions()),
+        .. DefaultsOf(MonitorOptions.SECTION_NAME, new MonitorOptions())
+    ];
 
     /// <summary>面板显示的全部宿主配置项，按显示顺序排列。</summary>
     public static readonly IReadOnlyList<HostConfigField> Fields =
@@ -219,10 +252,10 @@ public sealed class HostConfigEditor
         return checks;
     }
 
-    // appsettings.json 与本地配置文件合并，再叠加尚未写入的修改（整数列表不参与连接检查，不叠加）。
+    // 默认值与部署配置文件合并，再叠加尚未写入的修改（整数列表不参与连接检查，不叠加）。
     private IConfigurationRoot LoadConfiguration(IEnumerable<(HostConfigField Field, JsonNode? Value)> overrides) =>
         new ConfigurationBuilder()
-            .AddJsonFile(Path.Combine(_paths.BaseDirectory, APPSETTINGS), optional: true)
+            .AddInMemoryCollection(Defaults)
             .AddJsonFile(_paths.LocalConfigPath, optional: true)
             .AddInMemoryCollection(
                 overrides.Where(item => item.Value is not JsonArray)
@@ -324,4 +357,11 @@ public sealed class HostConfigEditor
             Kind     = HostConfigFieldKind.Secret,
             Optional = optional
         };
+
+    // 只取标量属性：数组默认值都为空，空数组在配置中本就等同于未配置。
+    private static IEnumerable<KeyValuePair<string, string?>> DefaultsOf(string section, object options) =>
+        JsonSerializer.SerializeToNode(options, options.GetType(), DefaultsJson) is JsonObject properties
+            ? properties.Where(property => property.Value is JsonValue)
+                        .Select(property => new KeyValuePair<string, string?>($"{section}:{property.Key}", property.Value?.ToString()))
+            : [];
 }
