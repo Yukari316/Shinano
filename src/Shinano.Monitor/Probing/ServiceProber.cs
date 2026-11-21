@@ -138,6 +138,7 @@ public sealed class ServiceProber : IDisposable
         builder.Pooling = false;
         await using NpgsqlConnection connection = new(builder.ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        // SQL_NEED: 监控进程不引用 SqlSugar，直接执行最简查询探测 PostgreSQL 可用性。
         await using NpgsqlCommand command = new("select 1", connection);
         await command.ExecuteScalarAsync(cancellationToken);
         return Outcome.Healthy;

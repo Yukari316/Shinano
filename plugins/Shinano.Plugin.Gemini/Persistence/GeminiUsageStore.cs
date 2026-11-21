@@ -103,6 +103,7 @@ public sealed class GeminiUsageStore
         {
             DateTimeOffset localNow = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _context.TimeZone);
             string since = localNow.Date.AddDays(-(days - 1)).ToString(DATE_FORMAT, CultureInfo.InvariantCulture);
+            // SQL_NEED: SqlSugar 无法将 string.Compare 翻译为 PostgreSQL 字符串比较条件，改用参数化原生条件比较 yyyy-MM-dd 日期。
             query = query.Where("stat_date >= @since", new { since });
         }
 
