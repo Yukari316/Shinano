@@ -116,6 +116,25 @@ public sealed class PluginRuntimeTests
     }
 
     [Fact]
+    public async Task RateLimit_PerSession_SharedBySendersOfGroup_NoSuperUserExemption()
+    {
+        await using PluginHarness harness = await StartAsync();
+        FakeMilkyServer server = harness.Server;
+        Assert.Null(await harness.Runtime.EnableAsync(PLUGIN_A, Token));
+
+        await server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "ratelimit-a");
+        await harness.ExpectReplyAsync("ok-rl");
+        // 同一群的其他人（含 Super User）共用这个群的额度。
+        await server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.SUPER_USER_ID, "member", "ratelimit-a");
+        await harness.ExpectReplyAsync("rl-a");
+
+        await server.PushGroupMessageAsync(PluginHarness.OTHER_GROUP_ID, PluginHarness.MEMBER_ID, "member", "ratelimit-a");
+        await harness.ExpectReplyAsync("ok-rl");
+        await server.PushFriendMessageAsync(PluginHarness.MEMBER_ID, "ratelimit-a");
+        await harness.ExpectReplyAsync("ok-rl");
+    }
+
+    [Fact]
     public async Task Suspend_StopsAllPlugins_AndResumeRestoresEnabledState()
     {
         await using PluginHarness harness = await StartAsync();

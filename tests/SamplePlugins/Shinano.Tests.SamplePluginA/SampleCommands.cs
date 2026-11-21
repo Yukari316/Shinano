@@ -52,4 +52,9 @@ public sealed class SampleCommands
     [Cooldown(60, Reply = "cd-a")]
     [RequirePermission(MemberRole.Admin)]
     public async ValueTask CooldownAsync(MessageReceivedEvent e) => await e.ReplyAsync("ok-a");
+
+    /// <summary>按会话限流，每个会话 60 秒内只放行一次。</summary>
+    [Command(Expressions = ["ratelimit-a"], PreventReentry = false)]
+    [RateLimit(1, 60, Scope = RateLimitScope.Session, Reply = "rl-a")]
+    public async ValueTask RateLimitAsync(MessageReceivedEvent e) => await e.ReplyAsync("ok-rl");
 }

@@ -254,6 +254,14 @@ public sealed class HelloCommands
 - 它排在 `RequirePermission` 之后，被拒绝的调用不计入冷却。
 - 耗时较长、要在完成后才开始计时的指令，可以改用 `CooldownTracker` 的 `IsCooling` 与 `Record`。
 
+**限流**：`[RateLimit(次数, 秒数)]` 限制任意连续的这段时间内最多触发几次，不区分发送者：
+
+- 默认全部来源共用一份额度；`Scope = RateLimitScope.Session` 时按会话计数，群聊按群号，私聊按对方 QQ。
+- 标在方法上，单条指令计数；标在类上，整组共享额度。
+- 设置了 `Reply` 时，额度已满时回复该文字。Super User 不豁免。
+- 它排在 `Cooldown` 之后，被拒绝的调用（包括冷却中的）不计入额度。
+- 需要在代码中判断时，使用 `RateLimitTracker` 的 `TryAcquire`。
+
 **占用消息**：
 
 - Sora 的指令默认 `BlockAfterMatch = true`：匹配后，消息不再交给后续指令与普通事件。
