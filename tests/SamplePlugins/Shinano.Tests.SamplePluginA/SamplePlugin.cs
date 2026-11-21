@@ -8,10 +8,10 @@ namespace Shinano.Tests.SamplePluginA;
 /// <summary>测试插件 A：容器注入的指令实例、事件订阅与初始化计数。</summary>
 public sealed class SamplePlugin : IShinanoPlugin
 {
-    private static int _initializeCount;
+    private static int InitializeCounter;
 
     /// <summary>InitializeAsync 被调用的次数。</summary>
-    public static int InitializeCount => Volatile.Read(ref _initializeCount);
+    public static int InitializeCount => Volatile.Read(ref InitializeCounter);
 
     /// <inheritdoc />
     public void ConfigureServices(ContainerBuilder builder) => builder.RegisterType<Greeter>().SingleInstance();
@@ -26,7 +26,7 @@ public sealed class SamplePlugin : IShinanoPlugin
     /// <inheritdoc />
     public ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref _initializeCount);
+        Interlocked.Increment(ref InitializeCounter);
         context.Events.Subscribe<MessageReceivedEvent>(async e =>
         {
             if (e.Message.Body.GetText() != "hello") return;

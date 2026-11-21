@@ -5,6 +5,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <WarningsAsErrors>nullable</WarningsAsErrors>
+        <!-- .editorconfig 中的代码风格规则默认只在 IDE 里提示，打开后 dotnet build 同样报告，命令行构建不会漏掉。 -->
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         <InvariantGlobalization>false</InvariantGlobalization>
         <!-- 宿主、监控与工具共用的发布版本，发布包文件名同样取自这里；插件版本以各自的 plugin.json 为准。 -->

@@ -8,10 +8,10 @@ public static class AdultPlaceholder
     private const string RESOURCE_NAME = "Shinano.Plugin.ImageSources.adult.jpg";
     private const string BASE64_PREFIX = "base64://";
 
-    private static readonly Lazy<string> _imageUri = new(Load);
+    private static readonly Lazy<string> LazyImageUri = new(Load);
 
     /// <summary><c>base64://</c> 形式的图片，可直接作为图片消息段发送；首次访问时读取资源，之后复用。</summary>
-    public static string ImageUri => _imageUri.Value;
+    public static string ImageUri => LazyImageUri.Value;
 
     // 资源由工程文件嵌入，缺失只可能是构建错误。
     private static string Load()

@@ -25,7 +25,7 @@ public sealed class HsoReviewIntegrationTests : IAsyncLifetime
     private const int  BYTE_BITS        = 8;
     private const byte COLOR_BLUE       = 128;
 
-    private static int _colors;
+    private static int ColorCounter;
 
     private readonly InfrastructureFixture _fixture;
     private HsoGallery?                    _gallery;
@@ -204,7 +204,7 @@ public sealed class HsoReviewIntegrationTests : IAsyncLifetime
     // 每次一种新颜色，保证内容（SHA256）不同；图库表在本次运行的各个测试间共用，计数为全局。
     private static byte[] Png()
     {
-        int color = Interlocked.Increment(ref _colors);
+        int color = Interlocked.Increment(ref ColorCounter);
         using SKBitmap bitmap = new(SIZE, SIZE);
         bitmap.Erase(new SKColor((byte)color, (byte)(color >> BYTE_BITS), COLOR_BLUE));
         using SKData data = bitmap.Encode(SKEncodedImageFormat.Png, 100);

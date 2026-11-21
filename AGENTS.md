@@ -24,6 +24,7 @@
 ## 构建、测试与运行
 
 - 构建：`dotnet build Shinano.slnx`。插件输出到 `artifacts/plugins/<工程名>/`（插件包目录布局），测试用插件输出到 `artifacts/test-plugins/`。
+- 构建打开了 `EnforceCodeStyleInBuild`，`.editorconfig` 中级别为 warning 的代码风格与命名规则在命令行构建时同样报告，可空性警告直接作为错误。交付前构建须 0 警告 0 错误，警告按待修复问题处理，不靠抑制消除；增量构建可能跳过未改动的工程，核对全部警告时用 `--no-incremental`。IDE 自身的检查（如 Rider 的代码检查）不经过构建，命令行看不到。
 - 前端：`pnpm -C web install` 后按包构建（如 `pnpm -C web --filter @shinano/panel run build`）；面板构建产物由宿主托管，插件页面构建到对应插件的 `web/`。
 - 测试：`dotnet test --project tests/Shinano.Tests`，聚焦时加 `--filter-class <完整类名>`。集成测试需要 `SHINANO_TEST_DSN` 与 `SHINANO_TEST_S3_ENDPOINT`、`SHINANO_TEST_S3_ACCESS_KEY`、`SHINANO_TEST_S3_SECRET_KEY`，未设置时跳过；调用真实图源服务的测试需要 `SHINANO_TEST_GATEWAY_TOKEN`，浏览器测试需要 `SHINANO_TEST_BROWSER_DIR`，NB2 依赖变更演练（用 uv 从 PyPI 下载）需要 `SHINANO_TEST_NB2_DIR`，只在修改相关功能时手动执行。
 - 发布包：`build/pack.ps1` 或 `build/pack.sh`，输出到 `artifacts/release/`。版本号取根目录 `Directory.Build.props` 的 `Version`；插件版本以各自的 `plugin.json` 为准，插件程序集版本在构建时取自同一字段（`plugins/Directory.Build.props`）。

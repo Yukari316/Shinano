@@ -28,7 +28,7 @@ public sealed class ImageSearchCommands
     private const int SECONDS_PER_MINUTE = 60;
     private const int IQDB_ATTEMPTS      = 2;
 
-    private static readonly TimeSpan _cooldown = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan SearchCooldown = TimeSpan.FromSeconds(20);
 
     private readonly CooldownTracker              _imageCooldown = new(TimeProvider.System);
     private readonly CooldownTracker              _animeCooldown = new(TimeProvider.System);
@@ -121,7 +121,7 @@ public sealed class ImageSearchCommands
         Func<QueryImage, Task<SearchDecision>>    search)
     {
         GroupId groupId = e.Message.SourceType == MessageSourceType.Group ? e.Message.GroupId : default;
-        if (cooldown.IsCooling(groupId, e.Message.SenderId, _cooldown))
+        if (cooldown.IsCooling(groupId, e.Message.SenderId, SearchCooldown))
         {
             await e.ReplyAsync(new MessageBody(ReplyTexts.COOLDOWN));
             return;

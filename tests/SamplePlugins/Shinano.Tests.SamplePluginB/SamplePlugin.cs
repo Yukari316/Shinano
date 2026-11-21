@@ -16,10 +16,10 @@ public sealed class SamplePlugin : IShinanoPlugin
     /// </summary>
     public const string FAIL_ONCE_FILE = "sample-b-fail-once";
 
-    private static int _initializeCount;
+    private static int InitializeCounter;
 
     /// <summary>InitializeAsync 被调用的次数。</summary>
-    public static int InitializeCount => Volatile.Read(ref _initializeCount);
+    public static int InitializeCount => Volatile.Read(ref InitializeCounter);
 
     /// <inheritdoc />
     public void ConfigureServices(ContainerBuilder builder) => builder.RegisterType<Greeter>().SingleInstance();
@@ -32,7 +32,7 @@ public sealed class SamplePlugin : IShinanoPlugin
     /// <inheritdoc />
     public ValueTask InitializeAsync(IPluginInitializationContext context, CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref _initializeCount);
+        Interlocked.Increment(ref InitializeCounter);
         context.Panel.UsePage("样例页面", "index.js");
         context.Panel.MapApi(api => api.MapGet("/ping", () => "pong-b"));
         context.Events.Subscribe<MessageReceivedEvent>(async e =>
