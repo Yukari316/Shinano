@@ -248,6 +248,13 @@ onMounted(async () => {
             {{ range.label }}
           </button>
         </div>
+        <button
+          v-if="usage && (usage.byModel.length > 0 || usage.daily.length > 0)"
+          class="btn btn-xs"
+          @click="usageDetailModal = usage.byModel.length > 0 ? 'model' : 'daily'"
+        >
+          查看明细
+        </button>
         <button class="btn btn-ghost btn-xs btn-square" aria-label="刷新用量统计" :disabled="usageLoading" @click="loadUsage()">
           <PhArrowsClockwise class="size-4" :class="{ 'animate-spin': usageLoading }" />
         </button>
@@ -276,15 +283,6 @@ onMounted(async () => {
           <div class="stat-value text-2xl tabular-nums">{{ formatRate(usage.totals.cacheHitRate, usage.totals.promptTokens) }}</div>
           <div class="stat-desc tabular-nums">命中 {{ formatNumber(usage.totals.cachedTokens) }} / 输入 {{ formatNumber(usage.totals.promptTokens) }}</div>
         </div>
-      </div>
-
-      <div v-if="usage && (usage.byModel.length > 0 || usage.daily.length > 0)" class="flex flex-wrap items-center gap-2">
-        <button v-if="usage.byModel.length > 0" class="btn btn-sm" @click="usageDetailModal = 'model'">
-          按模型明细（{{ usage.byModel.length }}）
-        </button>
-        <button v-if="usage.daily.length > 0" class="btn btn-sm" @click="usageDetailModal = 'daily'">
-          按日明细（{{ usage.daily.length }}）
-        </button>
       </div>
     </section>
 
