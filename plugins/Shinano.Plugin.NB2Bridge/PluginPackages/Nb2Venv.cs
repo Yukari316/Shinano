@@ -442,7 +442,7 @@ public sealed partial class Nb2Venv
 
         if (exitCode == 0) return null;
 
-        string failed = output.Split('\n').FirstOrDefault(line => line.StartsWith(PROBE_MARKER, StringComparison.Ordinal))?[PROBE_MARKER.Length..].Trim()
+        string failed = output.Split('\n').FirstOrDefault(line => line.StartsWith(PROBE_MARKER, StringComparison.Ordinal))?[PROBE_MARKER.Length..]?.Trim()
                         ?? "（未输出结果）";
         return Failure($"试加载插件失败，加载失败的模块：{failed}", output);
     }
