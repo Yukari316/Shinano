@@ -46,6 +46,7 @@ public sealed class GeminiPanelApi
             (string kind, CancellationToken cancellationToken) => GeminiPanelEndpoints.CandidatesAsync(_bot, _scope, kind, cancellationToken));
         routes.MapGet("/model", () => GeminiPanelEndpoints.GetModelSettings(_modelSettings, _secrets));
         routes.MapPut("/model", (GeminiModelSettingsUpdate update) => GeminiPanelEndpoints.SaveModelSettingsAsync(_modelSettings, _secrets, update));
+        routes.MapPut("/system-prompt", (GeminiSystemPromptUpdate update) => GeminiPanelEndpoints.SaveSystemPromptAsync(_modelSettings, _secrets, update));
         routes.MapGet("/models", (CancellationToken cancellationToken) => GeminiPanelEndpoints.ListModelsAsync(_api, _config, _secrets, cancellationToken));
         routes.MapGet("/usage", (int? days) => GeminiPanelEndpoints.UsageAsync(_usage, days));
     }

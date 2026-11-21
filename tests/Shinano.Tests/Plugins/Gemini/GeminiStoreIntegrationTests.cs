@@ -90,6 +90,7 @@ public sealed class GeminiStoreIntegrationTests
         Assert.Equal("medium", store.Current.Effort);
 
         await store.SaveAsync("gemini-4-neon", "high");
+        await store.SaveSystemPromptAsync("第一行规则\n第二行规则");
         await store.SaveAsync("gemini-3.8-flash", "low");
 
         GeminiModelSettingsStore reloaded = new(context, NullLogger<GeminiModelSettingsStore>.Instance);
@@ -97,6 +98,7 @@ public sealed class GeminiStoreIntegrationTests
 
         Assert.Equal("gemini-3.8-flash", reloaded.Current.Model);
         Assert.Equal("low", reloaded.Current.Effort);
+        Assert.Equal("第一行规则\n第二行规则", reloaded.Current.SystemPrompt);
     }
 
     [Fact]
@@ -191,6 +193,16 @@ public sealed class GeminiStoreIntegrationTests
         JsonObject? savedModel = await saveModel.Content.ReadFromJsonAsync<JsonObject>(ct);
         // gemini-4-carbon 不支持 xhigh，自动校正为 medium。
         Assert.Equal("medium", savedModel?["effort"]?.GetValue<string>());
+
+        // 保存多行系统提示词，验证写入且不影响模型配置。
+        HttpResponseMessage savePrompt = await client.PutAsJsonAsync(
+            "/api/plugin-api/gemini/system-prompt",
+            new JsonObject { ["systemPrompt"] = "规则一\n规则二" },
+            ct);
+        Assert.Equal(HttpStatusCode.OK, savePrompt.StatusCode);
+        JsonObject? promptView = await savePrompt.Content.ReadFromJsonAsync<JsonObject>(ct);
+        Assert.Equal("规则一\n规则二", promptView?["systemPrompt"]?.GetValue<string>());
+        Assert.Equal("gemini-4-carbon", promptView?["model"]?.GetValue<string>());
 
         HttpResponseMessage saveScope = await client.PutAsJsonAsync(
             "/api/plugin-api/gemini/scope/group",

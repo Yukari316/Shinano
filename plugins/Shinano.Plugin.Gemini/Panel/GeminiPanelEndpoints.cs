@@ -56,23 +56,8 @@ internal static class GeminiPanelEndpoints
     }
 
     /// <summary>读取当前模型与思考深度配置。</summary>
-    internal static IResult GetModelSettings(GeminiModelSettingsStore store, IPluginSecrets<GeminiSecrets> secrets)
-    {
-        GeminiModelSettingsRecord current = store.Current;
-        string model = GeminiModelCapabilities.NormalizeModelId(current.Model);
-        if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
-        IReadOnlyList<string> allowed = GeminiModelCapabilities.GetAllowedEfforts(model);
-        string effort = GeminiModelCapabilities.NormalizeEffort(model, current.Effort);
-
-        return Results.Ok(
-            new GeminiModelSettingsView
-            {
-                Model          = model,
-                Effort         = effort,
-                AllowedEfforts = allowed,
-                HasApiKey      = !string.IsNullOrWhiteSpace(secrets.Value.ApiKey)
-            });
-    }
+    internal static IResult GetModelSettings(GeminiModelSettingsStore store, IPluginSecrets<GeminiSecrets> secrets) =>
+        Results.Ok(BuildModelSettingsView(store.Current, secrets, thinking: null));
 
     /// <summary>保存模型与思考深度配置，保存后立即生效。</summary>
     internal static async Task<IResult> SaveModelSettingsAsync(
@@ -89,14 +74,41 @@ internal static class GeminiPanelEndpoints
         string effort = GeminiModelCapabilities.NormalizeEffort(model, update.Effort, update.Thinking);
         await store.SaveAsync(model, effort);
 
-        return Results.Ok(
-            new GeminiModelSettingsView
-            {
-                Model          = model,
-                Effort         = effort,
-                AllowedEfforts = GeminiModelCapabilities.GetAllowedEfforts(model, update.Thinking),
-                HasApiKey      = !string.IsNullOrWhiteSpace(secrets.Value.ApiKey)
-            });
+        return Results.Ok(BuildModelSettingsView(store.Current, secrets, update.Thinking));
+    }
+
+    /// <summary>保存多行系统提示词，保存后立即生效。</summary>
+    internal static async Task<IResult> SaveSystemPromptAsync(
+        GeminiModelSettingsStore      store,
+        IPluginSecrets<GeminiSecrets> secrets,
+        GeminiSystemPromptUpdate      update)
+    {
+        string normalized = (update.SystemPrompt ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Trim();
+        if (normalized.Length > 8000)
+            return Results.BadRequest(new { error = "系统提示词不能超过 8000 字" });
+
+        await store.SaveSystemPromptAsync(normalized);
+        return Results.Ok(BuildModelSettingsView(store.Current, secrets, thinking: null));
+    }
+
+    private static GeminiModelSettingsView BuildModelSettingsView(
+        GeminiModelSettingsRecord     current,
+        IPluginSecrets<GeminiSecrets> secrets,
+        bool?                         thinking)
+    {
+        string model = GeminiModelCapabilities.NormalizeModelId(current.Model);
+        if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
+        IReadOnlyList<string> allowed = GeminiModelCapabilities.GetAllowedEfforts(model, thinking);
+        string effort = GeminiModelCapabilities.NormalizeEffort(model, current.Effort, thinking);
+
+        return new GeminiModelSettingsView
+        {
+            Model          = model,
+            Effort         = effort,
+            AllowedEfforts = allowed,
+            HasApiKey      = !string.IsNullOrWhiteSpace(secrets.Value.ApiKey),
+            SystemPrompt   = current.SystemPrompt ?? string.Empty
+        };
     }
 
     /// <summary>经配置中的 Base URL 与代理调用 Gemini API 拉取可用模型列表。</summary>

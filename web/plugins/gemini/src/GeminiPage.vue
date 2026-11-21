@@ -27,6 +27,7 @@ const EFFORT_LABELS: Record<string, string> = {
   xhigh: 'XHigh（极高）'
 }
 
+const SYSTEM_PROMPT_MAX_LENGTH = 8000
 const error = ref('')
 const notice = ref('')
 const usageDays = ref(30)
@@ -40,6 +41,9 @@ const modelFilter = ref('')
 const models = ref<ModelOption[]>([])
 const modelsLoading = ref(false)
 const modelSaving = ref(false)
+const promptModalOpen = ref(false)
+const promptDraft = ref('')
+const promptSaving = ref(false)
 
 const scopes = ref<Scopes | null>(null)
 const scopeEditing = ref<ScopeKind | null>(null)
@@ -175,6 +179,40 @@ async function saveModel() {
     selectedEffort.value = result.body.effort
     notice.value = '模型与思考深度已保存，立即生效'
   }
+}
+
+function openSystemPromptModal() {
+  error.value = ''
+  notice.value = ''
+  promptDraft.value = modelSettings.value?.systemPrompt ?? ''
+  promptModalOpen.value = true
+}
+
+async function saveSystemPrompt() {
+  error.value = ''
+  notice.value = ''
+  if (promptDraft.value.trim().length > SYSTEM_PROMPT_MAX_LENGTH) {
+    error.value = `系统提示词不能超过 ${SYSTEM_PROMPT_MAX_LENGTH} 字`
+    return
+  }
+  promptSaving.value = true
+  const result = await call<ModelSettings>('/system-prompt', jsonBody('PUT', {
+    systemPrompt: promptDraft.value
+  }))
+  promptSaving.value = false
+  if (result.ok && result.body) {
+    modelSettings.value = result.body
+    promptModalOpen.value = false
+    notice.value = result.body.systemPrompt ? '系统提示词已保存，立即生效' : '系统提示词已清空，立即生效'
+  }
+}
+
+function describeSystemPrompt(): string {
+  const prompt = modelSettings.value?.systemPrompt ?? ''
+  if (!prompt) return '未设置'
+  const firstLine = prompt.split('\n').find((line) => line.trim().length > 0)?.trim() ?? ''
+  const preview = firstLine.length > 36 ? `${firstLine.slice(0, 36)}…` : firstLine
+  return `已设置（${prompt.length} 字）· ${preview}`
 }
 
 async function refreshScopes() {
@@ -376,6 +414,14 @@ onBeforeUnmount(() => {
           当前生效：{{ modelSettings.model }}{{ modelSettings.effort ? ` · ${modelSettings.effort}` : '' }}
         </span>
       </div>
+
+      <div class="flex flex-wrap items-center gap-3 rounded-box bg-base-200 px-4 py-3 text-sm">
+        <span class="font-medium">系统提示词</span>
+        <span class="min-w-0 flex-1 truncate opacity-70">{{ describeSystemPrompt() }}</span>
+        <button class="btn btn-ghost btn-xs ml-auto" @click="openSystemPromptModal">
+          <PhPencilSimple class="size-4" />编辑
+        </button>
+      </div>
     </section>
 
     <section class="flex flex-col gap-3">
@@ -539,6 +585,44 @@ onBeforeUnmount(() => {
 
           <footer class="flex items-center justify-end gap-2">
             <button class="btn btn-sm" @click="usageDetailModal = null">关闭</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="promptModalOpen"
+        class="modal modal-open"
+        role="dialog"
+        aria-labelledby="gemini-prompt-modal-title"
+        @click.self="promptModalOpen = false"
+      >
+        <div class="modal-box flex max-h-[85vh] w-11/12 max-w-2xl flex-col gap-3">
+          <header class="flex items-center gap-2">
+            <h3 id="gemini-prompt-modal-title" class="text-lg font-semibold">编辑系统提示词</h3>
+            <button class="btn btn-ghost btn-sm btn-square ml-auto" aria-label="关闭" @click="promptModalOpen = false">
+              <PhX class="size-4" />
+            </button>
+          </header>
+          <p class="text-xs opacity-70">每次对话请求都会附带此 System Instruction（支持多行文本）；留空保存则不发送。</p>
+          <textarea
+            v-model="promptDraft"
+            class="textarea w-full min-h-64 flex-1 font-mono text-sm leading-6"
+            rows="12"
+            :maxlength="SYSTEM_PROMPT_MAX_LENGTH"
+            placeholder="例如：你是一个严谨的技术助手，请始终使用简体中文回答……"
+            aria-label="系统提示词"
+          />
+          <footer class="flex items-center gap-2">
+            <span class="text-xs opacity-60 tabular-nums">{{ promptDraft.trim().length }} / {{ SYSTEM_PROMPT_MAX_LENGTH }} 字</span>
+            <button class="btn btn-ghost btn-sm ml-auto" :disabled="promptSaving || promptDraft.length === 0" @click="promptDraft = ''">
+              清空
+            </button>
+            <button class="btn btn-ghost btn-sm" :disabled="promptSaving" @click="promptModalOpen = false">取消</button>
+            <button class="btn btn-primary btn-sm" :disabled="promptSaving" @click="saveSystemPrompt">
+              <span v-if="promptSaving" class="loading loading-spinner loading-xs"></span>保存
+            </button>
           </footer>
         </div>
       </div>

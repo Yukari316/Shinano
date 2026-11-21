@@ -170,7 +170,7 @@ public sealed class GeminiMessageHandler
                 ApiKey             = apiKey,
                 Model              = model,
                 Effort             = effort,
-                SystemPrompt       = config.SystemPrompt,
+                SystemPrompt       = settings.SystemPrompt ?? string.Empty,
                 IncludeThoughts    = config.IncludeThoughts,
                 EnableGoogleSearch = config.EnableGoogleSearch,
                 MaxSearchSources   = config.MaxSearchSources,

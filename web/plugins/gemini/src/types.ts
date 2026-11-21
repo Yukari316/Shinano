@@ -19,6 +19,7 @@ export interface ModelSettings {
   effort: string
   allowedEfforts: string[]
   hasApiKey: boolean
+  systemPrompt: string
 }
 
 export interface ModelOption {

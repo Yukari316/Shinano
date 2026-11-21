@@ -30,21 +30,23 @@ public sealed class GeminiModelSettingsStore
         Database.CodeFirst.InitTables<GeminiModelSettingsRecord>();
         GeminiModelSettingsRecord? existing = await Database.Queryable<GeminiModelSettingsRecord>()
                                                             .FirstAsync(record => record.Id == GeminiModelSettingsRecord.SINGLETON_ID);
+        if (existing is not null) existing.SystemPrompt ??= string.Empty;
         _current = existing ?? new GeminiModelSettingsRecord();
     }
 
-    /// <summary>保存新的模型与思考深度配置并立即生效。</summary>
+    /// <summary>保存新的模型与思考深度配置（保留现有系统提示词）并立即生效。</summary>
     public async Task SaveAsync(string model, string effort)
     {
-        GeminiModelSettingsRecord record = new()
-        {
-            Id     = GeminiModelSettingsRecord.SINGLETON_ID,
-            Model  = model,
-            Effort = effort
-        };
         await _saving.WaitAsync();
         try
         {
+            GeminiModelSettingsRecord record = new()
+            {
+                Id           = GeminiModelSettingsRecord.SINGLETON_ID,
+                Model        = model,
+                Effort       = effort,
+                SystemPrompt = _current.SystemPrompt ?? string.Empty
+            };
             await Database.Storageable(record).ExecuteCommandAsync();
             _current = record;
         }
@@ -54,5 +56,29 @@ public sealed class GeminiModelSettingsStore
         }
 
         _logger.LogInformation("面板修改 Gemini 模型配置：model={Model}，effort={Effort}", model, effort.Length == 0 ? "（禁用）" : effort);
+    }
+
+    /// <summary>保存系统提示词（保留现有模型与思考深度）并立即生效。</summary>
+    public async Task SaveSystemPromptAsync(string systemPrompt)
+    {
+        await _saving.WaitAsync();
+        try
+        {
+            GeminiModelSettingsRecord record = new()
+            {
+                Id           = GeminiModelSettingsRecord.SINGLETON_ID,
+                Model        = _current.Model,
+                Effort       = _current.Effort,
+                SystemPrompt = systemPrompt
+            };
+            await Database.Storageable(record).ExecuteCommandAsync();
+            _current = record;
+        }
+        finally
+        {
+            _saving.Release();
+        }
+
+        _logger.LogInformation("面板修改 Gemini 系统提示词：长度 {Length} 字", systemPrompt.Length);
     }
 }

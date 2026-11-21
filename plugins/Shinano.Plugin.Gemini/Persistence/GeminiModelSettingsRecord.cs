@@ -20,4 +20,8 @@ public sealed class GeminiModelSettingsRecord
     /// <summary>思考深度（<c>default</c>、<c>minimal</c>、<c>low</c>、<c>medium</c>、<c>high</c>、<c>xhigh</c> 或空字符串表示禁用）。</summary>
     [SugarColumn(ColumnName = "effort", Length = 32)]
     public string Effort { get; set; } = "medium";
+
+    /// <summary>可选多行系统提示词（System Instruction）；留空时不发送。</summary>
+    [SugarColumn(ColumnName = "system_prompt", ColumnDataType = "text", IsNullable = true)]
+    public string? SystemPrompt { get; set; } = string.Empty;
 }

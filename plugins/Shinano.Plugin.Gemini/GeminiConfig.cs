@@ -37,26 +37,21 @@ public sealed class GeminiConfig
     [StringLength(512, ErrorMessage = "代理地址过长")]
     public string ProxyUrl { get; set; } = string.Empty;
 
-    /// <summary>可选系统提示词。</summary>
-    [Display(Name = "系统提示词（可选）", Description = "每次请求附带的 System Instruction；留空时不发送", Order = 7)]
-    [StringLength(8000, ErrorMessage = "系统提示词不能超过 8000 字")]
-    public string SystemPrompt { get; set; } = string.Empty;
-
     /// <summary>是否在回复卡片顶部展示模型的思考摘要。</summary>
-    [Display(Name = "显示思考摘要", Description = "开启后请求模型返回思考摘要，并显示在长文卡片正文顶部（默认关闭）", Order = 8)]
+    [Display(Name = "显示思考摘要", Description = "开启后请求模型返回思考摘要，并显示在长文卡片正文顶部（默认关闭）", Order = 7)]
     public bool IncludeThoughts { get; set; }
 
     /// <summary>是否启用 Google Search 联网搜索工具。</summary>
-    [Display(Name = "启用 Google Search 联网搜索", Description = "开启后允许模型调用 Google Search Grounding 检索最新信息（默认关闭）", Order = 9)]
+    [Display(Name = "启用 Google Search 联网搜索", Description = "开启后允许模型调用 Google Search Grounding 检索最新信息（默认关闭）", Order = 8)]
     public bool EnableGoogleSearch { get; set; }
 
     /// <summary>联网搜索在回复末尾最多列出的参考来源条数。</summary>
-    [Display(Name = "联网搜索引用条数上限", Description = "启用联网搜索且返回来源时，在卡片末尾最多显示的去重参考来源数", Order = 10)]
+    [Display(Name = "联网搜索引用条数上限", Description = "启用联网搜索且返回来源时，在卡片末尾最多显示的去重参考来源数", Order = 9)]
     [Range(1, 20, ErrorMessage = "引用条数上限必须在 1 到 20 之间")]
     public int MaxSearchSources { get; set; } = 5;
 
     /// <summary>单次 Gemini API 请求超时秒数。</summary>
-    [Display(Name = "请求超时（秒）", Description = "等待 Gemini 生成回复的最长秒数", Order = 11)]
+    [Display(Name = "请求超时（秒）", Description = "等待 Gemini 生成回复的最长秒数", Order = 10)]
     [Range(10, 600, ErrorMessage = "请求超时必须在 10 到 600 秒之间")]
     public int TimeoutSeconds { get; set; } = 120;
 }

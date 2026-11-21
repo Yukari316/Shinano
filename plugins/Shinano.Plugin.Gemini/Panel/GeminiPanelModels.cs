@@ -48,6 +48,16 @@ public sealed class GeminiModelSettingsView
 
     /// <summary>是否已配置 Gemini API Key。</summary>
     public required bool HasApiKey { get; init; }
+
+    /// <summary>当前生效的系统提示词。</summary>
+    public string SystemPrompt { get; init; } = string.Empty;
+}
+
+/// <summary>保存系统提示词的请求体。</summary>
+public sealed class GeminiSystemPromptUpdate
+{
+    /// <summary>系统提示词内容；为空表示清除。</summary>
+    public string? SystemPrompt { get; init; }
 }
 
 /// <summary>保存模型与思考深度的请求体。</summary>
