@@ -14,6 +14,10 @@ public static class SupervisorPolicy
     /// <summary>连续多少次重启都没能就绪后放弃，避免宿主每次启动都请求重启时无限循环。</summary>
     public const int MAX_RESTARTS_WITHOUT_READY = 3;
 
+    /// <summary>首次启动宿主时的看护决定：存在未应用的重启计划时，未在时限内就绪同样触发结束并再拉起以还原。</summary>
+    public static SupervisorDecision InitialWatch(bool planPending) =>
+        planPending ? SupervisorDecision.RestartAndRetryIfNotReady : SupervisorDecision.RestartAndReport;
+
     /// <summary>宿主退出后的决定。</summary>
     /// <param name="exitCode">宿主退出码。</param>
     /// <param name="stopRequested">管理员是否已要求停止。</param>

@@ -17,6 +17,7 @@ public sealed class SystemdServiceManager : IServiceManager
     private const string LOAD_STATE        = "LoadState";
     private const string ACTIVE_STATE      = "ActiveState";
     private const string EXEC_START        = "ExecStart";
+    private const string USER_PROPERTY     = "User";
     private const string LOADED            = "loaded";
     private const string ACTIVE            = "active";
     private const string INACTIVE          = "inactive";
@@ -91,7 +92,7 @@ public sealed class SystemdServiceManager : IServiceManager
     {
         (int exitCode, string output) = CommandRunner.Capture(
             SYSTEMCTL,
-            ["show", name, $"--property={LOAD_STATE},{ACTIVE_STATE},{EXEC_START}"]);
+            ["show", name, $"--property={LOAD_STATE},{ACTIVE_STATE},{EXEC_START},{USER_PROPERTY}"]);
         Dictionary<string, string> properties = new(StringComparer.Ordinal);
         foreach (string line in output.Split('\n'))
         {
@@ -100,11 +101,13 @@ public sealed class SystemdServiceManager : IServiceManager
         }
 
         bool exists = exitCode == 0 && properties.GetValueOrDefault(LOAD_STATE) == LOADED;
+        string? user = exists && properties.TryGetValue(USER_PROPERTY, out string? rawUser) && rawUser.Length > 0 ? rawUser : null;
         return new ServiceStatus
         {
             Exists     = exists,
             Running    = exists && properties.GetValueOrDefault(ACTIVE_STATE) == ACTIVE,
-            Executable = exists ? ExecutablePath(properties.GetValueOrDefault(EXEC_START)) : null
+            Executable = exists ? ExecutablePath(properties.GetValueOrDefault(EXEC_START)) : null,
+            User       = user
         };
     }
 

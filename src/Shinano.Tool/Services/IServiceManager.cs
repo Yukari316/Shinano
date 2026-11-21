@@ -42,4 +42,7 @@ public sealed class ServiceStatus
 
     /// <summary>服务的可执行文件；不存在或无法读取时为 null。</summary>
     public string? Executable { get; init; }
+
+    /// <summary>Linux systemd 服务的运行用户（unit 中的 <c>User=</c>）；未配置、Windows 或无法读取时为 null。</summary>
+    public string? User { get; init; }
 }

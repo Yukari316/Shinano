@@ -57,6 +57,8 @@ public sealed class ToolCommandLineTests
     [Fact]
     public void SupervisorPolicy_RestartsOnlyOnRestartExitCode()
     {
+        Assert.Equal(SupervisorDecision.RestartAndRetryIfNotReady, SupervisorPolicy.InitialWatch(planPending: true));
+        Assert.Equal(SupervisorDecision.RestartAndReport, SupervisorPolicy.InitialWatch(planPending: false));
         Assert.Equal(SupervisorDecision.Stop, SupervisorPolicy.AfterExit(HostContract.RESTART_EXIT_CODE, true, false, true, 0));
         Assert.Equal(SupervisorDecision.RestartAndRetryIfNotReady, SupervisorPolicy.AfterExit(HostContract.RESTART_EXIT_CODE, false, false, true, 0));
         Assert.Equal(SupervisorDecision.RestartAndReport, SupervisorPolicy.AfterExit(HostContract.RESTART_EXIT_CODE, false, false, false, 0));

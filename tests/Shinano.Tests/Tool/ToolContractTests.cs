@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shinano.Host.Bot;
 using Shinano.Host.Configuration;
 using Shinano.Host.Panel;
@@ -8,9 +10,11 @@ using Shinano.Host.Plugins.Staging;
 using Shinano.Host.Restart;
 using Shinano.Host.Web;
 using Shinano.Infrastructure.Database;
+using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Storage;
 using Shinano.Monitor.Web;
+using Shinano.Tests.Host;
 using Shinano.Tests.Host.Restart;
 using Shinano.Tool.Cli;
 using Shinano.Tool.Configuration;
@@ -128,10 +132,13 @@ public sealed class ToolContractTests : IDisposable
     }
 
     [Fact]
-    public void StagedUpgrade_IsReadByHostStaging()
+    public void StagedUpgrade_IsAppliedByHostRestartCoordinator_AndResultIsReadByTool()
     {
         using PackageFixture fixture = new();
-        fixture.Install("sample-a", "sample-a", "1.0.0");
+        string installedDir = fixture.Install("CustomDir", "sample-a", "1.0.0");
+        fixture.Install("sample-b", "sample-b", "1.0.0");
+        fixture.CreateStaging().StageRemoval("sample-b", purgeData: true);
+
         string bundled = Path.Combine(_directory, "bundled");
         Directory.CreateDirectory(bundled);
         using (Stream zip = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.1.0")))
@@ -139,47 +146,122 @@ public sealed class ToolContractTests : IDisposable
             zip.CopyTo(file);
 
         DeploymentState state = new() { BundledPlugins = ["sample-a"] };
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        BundledUpgradeResult upgradeResult = BundledPluginSync.Upgrade(
+            PluginPackages.ReadBundled(bundled),
+            fixture.Settings.PluginRoot,
+            fixture.DataDirectory,
+            state,
+            new ToolLog(Path.Combine(_directory, "tool.log"), null),
+            now);
+
+        Assert.Equal(now, upgradeResult.PlanCreatedAt);
+        Assert.True(RestartPlanFile.Exists(fixture.DataDirectory));
+
+        // 宿主首次启动直接消费工具写入的 restart/plan.json，只替换 sample-a，保留手动暂存的 sample-b。
+        RestartCoordinator coordinator = CreateCoordinator(fixture);
+        coordinator.PrepareStartup();
+        Assert.Equal("1.1.0", Shinano.Host.Plugins.PluginManifest.Read(Path.Combine(installedDir, "plugin.json")).Version);
+        Assert.True(coordinator.OnPluginsLoaded(new Dictionary<string, string?> { ["sample-a"] = null, ["sample-b"] = null }));
+
+        PendingPluginChange remaining = Assert.Single(fixture.CreateStaging().Pending());
+        Assert.Equal("sample-b", remaining.Change.PluginId);
+        Assert.True(remaining.Change.PurgeData);
+
+        // 工具可读回宿主写入的 restart/result.json。
+        ToolRestartResult? toolResult = RestartPlanFile.ReadResult(fixture.DataDirectory);
+        Assert.NotNull(toolResult);
+        Assert.Equal(ToolRestartOutcome.Succeeded, toolResult.Outcome);
+        Assert.Single(toolResult.Changes);
+        Assert.Equal(("sample-a", "1.0.0", "1.1.0"), (toolResult.Changes[0].PluginId, toolResult.Changes[0].FromVersion, toolResult.Changes[0].ToVersion));
+    }
+
+    // 随包插件升级如果未通过宿主加载验证，下一次启动自动回滚，工具读回的结果为 RolledBack。
+    [Fact]
+    public void StagedUpgrade_LoadFailureRollsBack_AndToolDetectsRollback()
+    {
+        using PackageFixture fixture = new();
+        string installedDir = fixture.Install("sample-a", "sample-a", "1.0.0");
+        string bundled = Path.Combine(_directory, "bundled-rollback");
+        Directory.CreateDirectory(bundled);
+        using (Stream zip = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.1.0")))
+        using (FileStream file = File.Create(Path.Combine(bundled, "sample-a.zip")))
+            zip.CopyTo(file);
+
+        DeploymentState state = new() { BundledPlugins = ["sample-a"] };
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         BundledPluginSync.Upgrade(
             PluginPackages.ReadBundled(bundled),
             fixture.Settings.PluginRoot,
             fixture.DataDirectory,
             state,
             new ToolLog(Path.Combine(_directory, "tool.log"), null),
-            DateTimeOffset.UtcNow);
+            now);
 
-        PendingPluginChange change = Assert.Single(fixture.CreateStaging().Pending());
-        Assert.Equal(PluginChangeKind.Upgrade, change.Change.Kind);
-        Assert.Equal(("sample-a", "1.0.0", "1.1.0"), (change.Change.PluginId, change.Change.FromVersion, change.Change.ToVersion));
-        Assert.True(File.Exists(Path.Combine(fixture.CreateStaging().PackageDirectory("sample-a"), "plugin.json")));
-    }
+        try
+        {
+            RestartCoordinator first = CreateCoordinator(fixture);
+            first.PrepareStartup();
+            Assert.Equal("1.1.0", Shinano.Host.Plugins.PluginManifest.Read(Path.Combine(installedDir, "plugin.json")).Version);
+            Assert.False(first.OnPluginsLoaded(new Dictionary<string, string?> { ["sample-a"] = "程序集加载失败" }));
 
-    // 工具整体重写 pending.json，不能丢掉宿主写入的其他项的字段。
-    [Fact]
-    public void StagedUpgrade_KeepsOtherChangesPurgeFlag()
-    {
-        using PackageFixture fixture = new();
-        fixture.Install("sample-a", "sample-a", "1.0.0");
-        fixture.Install("sample-b", "sample-b", "1.0.0");
-        fixture.CreateStaging().StageRemoval("sample-b", purgeData: true);
-        string bundled = Path.Combine(_directory, "bundled");
-        Directory.CreateDirectory(bundled);
-        using (Stream zip = PackageFixture.Zip(PackageFixture.Package("sample-a", "1.1.0")))
-        using (FileStream file = File.Create(Path.Combine(bundled, "sample-a.zip")))
-            zip.CopyTo(file);
+            RestartCoordinator second = CreateCoordinator(fixture);
+            second.PrepareStartup();
+            Assert.Equal("1.0.0", Shinano.Host.Plugins.PluginManifest.Read(Path.Combine(installedDir, "plugin.json")).Version);
 
-        BundledPluginSync.Upgrade(
-            PluginPackages.ReadBundled(bundled),
-            fixture.Settings.PluginRoot,
-            fixture.DataDirectory,
-            new DeploymentState { BundledPlugins = ["sample-a"] },
-            new ToolLog(Path.Combine(_directory, "tool.log"), null),
-            DateTimeOffset.UtcNow);
-
-        PendingPluginChange removal = Assert.Single(fixture.CreateStaging().Pending(), item => item.Change.PluginId == "sample-b");
-        Assert.True(removal.Change.PurgeData);
+            ToolRestartResult? toolResult = RestartPlanFile.ReadResult(fixture.DataDirectory);
+            Assert.NotNull(toolResult);
+            Assert.Equal(ToolRestartOutcome.RolledBack, toolResult.Outcome);
+            Assert.Contains("程序集加载失败", toolResult.Reason);
+            Assert.False(UpgradeCommand.ReportRestartOutcome(fixture.DataDirectory, now, new ToolLog(Path.Combine(_directory, "tool.log"), null)));
+        }
+        finally
+        {
+            Environment.ExitCode = 0;
+        }
     }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private static T Bind<T>(IConfiguration root, string section) where T : new() => root.GetSection(section).Get<T>() ?? new T();
+
+    private static RestartCoordinator CreateCoordinator(PackageFixture fixture)
+    {
+        DeploymentPaths paths = new()
+        {
+            BaseDirectory = fixture.DataDirectory,
+            DataDirectory = fixture.DataDirectory
+        };
+        RuntimeHealth health = new(TimeProvider.System);
+        return new RestartCoordinator(
+            paths,
+            new RestartOptions { KeepBackup = true },
+            fixture.Settings,
+            fixture.CreateStaging(),
+            fixture.CreatePurger(),
+            new NoOpLifetime(),
+            null,
+            new SuperUserNotifier(
+                new BotAccessor(new LlBotOptions(), new DeploymentOptions()),
+                new DeploymentOptions(),
+                TestRendering.Images,
+                TimeProvider.System,
+                NullLogger<SuperUserNotifier>.Instance),
+            health,
+            TimeProvider.System,
+            NullLogger<RestartCoordinator>.Instance);
+    }
+
+    private sealed class NoOpLifetime : IHostApplicationLifetime
+    {
+        public CancellationToken ApplicationStarted => CancellationToken.None;
+
+        public CancellationToken ApplicationStopping => CancellationToken.None;
+
+        public CancellationToken ApplicationStopped => CancellationToken.None;
+
+        public void StopApplication()
+        {
+        }
+    }
 }

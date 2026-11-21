@@ -50,7 +50,8 @@ public static class Supervisor
         using PosixSignalRegistration quit = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, OnSignal);
         using PosixSignalRegistration terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, OnSignal);
 
-        SupervisorDecision watch = SupervisorDecision.RestartAndReport;
+        SupervisorDecision watch = SupervisorPolicy.InitialWatch(
+            File.Exists(Path.Combine(layout.DataDirectory, HostContract.RESTART_PLAN_PATH)));
         int restartsWithoutReady = 0;
         while (true)
         {

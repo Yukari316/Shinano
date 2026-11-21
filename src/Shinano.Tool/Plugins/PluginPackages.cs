@@ -84,10 +84,10 @@ public static class PluginPackages
     }
 
     /// <summary>
-    /// <paramref name="candidate" /> 是否比 <paramref name="installed" /> 新；任一版本不是 <c>主.次[.修订]</c> 形式时为 null。
+    /// <paramref name="candidate" /> 是否比 <paramref name="installed" /> 新（按 SemVer 2.0 比较）；任一版本无法解析时为 null。
     /// </summary>
     public static bool? IsNewer(string candidate, string installed) =>
-        Version.TryParse(candidate, out Version? next) && Version.TryParse(installed, out Version? current) ? next > current : null;
+        SemanticVersion.Compare(candidate, installed) is { } comparison ? comparison > 0 : null;
 
     private static PluginManifest ReadArchiveManifest(string archivePath)
     {

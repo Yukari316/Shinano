@@ -24,6 +24,9 @@ public static class HostContract
     /// </summary>
     public const string RESTART_PLAN_PATH = "restart/plan.json";
 
+    /// <summary>宿主完成插件包变更重启后写入的结果文件，相对部署数据目录。</summary>
+    public const string RESTART_RESULT_PATH = "restart/result.json";
+
     /// <summary>表示启动流程已结束的阶段；故障模式与插件包无关，不触发再启动。</summary>
     public static readonly IReadOnlyList<string> FinishedPhases = ["Ready", "FaultMode"];
 }
