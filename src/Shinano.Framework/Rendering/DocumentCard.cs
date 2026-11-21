@@ -1,8 +1,8 @@
 namespace Shinano.Framework.Rendering;
 
 /// <summary>
-/// 文档卡片：把 Markdown 渲染为图片，没有标题块。支持 CommonMark 与 GFM 表格、删除线、任务列表；
-/// HTML 与公式原样显示为文本；代码块不做语法高亮。
+/// 文档卡片：把 Markdown 渲染为图片，没有标题块。支持 CommonMark、GFM（表格、删除线、任务列表）、
+/// 终末地暗色代码块语法高亮与行内/块级 LaTeX 数学公式；HTML 原样显示为文本，单条公式失败回退为文本。
 /// </summary>
 public sealed class DocumentCard
 {

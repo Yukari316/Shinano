@@ -1,4 +1,6 @@
 using Shinano.Framework.Rendering;
+using Shinano.Host.Bot;
+using Shinano.Host.Rendering;
 using SkiaSharp;
 
 namespace Shinano.Tests.Host;
@@ -38,7 +40,7 @@ public sealed class CardRendererTests
     {
         TextPainter painter = TestRendering.Fonts.Painter;
 
-        // Space Grotesk 没有汉字，回退到 Noto Sans SC 后宽度与直接使用中文字体相同。
+        // Saira Expanded 没有汉字，回退到 Noto Sans SC 后宽度与直接使用中文字体相同。
         Assert.Equal(painter.Measure("相似度", TestRendering.Fonts.Regular, 18), painter.Measure("相似度", TestRendering.Fonts.Latin, 18), 0.01f);
     }
 
@@ -124,6 +126,90 @@ public sealed class CardRendererTests
         using SKBitmap large = Decode(rendered.Image);
         using SKBitmap small = Decode(withoutImage.Image);
         Assert.True(large.Height > small.Height + 300);
+    }
+
+    [Fact]
+    public void RenderDocument_HighlightsDarkEndfieldCodeBlockWithMultipleColors()
+    {
+        IReadOnlyList<IReadOnlyList<CodeToken>> tokens = CodeHighlighter.Highlight(
+            "public sealed class Demo\n{\n    // 注释\n    public string Value = \"hello\";\n}\n",
+            "csharp");
+
+        HashSet<SKColor> distinctColors = [.. tokens.SelectMany(line => line).Select(token => token.Color)];
+        Assert.True(distinctColors.Count >= 3);
+
+        RenderedDocument rendered = TestRendering.Images.RenderDocument(new DocumentCard
+        {
+            Markdown = """
+                ```csharp
+                public sealed class Demo
+                {
+                    // 注释
+                    public int Count => 42;
+                }
+                ```
+                """,
+            Note        = "gemini-4-hydrogen · medium",
+            FooterRight = "[1/2]"
+        });
+
+        using SKBitmap bitmap = Decode(rendered.Image);
+        Assert.Equal(TestRendering.WIDTH, bitmap.Width);
+        Assert.True(HasPixelCloseTo(bitmap, CodeHighlighter.Background));
+    }
+
+    [Fact]
+    public void RenderDocument_RendersLatexFormulasAndFallsBackOnInvalidLatex()
+    {
+        string normalized = LatexMathRenderer.NormalizeDelimiters(
+            "行内 \\(a^2 + b^2 = c^2\\) 与代码 `\\(skip\\)`\n\n```\n\\[skip\\]\n```\n\n\\[\n\\frac{1}{2}\n\\]");
+        Assert.Contains("$a^2 + b^2 = c^2$", normalized);
+        Assert.Contains("`\\(skip\\)`", normalized);
+        Assert.Contains("\\[skip\\]", normalized);
+        Assert.Contains("$$\n\\frac{1}{2}\n$$", normalized);
+
+        using RenderedMathFormula? valid = LatexMathRenderer.TryRender(@"\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}", 18, CardPalette.Ink, displayStyle: true);
+        Assert.NotNull(valid);
+        Assert.True(valid.Width > 20 && valid.Height > 15);
+
+        using RenderedMathFormula? invalid = LatexMathRenderer.TryRender(@"\notarealmacro{\frac{1}", 18, CardPalette.Ink, displayStyle: false);
+        Assert.Null(invalid);
+
+        RenderedDocument rendered = TestRendering.Images.RenderDocument(new DocumentCard
+        {
+            Markdown = HostCommands.ExtractMarkdownSample("渲染测试")
+        });
+        using SKBitmap bitmap = Decode(rendered.Image);
+        Assert.Equal(TestRendering.WIDTH, bitmap.Width);
+        Assert.True(bitmap.Height > 900);
+    }
+
+    [Fact]
+    public void HostCommands_ExtractMarkdownSampleSupportsDefaultAndCustomBody()
+    {
+        string defaultSample = HostCommands.ExtractMarkdownSample("渲染测试");
+        Assert.Contains("# Markdown 渲染测试", defaultSample);
+        Assert.Equal(defaultSample, HostCommands.ExtractMarkdownSample("md测试   "));
+
+        string custom = HostCommands.ExtractMarkdownSample("md测试\n# 自定义标题\n$x+1$");
+        Assert.Equal("# 自定义标题\n$x+1$", custom);
+    }
+
+    private static bool HasPixelCloseTo(SKBitmap bitmap, SKColor expected)
+    {
+        for (int y = 0; y < bitmap.Height; y += 4)
+        {
+            for (int x = 0; x < bitmap.Width; x += 4)
+            {
+                SKColor pixel = bitmap.GetPixel(x, y);
+                if (Math.Abs(pixel.Red - expected.Red) <= 2
+                    && Math.Abs(pixel.Green - expected.Green) <= 2
+                    && Math.Abs(pixel.Blue - expected.Blue) <= 2)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static ListCard List(int items) =>

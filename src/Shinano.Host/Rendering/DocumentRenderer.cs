@@ -1,6 +1,7 @@
 using System.Globalization;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
+using Markdig.Extensions.Mathematics;
 using Markdig.Extensions.Tables;
 using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
@@ -46,12 +47,19 @@ internal sealed class DocumentRenderer
     private const float  QUOTE_BAR        = 4;
     private const float  QUOTE_PADDING_X  = 16;
     private const float  QUOTE_PADDING_Y  = 10;
-    private const float  CODE_SIZE        = 14;
-    private const float  CODE_LEADING     = 1.65f;
-    private const float  CODE_PADDING_X   = 18;
-    private const float  CODE_PADDING_Y   = 12;
-    private const float  CODE_LABEL_SIZE  = 11;
-    private const float  CODE_LABEL_GAP   = 4;
+    private const float  CODE_SIZE          = 14;
+    private const float  CODE_LEADING       = 1.65f;
+    private const float  CODE_PADDING_X     = 18;
+    private const float  CODE_PADDING_Y     = 14;
+    private const float  CODE_HEADER_HEIGHT = 30;
+    private const float  CODE_ACCENT_WIDTH  = 3;
+    private const float  CODE_DIAMOND_SIZE  = 6;
+    private const float  CODE_LABEL_SIZE    = 11;
+    private const float  CODE_BORDER        = 1;
+    private const float  MATH_BLOCK_SIZE    = 20;
+    private const float  MATH_INLINE_SIZE   = 18;
+    private const float  MATH_PADDING_X     = 16;
+    private const float  MATH_PADDING_Y     = 12;
     private const float  TABLE_SIZE       = 16;
     private const float  TABLE_LEADING    = 1.5f;
     private const float  TABLE_PADDING_X  = 12;
@@ -70,15 +78,17 @@ internal sealed class DocumentRenderer
                                                         .UsePipeTables()
                                                         .UseEmphasisExtras(EmphasisExtraOptions.Strikethrough)
                                                         .UseTaskLists()
+                                                        .UseMathematics()
                                                         .DisableHtml()
                                                         .Build();
 
-    private readonly DocumentCard              _card;
-    private readonly List<byte[]>              _attachments;
-    private readonly float                     _scale;
-    private readonly Dictionary<string, SKImage?> _images  = [];
-    private readonly Dictionary<string, int>   _numbers = [];
-    private          int                       _quoteDepth;
+    private readonly DocumentCard                   _card;
+    private readonly List<byte[]>                   _attachments;
+    private readonly float                          _scale;
+    private readonly Dictionary<string, SKImage?>   _images   = [];
+    private readonly Dictionary<string, int>        _numbers  = [];
+    private readonly List<RenderedMathFormula>      _formulas = [];
+    private          int                            _quoteDepth;
 
     /// <summary>准备一次绘制。</summary>
     /// <param name="card">文档。</param>
@@ -100,7 +110,8 @@ internal sealed class DocumentRenderer
     {
         try
         {
-            MarkdownDocument document = Markdown.Parse(_card.Markdown, Pipeline);
+            string normalized = LatexMathRenderer.NormalizeDelimiters(_card.Markdown);
+            MarkdownDocument document = Markdown.Parse(normalized, Pipeline);
             canvas.Fill(new SKRect(0, 0, CardCanvas.WIDTH, TOP_BAR), CardPalette.Ink);
             canvas.Edge(TOP_BAR);
             float bottom = canvas.Panel(TOP_BAR, panel => Blocks(panel, document, ContentLeft, ContentRight, 0, 0), PANEL_PADDING_Y, PANEL_GAP);
@@ -109,6 +120,7 @@ internal sealed class DocumentRenderer
         finally
         {
             foreach (SKImage? image in _images.Values) image?.Dispose();
+            foreach (RenderedMathFormula formula in _formulas) formula.Dispose();
         }
     }
 
@@ -134,6 +146,7 @@ internal sealed class DocumentRenderer
             ParagraphBlock paragraph => Paragraph(canvas, paragraph.Inline, Body(canvas), left, right, top),
             ListBlock list           => List(canvas, list, left, right, top, depth),
             QuoteBlock quote         => Quote(canvas, quote, left, right, top, depth),
+            MathBlock math           => MathBlockView(canvas, math.Lines.ToString(), left, right, top),
             CodeBlock code           => Code(canvas, code, left, right, top),
             ThematicBreakBlock       => Hatch(canvas, left, right, top),
             ContainerBlock container => Blocks(canvas, container, left, right, top, depth),
@@ -174,7 +187,7 @@ internal sealed class DocumentRenderer
         return bottom + H1_RULE_GAP + H1_RULE;
     }
 
-    // 内嵌模式下可解码的图片单独成块，打断所在段落；其余图片以占位或说明文字留在行内。
+    // 内嵌模式下可解码的图片与块级公式单独成块，打断所在段落；其余行内元素留在段落内。
     private float Paragraph(CardCanvas canvas, ContainerInline? inline, RichTextStyle style, float left, float right, float top)
     {
         List<RichSpan> spans = [];
@@ -188,18 +201,29 @@ internal sealed class DocumentRenderer
                 continue;
             }
 
-            if (segment is not InlineImage image) continue;
-            y = FlushText();
-            if (any) y += BLOCK_GAP;
-            y = Image(canvas, image, left, right, y);
-            any = true;
+            if (segment is InlineImage image)
+            {
+                y = FlushText();
+                if (any) y += BLOCK_GAP;
+                y = Image(canvas, image, left, right, y);
+                any = true;
+                continue;
+            }
+
+            if (segment is InlineMathBlock math)
+            {
+                y = FlushText();
+                if (any) y += BLOCK_GAP;
+                y = MathBlockView(canvas, math.LaTeX, left, right, y);
+                any = true;
+            }
         }
 
         return FlushText();
 
         float FlushText()
         {
-            if (spans.Count == 0 || spans.All(item => string.IsNullOrWhiteSpace(item.Text))) return y;
+            if (spans.Count == 0 || spans.All(item => item.Formula is null && string.IsNullOrWhiteSpace(item.Text))) return y;
             if (any) y += BLOCK_GAP;
             y += RichTextBlock.Layout(canvas, spans, style, right - left).Draw(left, right, y);
             spans.Clear();
@@ -288,30 +312,142 @@ internal sealed class DocumentRenderer
         return top + height;
     }
 
+    // 终末地暗色代码块（参考 endfield-ui-skill）：冷暗灰底、深色标头与信号黄强调条，正文逐段着色并保留换行颜色。
     private static float Code(CardCanvas canvas, CodeBlock code, float left, float right, float top)
     {
-        string language = code is FencedCodeBlock { Info: { Length: > 0 } info } ? info.Trim().ToUpperInvariant() : string.Empty;
+        string rawLanguage = code is FencedCodeBlock { Info: { Length: > 0 } info } ? info.Trim() : string.Empty;
+        string displayLanguage = FormatCodeLanguage(rawLanguage);
         float textLeft = left + CODE_PADDING_X;
         float textRight = right - CODE_PADDING_X;
-        List<string> lines = [.. code.Lines.ToString().Split('\n').SelectMany(line => canvas.Painter.Wrap(line.TrimEnd('\r'), canvas.Fonts.Mono, CODE_SIZE, textRight - textLeft))];
-        float lineHeight = CODE_SIZE * CODE_LEADING;
-        float labelHeight = language.Length > 0 ? CODE_LABEL_SIZE * TABLE_LEADING + CODE_LABEL_GAP : 0;
-        float height = CODE_PADDING_Y * 2 + labelHeight + lines.Count * lineHeight;
-        canvas.Fill(new SKRect(left, top, right, top + height), CardPalette.Ink);
-        float y = top + CODE_PADDING_Y;
-        if (language.Length > 0)
-        {
-            canvas.Text(language, canvas.Fonts.Latin, CODE_LABEL_SIZE, CardPalette.Signal, textLeft, CardCanvas.Baseline(y, CODE_LABEL_SIZE, TABLE_LEADING));
-            y += labelHeight;
-        }
+        float maxWidth = Math.Max(1, textRight - textLeft);
 
-        foreach (string line in lines)
+        IReadOnlyList<IReadOnlyList<CodeToken>> highlighted = CodeHighlighter.Highlight(code.Lines.ToString(), rawLanguage);
+        List<List<CodeToken>> wrappedLines = [];
+        foreach (IReadOnlyList<CodeToken> line in highlighted)
+            wrappedLines.AddRange(WrapCodeLine(canvas, line, maxWidth));
+        if (wrappedLines.Count == 0) wrappedLines.Add([]);
+
+        float lineHeight = CODE_SIZE * CODE_LEADING;
+        float bodyHeight = CODE_PADDING_Y * 2 + wrappedLines.Count * lineHeight;
+        float totalHeight = CODE_HEADER_HEIGHT + bodyHeight;
+        SKRect cardRect = new(left, top, right, top + totalHeight);
+        SKRect headerRect = new(left, top, right, top + CODE_HEADER_HEIGHT);
+
+        canvas.Fill(cardRect, CodeHighlighter.Background);
+        canvas.Fill(headerRect, CodeHighlighter.HeaderBackground);
+        canvas.Fill(new SKRect(left, top, left + CODE_ACCENT_WIDTH, top + CODE_HEADER_HEIGHT), CardPalette.Signal);
+        canvas.Rule(left, right, top + CODE_HEADER_HEIGHT, CodeHighlighter.Border, CODE_BORDER);
+        using (SKPaint border = Stroke(CodeHighlighter.Border, CODE_BORDER))
+            canvas.Canvas.DrawRect(cardRect, border);
+
+        float headerCenterY = top + CODE_HEADER_HEIGHT / 2;
+        float labelBaseline = CardCanvas.Baseline(top + (CODE_HEADER_HEIGHT - CODE_LABEL_SIZE * TABLE_LEADING) / 2, CODE_LABEL_SIZE, TABLE_LEADING);
+        canvas.Diamond(textLeft + CODE_DIAMOND_SIZE / 2, headerCenterY, CODE_DIAMOND_SIZE, CardPalette.Signal);
+        canvas.Text(displayLanguage, canvas.Fonts.Latin, CODE_LABEL_SIZE, CardPalette.Signal, textLeft + CODE_DIAMOND_SIZE + 8, labelBaseline);
+        string lineBadge = string.Format(CultureInfo.InvariantCulture, "{0} {1}", highlighted.Count, highlighted.Count == 1 ? "LINE" : "LINES");
+        canvas.TextRight(lineBadge, canvas.Fonts.Latin, CODE_LABEL_SIZE, CardPalette.InkTertiary, textRight, labelBaseline);
+
+        float y = top + CODE_HEADER_HEIGHT + CODE_PADDING_Y;
+        foreach (List<CodeToken> line in wrappedLines)
         {
-            canvas.Text(line, canvas.Fonts.Mono, CODE_SIZE, CardPalette.Muted, textLeft, CardCanvas.Baseline(y, CODE_SIZE, CODE_LEADING));
+            float x = textLeft;
+            float baseline = CardCanvas.Baseline(y, CODE_SIZE, CODE_LEADING);
+            foreach (CodeToken segment in line)
+            {
+                if (segment.Text.Length == 0) continue;
+                canvas.Text(segment.Text, canvas.Fonts.Mono, CODE_SIZE, segment.Color, x, baseline);
+                x += canvas.Painter.Measure(segment.Text, canvas.Fonts.Mono, CODE_SIZE);
+            }
+
             y += lineHeight;
         }
 
-        return top + height;
+        return top + totalHeight;
+    }
+
+    private static string FormatCodeLanguage(string rawLanguage)
+    {
+        if (rawLanguage.Length == 0) return "CODE";
+        int end = rawLanguage.IndexOfAny([' ', '\t', '{', ',']);
+        string token = end > 0 ? rawLanguage[..end] : rawLanguage;
+        return token.Length > 0 ? token.ToUpperInvariant() : "CODE";
+    }
+
+    private static List<List<CodeToken>> WrapCodeLine(CardCanvas canvas, IReadOnlyList<CodeToken> tokens, float maxWidth)
+    {
+        if (tokens.Count == 0) return [[]];
+
+        List<List<CodeToken>> lines = [];
+        List<CodeToken> current = [];
+        float width = 0;
+
+        foreach (CodeToken token in tokens)
+        {
+            TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(token.Text);
+            while (enumerator.MoveNext())
+            {
+                string element = enumerator.GetTextElement();
+                float elementWidth = canvas.Painter.Measure(element, canvas.Fonts.Mono, CODE_SIZE);
+                if (current.Count > 0 && width + elementWidth > maxWidth)
+                {
+                    lines.Add(current);
+                    current = [];
+                    width = 0;
+                }
+
+                if (current.Count > 0 && current[^1].Color == token.Color)
+                {
+                    current[^1] = new CodeToken
+                    {
+                        Text  = current[^1].Text + element,
+                        Color = token.Color
+                    };
+                }
+                else
+                {
+                    current.Add(new CodeToken
+                    {
+                        Text  = element,
+                        Color = token.Color
+                    });
+                }
+
+                width += elementWidth;
+            }
+        }
+
+        lines.Add(current);
+        return lines;
+    }
+
+    private float MathBlockView(CardCanvas canvas, string latex, float left, float right, float top)
+    {
+        string trimmed = latex.Trim();
+        if (trimmed.Length == 0) return top;
+
+        RenderedMathFormula? formula = LatexMathRenderer.TryRender(trimmed, MATH_BLOCK_SIZE, BodyColor, displayStyle: true);
+        if (formula is null) return Plain(canvas, trimmed, left, right, top);
+
+        _formulas.Add(formula);
+        float maxWidth = Math.Max(1, right - left - MATH_PADDING_X * 2);
+        float scale = formula.Width > maxWidth ? maxWidth / formula.Width : 1f;
+        float drawWidth = formula.Width * scale;
+        float drawHeight = formula.Height * scale;
+        float boxHeight = drawHeight + MATH_PADDING_Y * 2;
+        SKRect rect = new(left, top, right, top + boxHeight);
+        canvas.Fill(rect, CardPalette.Sunken);
+        using (SKPaint border = Stroke(CardPalette.Line, IMAGE_BORDER))
+            canvas.Canvas.DrawRect(rect, border);
+
+        float drawX = left + (right - left - drawWidth) / 2;
+        float drawY = top + MATH_PADDING_Y;
+        canvas.Canvas.Save();
+        canvas.Canvas.Translate(drawX, drawY);
+        if (MathF.Abs(scale - 1f) > 0.001f)
+            canvas.Canvas.Scale(scale);
+        canvas.Canvas.DrawPicture(formula.Picture);
+        canvas.Canvas.Restore();
+        return top + boxHeight;
     }
 
     private static float Hatch(CardCanvas canvas, float left, float right, float top)
@@ -453,6 +589,9 @@ internal sealed class DocumentRenderer
             case CodeInline code:
                 yield return new RichSpan { Text = code.Content, Style = style | SpanStyle.Code };
                 break;
+            case MathInline math:
+                foreach (object segment in MathSegments(math, style)) yield return segment;
+                break;
             case HtmlEntityInline entity:
                 yield return new RichSpan { Text = entity.Transcoded.ToString(), Style = style };
                 break;
@@ -552,9 +691,43 @@ internal sealed class DocumentRenderer
             IsAntialias = true
         };
 
+    private IEnumerable<object> MathSegments(MathInline math, SpanStyle style)
+    {
+        string latex = math.Content.ToString();
+        if (math.DelimiterCount >= 2)
+        {
+            yield return new InlineMathBlock { LaTeX = latex };
+            yield break;
+        }
+
+        RenderedMathFormula? formula = LatexMathRenderer.TryRender(latex, MATH_INLINE_SIZE, BodyColor, displayStyle: false);
+        if (formula is not null)
+        {
+            _formulas.Add(formula);
+            yield return new RichSpan
+            {
+                Text    = latex,
+                Style   = style,
+                Formula = formula
+            };
+            yield break;
+        }
+
+        yield return new RichSpan
+        {
+            Text  = $"${latex}$",
+            Style = style
+        };
+    }
+
     private sealed class InlineImage
     {
         public required SKImage Image   { get; init; }
         public required string  Caption { get; init; }
+    }
+
+    private sealed class InlineMathBlock
+    {
+        public required string LaTeX { get; init; }
     }
 }

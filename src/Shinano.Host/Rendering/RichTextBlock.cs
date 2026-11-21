@@ -21,38 +21,38 @@ internal sealed class RichTextBlock
     private const float UNDERLINE_WIDTH      = 1.2f;
     private const string LINE_BREAK          = "\n";
 
-    private readonly CardCanvas         _canvas;
-    private readonly RichTextStyle      _style;
-    private readonly List<List<Token>>  _lines;
+    private readonly CardCanvas        _canvas;
+    private readonly RichTextStyle     _style;
+    private readonly List<LineLayout>  _lines;
 
-    private RichTextBlock(CardCanvas canvas, RichTextStyle style, List<List<Token>> lines)
+    private RichTextBlock(CardCanvas canvas, RichTextStyle style, List<LineLayout> lines)
     {
         _canvas = canvas;
         _style  = style;
         _lines  = lines;
     }
 
-    /// <summary>行高。</summary>
+    /// <summary>基准行高。</summary>
     public float LineHeight => _style.Size * _style.Leading;
 
     /// <summary>总高度；没有文字时为 0。</summary>
-    public float Height => _lines.Count * LineHeight;
+    public float Height => _lines.Sum(line => line.Height);
 
     /// <summary>最宽一行的宽度。</summary>
-    public float Width => _lines.Count == 0 ? 0 : _lines.Max(line => line.Sum(token => token.Width));
+    public float Width => _lines.Count == 0 ? 0 : _lines.Max(line => line.Width);
 
     /// <summary>按 <paramref name="maxWidth" /> 排版。</summary>
     public static RichTextBlock Layout(CardCanvas canvas, IReadOnlyList<RichSpan> spans, RichTextStyle style, float maxWidth)
     {
         List<Token> tokens = Tokenize(canvas, spans, style, maxWidth);
-        List<List<Token>> lines = [];
+        List<LineLayout> lines = [];
         List<Token> line = [];
         float width = 0;
         foreach (Token token in tokens)
         {
             if (token.IsBreak)
             {
-                lines.Add(Trim(line));
+                lines.Add(BuildLine(Trim(line), style));
                 line = [];
                 width = 0;
                 continue;
@@ -61,7 +61,7 @@ internal sealed class RichTextBlock
             if (token.IsSpace && line.Count == 0) continue;
             if (width + token.Width > maxWidth && line.Any(item => !item.IsSpace))
             {
-                lines.Add(Trim(line));
+                lines.Add(BuildLine(Trim(line), style));
                 line = [];
                 width = 0;
                 if (token.IsSpace) continue;
@@ -71,44 +71,57 @@ internal sealed class RichTextBlock
             width += token.Width;
         }
 
-        if (line.Count > 0) lines.Add(Trim(line));
+        if (line.Count > 0) lines.Add(BuildLine(Trim(line), style));
         return new RichTextBlock(canvas, style, lines);
     }
 
     /// <summary>从 <paramref name="top" /> 起逐行绘制，返回所占高度。</summary>
     public float Draw(float left, float right, float top, LineAlignment alignment = LineAlignment.Left)
     {
-        for (int index = 0; index < _lines.Count; index++)
+        float y = top;
+        foreach (LineLayout line in _lines)
         {
-            List<Token> line = _lines[index];
-            float lineTop = top + index * LineHeight;
-            float lineWidth = line.Sum(token => token.Width);
             float x = alignment switch
             {
-                LineAlignment.Right  => right - lineWidth,
-                LineAlignment.Center => left + (right - left - lineWidth) / 2,
+                LineAlignment.Right  => right - line.Width,
+                LineAlignment.Center => left + (right - left - line.Width) / 2,
                 _                    => left
             };
-            float baseline = CardCanvas.Baseline(lineTop, _style.Size, _style.Leading);
-            foreach (Token token in line)
+            float baseline = y + line.BaselineOffset;
+            foreach (Token token in line.Tokens)
             {
-                DrawToken(token, x, lineTop, baseline);
+                DrawToken(token, x, y, line.Height, baseline);
                 x += token.Width;
             }
+
+            y += line.Height;
         }
 
-        return Height;
+        return y - top;
     }
 
-    private void DrawToken(Token token, float x, float lineTop, float baseline)
+    private void DrawToken(Token token, float x, float lineTop, float lineHeight, float baseline)
     {
+        if (token.Formula is { } formula)
+        {
+            float drawX = x + token.PadLeft;
+            float drawY = baseline - formula.Ascent * token.Scale;
+            _canvas.Canvas.Save();
+            _canvas.Canvas.Translate(drawX, drawY);
+            if (MathF.Abs(token.Scale - 1f) > 0.001f)
+                _canvas.Canvas.Scale(token.Scale);
+            _canvas.Canvas.DrawPicture(formula.Picture);
+            _canvas.Canvas.Restore();
+            return;
+        }
+
         float size = _style.Size;
         SpanStyle style = token.Style;
         SKColor? box = style.HasFlag(SpanStyle.Placeholder) ? CardPalette.Signal : style.HasFlag(SpanStyle.Code) ? CardPalette.Sunken : null;
         if (box is { } boxColor)
         {
             float boxHeight = size * BOX_HEIGHT_RATIO;
-            float boxTop = lineTop + (LineHeight - boxHeight) / 2;
+            float boxTop = lineTop + (lineHeight - boxHeight) / 2;
             _canvas.Fill(new SKRect(x, boxTop, x + token.Width, boxTop + boxHeight), boxColor);
         }
 
@@ -133,9 +146,28 @@ internal sealed class RichTextBlock
 
     private static List<Token> Tokenize(CardCanvas canvas, IReadOnlyList<RichSpan> spans, RichTextStyle style, float maxWidth)
     {
+        const float MATH_INLINE_PAD = 2;
         List<Token> tokens = [];
         foreach (RichSpan span in spans)
         {
+            if (span.Formula is { } formula)
+            {
+                float available = Math.Max(1, maxWidth - MATH_INLINE_PAD * 2);
+                float scale = formula.Width > available ? available / formula.Width : 1f;
+                tokens.Add(new Token
+                {
+                    Text     = string.Empty,
+                    Style    = span.Style,
+                    Typeface = style.Typeface,
+                    Size     = style.Size,
+                    Width    = formula.Width * scale + MATH_INLINE_PAD * 2,
+                    PadLeft  = MATH_INLINE_PAD,
+                    Formula  = formula,
+                    Scale    = scale
+                });
+                continue;
+            }
+
             (SKTypeface typeface, float size) = Face(canvas, span.Style, style);
             int first = tokens.Count;
             List<string> word = [];
@@ -240,16 +272,52 @@ internal sealed class RichTextBlock
         return line;
     }
 
+    private static LineLayout BuildLine(List<Token> tokens, RichTextStyle style)
+    {
+        float defaultHeight = style.Size * style.Leading;
+        float defaultBaseline = CardCanvas.Baseline(0, style.Size, style.Leading);
+        float ascent = defaultBaseline;
+        float descent = defaultHeight - defaultBaseline;
+        float width = 0;
+        foreach (Token token in tokens)
+        {
+            width += token.Width;
+            if (token.Formula is not { } formula) continue;
+            float formulaAscent = formula.Ascent * token.Scale + 2;
+            float formulaDescent = (formula.Height - formula.Ascent) * token.Scale + 2;
+            ascent = Math.Max(ascent, formulaAscent);
+            descent = Math.Max(descent, formulaDescent);
+        }
+
+        return new LineLayout
+        {
+            Tokens         = tokens,
+            Width          = width,
+            Height         = Math.Max(defaultHeight, ascent + descent),
+            BaselineOffset = ascent
+        };
+    }
+
+    private sealed class LineLayout
+    {
+        public required List<Token> Tokens         { get; init; }
+        public required float       Width          { get; init; }
+        public required float       Height         { get; init; }
+        public required float       BaselineOffset { get; init; }
+    }
+
     private sealed class Token
     {
-        public required string     Text     { get; init; }
-        public required SpanStyle  Style    { get; init; }
-        public required SKTypeface Typeface { get; init; }
-        public required float      Size     { get; init; }
-        public required float      Width    { get; init; }
-        public          float      PadLeft  { get; init; }
-        public          bool       IsSpace  { get; init; }
-        public          bool       IsBreak  { get; init; }
+        public required string               Text     { get; init; }
+        public required SpanStyle            Style    { get; init; }
+        public required SKTypeface           Typeface { get; init; }
+        public required float                Size     { get; init; }
+        public required float                Width    { get; init; }
+        public          float                PadLeft  { get; init; }
+        public          bool                 IsSpace  { get; init; }
+        public          bool                 IsBreak  { get; init; }
+        public          RenderedMathFormula? Formula  { get; init; }
+        public          float                Scale    { get; init; } = 1f;
 
         public Token Padded(float left, float right) =>
             new()
@@ -261,12 +329,14 @@ internal sealed class RichTextBlock
                 Width    = Width + left + right,
                 PadLeft  = PadLeft + left,
                 IsSpace  = IsSpace,
-                IsBreak  = IsBreak
+                IsBreak  = IsBreak,
+                Formula  = Formula,
+                Scale    = Scale
             };
     }
 }
 
-/// <summary>一段同样式的行内文字；文字中的 <c>\n</c> 为强制换行。</summary>
+/// <summary>一段同样式的行内文字或行内公式；文字中的 <c>\n</c> 为强制换行。</summary>
 internal sealed class RichSpan
 {
     /// <summary>文字。</summary>
@@ -274,6 +344,9 @@ internal sealed class RichSpan
 
     /// <summary>样式。</summary>
     public SpanStyle Style { get; init; }
+
+    /// <summary>行内 LaTeX 公式；非空时优先按公式绘制。</summary>
+    public RenderedMathFormula? Formula { get; init; }
 }
 
 /// <summary>文档行内文字的样式，可以组合。</summary>

@@ -5,7 +5,7 @@ using SkiaSharp;
 namespace Shinano.Host.Rendering;
 
 /// <summary>
-/// 宿主的公共字体，随宿主交付于程序目录的 <c>Resource/Fonts</c>：Noto Sans SC 常规与粗体、Space Grotesk 中粗与粗体、
+/// 宿主的公共字体，随宿主交付于程序目录的 <c>Resource/Fonts</c>：Noto Sans SC 常规与粗体、Saira Expanded（终末地宽体）中粗与粗体、
 /// JetBrains Mono（均为 OFL）、Twemoji Mozilla（图形 CC-BY 4.0）。使用静态字重文件：SkiaSharp 直接加载可变字体时只取默认字重。
 /// 选用 COLRv0 格式的 Twemoji：当前 Noto Color Emoji（COLRv1 + SVG）在 Windows 上经 SkiaSharp 绘制为空白。
 /// 字体缺失时不阻止宿主启动，访问时抛出异常，由调用方改用文字。
@@ -18,8 +18,8 @@ public sealed class HostFonts : IPluginFonts, IDisposable
     private const string FONTS_DIRECTORY = "Fonts";
     private const string REGULAR_FILE    = "NotoSansSC-Regular.otf";
     private const string BOLD_FILE       = "NotoSansSC-Bold.otf";
-    private const string LATIN_FILE      = "SpaceGrotesk-Medium.ttf";
-    private const string LATIN_BOLD_FILE = "SpaceGrotesk-Bold.ttf";
+    private const string LATIN_FILE      = "SairaExpanded-Medium.ttf";
+    private const string LATIN_BOLD_FILE = "SairaExpanded-Bold.ttf";
     private const string MONO_FILE       = "JetBrainsMono-Regular.ttf";
     private const string EMOJI_FILE      = "TwemojiMozilla.ttf";
 

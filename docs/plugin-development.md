@@ -543,7 +543,7 @@ RustFS 经 S3 协议访问，bucket 名为 `<部署前缀>-<用途>`。插件有
   await e.ReplyAsync(new MessageBody().AddImage(BASE64_PREFIX + Convert.ToBase64String(png)));
   ```
 - **字体** `Fonts`：
-  - 公共字体：Noto Sans SC 常规与粗体、Space Grotesk、JetBrains Mono、Twemoji 彩色 emoji。
+  - 公共字体：Noto Sans SC 常规与粗体、Saira Expanded、JetBrains Mono、Twemoji 彩色 emoji。
   - 文字绘制辅助 `Painter` 带字体回退与 HarfBuzz 整形。
   - 字体由宿主持有，插件不得释放。
   - 公共字体不够用时，插件把字体放进自己的 `assets/`，用 `Assets.ReadAllBytesAsync` 读取。
