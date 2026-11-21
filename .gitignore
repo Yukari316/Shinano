@@ -254,4 +254,5 @@ plugins/Shinano.Plugin.Qa/web/
 plugins/Shinano.Plugin.Hso/web/
 plugins/Shinano.Plugin.Bilibili/web/
 plugins/Shinano.Plugin.NB2Bridge/web/
+plugins/Shinano.Plugin.Gemini/web/
 web/**/dist/

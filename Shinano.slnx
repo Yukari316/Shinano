@@ -3,6 +3,7 @@
     <Project Path="plugins/Shinano.Plugin.Bilibili/Shinano.Plugin.Bilibili.csproj" />
     <Project Path="plugins/Shinano.Plugin.Cheru/Shinano.Plugin.Cheru.csproj" />
     <Project Path="plugins/Shinano.Plugin.Entertainment/Shinano.Plugin.Entertainment.csproj" />
+    <Project Path="plugins/Shinano.Plugin.Gemini/Shinano.Plugin.Gemini.csproj" />
     <Project Path="plugins/Shinano.Plugin.Hso/Shinano.Plugin.Hso.csproj" />
     <Project Path="plugins/Shinano.Plugin.ImageSearch/Shinano.Plugin.ImageSearch.csproj" />
     <Project Path="plugins/Shinano.Plugin.ImageSources/Shinano.Plugin.ImageSources.csproj" />

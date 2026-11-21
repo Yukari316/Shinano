@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\plugins\Shinano.Plugin.ImageSearch\Shinano.Plugin.ImageSearch.csproj"/>
     <ProjectReference Include="..\..\plugins\Shinano.Plugin.Hso\Shinano.Plugin.Hso.csproj"/>
     <ProjectReference Include="..\..\plugins\Shinano.Plugin.Bilibili\Shinano.Plugin.Bilibili.csproj"/>
+    <ProjectReference Include="..\..\plugins\Shinano.Plugin.Gemini\Shinano.Plugin.Gemini.csproj"/>
     <ProjectReference Include="..\..\plugins\Shinano.Plugin.NB2Bridge\Shinano.Plugin.NB2Bridge.csproj"/>
     <!-- 测试用插件只需先构建到 artifacts/test-plugins，由插件运行时按插件包加载。 -->
     <ProjectReference Include="..\SamplePlugins\Shinano.Tests.SamplePluginA\Shinano.Tests.SamplePluginA.csproj" ReferenceOutputAssembly="false"/>
