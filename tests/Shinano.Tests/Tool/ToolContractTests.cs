@@ -36,15 +36,15 @@ public sealed class ToolContractTests : IDisposable
         Assert.Equal(ApiRoutes.READINESS_PATH, HostContract.READINESS_PATH);
         Assert.Equal(DeploymentPaths.DATA_DIRECTORY_VARIABLE, DeploymentLayout.DATA_DIRECTORY_VARIABLE);
         Assert.Equal(MonitorSettings.DATA_DIRECTORY_VARIABLE, DeploymentLayout.DATA_DIRECTORY_VARIABLE);
-        Assert.Equal(DeploymentPaths.LOCAL_CONFIG_FILE_NAME, DeploymentLayout.LOCAL_CONFIG_FILE_NAME);
+        Assert.Equal(DeploymentPaths.CONFIG_FILE_NAME, DeploymentLayout.CONFIG_FILE_NAME);
         Assert.True(PanelToken.IsValid(PanelToken.Generate()));
     }
 
     [Fact]
     public void WrittenConfig_BindsToHostAndMonitorOptions()
     {
-        string path = Path.Combine(_directory, DeploymentLayout.LOCAL_CONFIG_FILE_NAME);
-        LocalConfig config = LocalConfig.Load(path);
+        string path = Path.Combine(_directory, DeploymentLayout.CONFIG_FILE_NAME);
+        DeploymentConfig config = DeploymentConfig.Load(path);
         config.Set(ConfigKeys.TIME_ZONE, "Asia/Tokyo");
         config.Set(ConfigKeys.BUCKET_PREFIX, "shinano-a");
         config.Set(ConfigKeys.SUPER_USERS, new JsonArray(1001L, 1002L));

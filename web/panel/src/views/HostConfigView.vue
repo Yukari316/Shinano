@@ -80,7 +80,7 @@ function resetSecrets(): void {
   secretClears.value = Object.fromEntries(secrets.map((entry) => [keyOf(entry), false]))
 }
 
-// 只提交修改过的配置项；未提交的项在本地配置文件中保持不变。
+// 只提交修改过的配置项；未提交的项在部署配置文件中保持不变。
 function changes(): Record<string, Record<string, unknown>> {
   const result: Record<string, Record<string, unknown>> = {}
   for (const entry of entries.value) {
@@ -205,7 +205,7 @@ async function finishTokenChange(): Promise<void> {
         <span v-else-if="saving">正在检查连接并保存…</span>
         <span v-else-if="pendingCount > 0">{{ pendingCount }} 项未保存的修改</span>
         <span v-else-if="saved" role="status" class="text-success-strong">
-          已保存到本地配置文件，重启后生效<template v-for="note in notes" :key="note">；{{ note }}</template>
+          已保存到部署配置文件，重启后生效<template v-for="note in notes" :key="note">；{{ note }}</template>
         </span>
         <span v-else class="opacity-70">宿主配置只在启动时读取，保存后需要重启生效；修改数据库、LLBot、RustFS 或证书时先实际连接检查，通过才保存。</span>
       </p>

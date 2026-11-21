@@ -20,7 +20,7 @@ public static class ToolApplication
                                    hso-import --dir <目录> [--dsn <DSN>] [--rustfs-endpoint <地址>] [--access-key <AccessKey>]
                                               [--secret-key <SecretKey>] [--bucket-prefix <前缀>]
                                                         把目录中的图片导入 Hso 图库（需先在面板启用过一次 Hso 插件）；
-                                                        数据库与 RustFS 默认取本部署的本地配置
+                                                        数据库与 RustFS 默认取本部署的部署配置
                                    nb2-setup [--data-dir <目录>]
                                                         用 uv 在部署数据目录的 nb2/ 下创建或补全 NB2 运行环境
                                  通常通过 scripts 下的 init、start、upgrade、service、hso-import、nb2-setup 脚本调用。

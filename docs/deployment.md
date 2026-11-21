@@ -53,7 +53,7 @@ shinano-<版本>-<平台>/
 
 | 路径 | 内容 |
 |---|---|
-| `shinano.local.json` | 本地配置，含全部连接凭据与面板 Token |
+| `shinano.json` | 部署配置，含全部连接凭据与面板 Token |
 | `deployment.json` | 工具记录的运行方式、服务名与已装入的随包插件，宿主不读取 |
 | `tool.log` | 工具修改系统状态的操作记录 |
 | `plugins/` | 已安装的插件，每个插件一个子目录 |
@@ -67,7 +67,7 @@ shinano-<版本>-<平台>/
 | `nb2/` | NB2 运行环境、插件配置与日志 |
 | `service/` | Linux 上生成的 systemd unit 文件 |
 
-`shinano.local.json`、`secrets/`、`keys/` 与 `browser/` 都包含机密，不要让其他用户读取，也不要提交到版本库或发到聊天中。Linux 上本地配置、插件机密与 NB2 的 `.env` 以 0600 创建，`keys/` 与 `browser/` 由框架和浏览器创建，请确认部署数据目录只有运行用户可以访问；Windows 依靠部署目录的 ACL 限制访问。
+`shinano.json`、`secrets/`、`keys/` 与 `browser/` 都包含机密，不要让其他用户读取，也不要提交到版本库或发到聊天中。Linux 上部署配置、插件机密与 NB2 的 `.env` 以 0600 创建，`keys/` 与 `browser/` 由框架和浏览器创建，请确认部署数据目录只有运行用户可以访问；Windows 依靠部署目录的 ACL 限制访问。
 
 ## 3. 数据库准备
 
@@ -111,7 +111,7 @@ scripts/init.ps1       # Windows，需要 PowerShell 7
 
 结束时工具会：
 
-- 生成 64 位面板登录 Token，写入本地配置，**只在最后显示这一次**，请妥善保存。以后再运行 init，已有的 Token 不会变。忘记 Token 时，可以查看 `data/shinano.local.json` 中的 `Shinano:Web:Token`。
+- 生成 64 位面板登录 Token，写入部署配置，**只在最后显示这一次**，请妥善保存。以后再运行 init，已有的 Token 不会变。忘记 Token 时，可以查看 `data/shinano.json` 中的 `Shinano:Web:Token`。
 - 首次初始化时把随包插件装入插件目录，全部默认不启用。
 - 直接运行模式下询问是否立即启动；服务模式下创建并启动服务（见第 5 节）。
 
@@ -177,7 +177,7 @@ scripts/service.sh start|stop|status
 scripts/service.sh install|uninstall
 ```
 
-服务模式下修改本地配置后，先 `service stop` 再 `service start` 才会生效。改变运行方式或服务名时重新运行 init，工具会先删除原有服务。
+服务模式下修改部署配置后，先 `service stop` 再 `service start` 才会生效。改变运行方式或服务名时重新运行 init，工具会先删除原有服务。
 
 ## 6. 首次配置
 
@@ -216,7 +216,7 @@ scripts/service.sh install|uninstall
 
 升级时，程序目录整体替换。旧版移到 `.previous/`，只保留最近一次。两个进程的 `Logs/` 和状态页的探测记录会保留下来。替换失败时自动还原旧版；替换成功后随包插件同步等步骤失败时，新版本已经装好，工具如实报告失败的步骤，不回退程序。服务模式下无论成败都会重新启动服务。新包中的随包插件在停止服务之前读取，插件包损坏时不做任何改动就退出。
 
-升级不询问配置，新增的配置项取默认值。随包插件的处理：已安装且新包版本更高的，进入待处理变更，由面板重启时应用；新增的直接装入，不启用；管理员删除过的不再装回。 升级带来新版 NB2Bridge 后，如果 NB2 页面提示「NB2 基础环境与当前 NB2Bridge 版本不一致」，在该页面点「重建环境」（旧版建立的 NB2 环境同样提示重建）；重建前 NB2 照常运行，但不能安装或升级 NB2 插件。
+升级不询问配置，新增的配置项取默认值。1.0.0 及更早版本的部署配置文件名为 `shinano.local.json`，升级时在新版程序装好后自动改名为 `shinano.json`；两个文件同时存在时升级不做任何改动就退出，需先删除不要的一份。宿主与状态页只认新文件名，因此必须经 upgrade 升级，不要直接覆盖程序目录。随包插件的处理：已安装且新包版本更高的，进入待处理变更，由面板重启时应用；新增的直接装入，不启用；管理员删除过的不再装回。 升级带来新版 NB2Bridge 后，如果 NB2 页面提示「NB2 基础环境与当前 NB2Bridge 版本不一致」，在该页面点「重建环境」（旧版建立的 NB2 环境同样提示重建）；重建前 NB2 照常运行，但不能安装或升级 NB2 插件。
 
 ### 插件包
 
@@ -247,7 +247,7 @@ scripts/service.sh install|uninstall
 |---|---|
 | 数据库 | PostgreSQL 中的部署数据库（`pg_dump`） |
 | 媒体 | RustFS 中以 bucket 前缀开头的 bucket：`<前缀>-chat`、`<前缀>-media`，以及插件 bucket（如 `<前缀>-hso`） |
-| 部署数据 | `data/` 整个目录（本地配置、机密、会话密钥、插件、浏览器用户目录、NB2 环境） |
+| 部署数据 | `data/` 整个目录（部署配置、机密、会话密钥、插件、浏览器用户目录、NB2 环境） |
 
 `data/ffmpeg/` 与 `data/browser/` 中的浏览器程序可以重新下载，不备份也可以，但 `data/browser/` 中的插件用户目录保存着 B站登录状态。
 
@@ -278,9 +278,9 @@ scripts/service.sh install|uninstall
 
 卸载不会删除部署目录、数据库和 bucket，工具结束时会列出这些仍保留的资源。确认不再需要后，手动删除部署目录、数据库，以及以 bucket 前缀开头的 bucket。
 
-## 附录：`shinano.local.json` 配置项
+## 附录：`shinano.json` 配置项
 
-本地配置位于 `data/shinano.local.json`，所有键都在 `Shinano` 下。未写出的项使用下表中的默认值。除注明的项外，修改后都需要重启宿主。大部分项可以在面板「宿主配置」页修改，标「敏感」的项在面板只写不回显。
+部署配置位于 `data/shinano.json`，所有键都在 `Shinano` 下。未写出的项使用下表中的默认值。除注明的项外，修改后都需要重启宿主。大部分项可以在面板「宿主配置」页修改，标「敏感」的项在面板只写不回显。
 
 | 键 | 默认值 | 说明 |
 |---|---|---|

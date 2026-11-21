@@ -24,7 +24,7 @@ public static class Supervisor
     {
         DeploymentLayout layout = context.Layout;
         ToolLog log = context.Log;
-        if (!File.Exists(layout.LocalConfigPath)) throw new ToolException("尚未初始化，请先运行 init");
+        if (!File.Exists(layout.ConfigPath)) throw new ToolException("尚未初始化，请先运行 init");
         if (DeploymentStateStore.Read(layout) is { RunMode: RunMode.Service, ServicesInstalled: true })
             throw new ToolException("该部署以服务方式运行，请使用 service start；改为直接运行请重新运行 init 并选择直接运行");
         if (!File.Exists(layout.HostExecutable)) throw new ToolException($"找不到宿主程序 {layout.HostExecutable}");
@@ -55,7 +55,7 @@ public static class Supervisor
         while (true)
         {
             // 每次拉起前重新读取：面板可能改了监听地址、端口或证书，重启后的宿主监听在新地址上。
-            LocalConfig config = LocalConfig.Load(layout.LocalConfigPath);
+            DeploymentConfig config = DeploymentConfig.Load(layout.ConfigPath);
             using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, layout.DataDirectory));
             using Process host = StartHost(layout, log);
             current = host;

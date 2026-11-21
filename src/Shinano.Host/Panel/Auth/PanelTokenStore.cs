@@ -5,7 +5,7 @@ using Shinano.Host.Configuration;
 namespace Shinano.Host.Panel.Auth;
 
 /// <summary>
-/// 面板登录 Token：保存在本地配置 <c>Shinano:Web:Token</c>，缺失时生成并写入。Token 不写入日志，也不下发给前端，
+/// 面板登录 Token：保存在部署配置 <c>Shinano:Web:Token</c>，缺失时生成并写入。Token 不写入日志，也不下发给前端，
 /// 只有重新生成时在响应中返回一次。会话中记录 Token 指纹，Token 改变后全部现有会话失效。
 /// </summary>
 public sealed class PanelTokenStore
@@ -18,13 +18,13 @@ public sealed class PanelTokenStore
 
     private static readonly string[] TokenPath = ["Shinano", "Web", "Token"];
 
-    private readonly LocalConfigFile          _file;
+    private readonly DeploymentConfigFile     _file;
     private readonly ILogger<PanelTokenStore> _logger;
     private readonly Lock                     _lock = new();
     private          string                   _token;
 
-    /// <summary>读取 Token，缺失时生成并写入本地配置。</summary>
-    public PanelTokenStore(LocalConfigFile file, ILogger<PanelTokenStore> logger)
+    /// <summary>读取 Token，缺失时生成并写入部署配置。</summary>
+    public PanelTokenStore(DeploymentConfigFile file, ILogger<PanelTokenStore> logger)
     {
         _file   = file;
         _logger = logger;
@@ -36,7 +36,7 @@ public sealed class PanelTokenStore
         }
 
         _token = Save(Generate());
-        _logger.LogWarning("本地配置中没有有效的面板 Token，已生成新 Token 并写入本地配置文件");
+        _logger.LogWarning("部署配置中没有有效的面板 Token，已生成新 Token 并写入部署配置文件");
     }
 
     /// <summary>当前 Token 的指纹，写入会话用于判断 Token 是否已更换。</summary>
@@ -60,7 +60,7 @@ public sealed class PanelTokenStore
         }
     }
 
-    /// <summary>生成新 Token 并写入本地配置，全部现有会话随之失效。</summary>
+    /// <summary>生成新 Token 并写入部署配置，全部现有会话随之失效。</summary>
     /// <returns>新 Token，只应向调用者显示一次。</returns>
     public string Regenerate()
     {
@@ -71,7 +71,7 @@ public sealed class PanelTokenStore
 
     private string Save(string token)
     {
-        _file.Update(root => LocalConfigFile.Section(root, TokenPath[..^1])[TokenPath[^1]] = token);
+        _file.Update(root => DeploymentConfigFile.Section(root, TokenPath[..^1])[TokenPath[^1]] = token);
         lock (_lock)
         {
             _token = token;

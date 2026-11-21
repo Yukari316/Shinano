@@ -12,7 +12,7 @@ using Shinano.Tool.Services;
 namespace Shinano.Tool.Setup;
 
 /// <summary>
-/// <c>init</c>：逐项询问部署配置并写入本地配置。重复运行时以现有值为默认值，不覆盖未修改项与已生成的 Token。
+/// <c>init</c>：逐项询问部署配置并写入部署配置文件。重复运行时以现有值为默认值，不覆盖未修改项与已生成的 Token。
 /// 首次运行时装入随包原生插件（不启用）；服务模式下创建并启动服务。未问到的配置项保持默认，可在面板修改。
 /// </summary>
 public static class InitCommand
@@ -81,7 +81,7 @@ public static class InitCommand
         if (!File.Exists(layout.HostExecutable))
             throw new ToolException($"找不到宿主程序 {layout.HostExecutable}；请在解压后的发布包中运行 scripts 下的 init");
 
-        LocalConfig config = LocalConfig.Load(layout.LocalConfigPath);
+        DeploymentConfig config = DeploymentConfig.Load(layout.ConfigPath);
         DeploymentState? previous = DeploymentStateStore.Read(layout);
         DeploymentState state = previous ?? new DeploymentState();
         InstalledServices installed = InstalledServices.Of(state);
@@ -100,7 +100,7 @@ public static class InitCommand
         config.Set(ConfigKeys.HOST_SERVICE_NAME, state.HostServiceName);
         config.Set(ConfigKeys.MONITOR_SERVICE_NAME, state.MonitorServiceName);
         config.Save();
-        log.Info($"已写入本地配置 {layout.LocalConfigPath}");
+        log.Info($"已写入部署配置 {layout.ConfigPath}");
 
         if (previous is null)
         {
@@ -170,7 +170,7 @@ public static class InitCommand
         }
     }
 
-    private static void AskDeployment(Prompter ask, LocalConfig config)
+    private static void AskDeployment(Prompter ask, DeploymentConfig config)
     {
         config.Set(
             ConfigKeys.TIME_ZONE,
@@ -189,7 +189,7 @@ public static class InitCommand
         config.Set(ConfigKeys.SUPER_USERS, new JsonArray([.. InputRules.ParseIds(superUsers)!.Select(id => (JsonNode)id)]));
     }
 
-    private static async Task AskDatabaseAsync(ToolContext context, LocalConfig config)
+    private static async Task AskDatabaseAsync(ToolContext context, DeploymentConfig config)
     {
         Prompter ask = context.Prompter;
         string? existing = config.GetString(ConfigKeys.DATABASE_DSN);
@@ -227,7 +227,7 @@ public static class InitCommand
         if (existing is null || !DsnFormat.SameTarget(original, dsn)) config.Set(ConfigKeys.DATABASE_DSN, dsn.ConnectionString);
     }
 
-    private static void AskRustFs(Prompter ask, LocalConfig config)
+    private static void AskRustFs(Prompter ask, DeploymentConfig config)
     {
         string endpoint = ask.Text("RustFS 内部地址（如 http://10.0.0.2:9000）", RUSTFS_ENDPOINT_OPTION, config.GetString(ConfigKeys.RUSTFS_ENDPOINT), InputRules.HttpUrl);
         config.Set(ConfigKeys.RUSTFS_ENDPOINT, endpoint);
@@ -243,7 +243,7 @@ public static class InitCommand
         SetSecret(ask, config, ConfigKeys.RUSTFS_SECRET_KEY, "RustFS SecretKey", RUSTFS_SECRET_KEY_VARIABLE, required: true);
     }
 
-    private static void AskLlBot(Prompter ask, LocalConfig config)
+    private static void AskLlBot(Prompter ask, DeploymentConfig config)
     {
         config.Set(ConfigKeys.LLBOT_HOST, ask.Text("LLBot 主机", LLBOT_HOST_OPTION, config.GetString(ConfigKeys.LLBOT_HOST) ?? DEFAULT_LOOPBACK, InputRules.HostName));
         config.Set(
@@ -253,7 +253,7 @@ public static class InitCommand
         SetSecret(ask, config, ConfigKeys.LLBOT_ACCESS_TOKEN, "LLBot AccessToken（没有可留空）", LLBOT_TOKEN_VARIABLE, required: false);
     }
 
-    private static void AskListen(Prompter ask, LocalConfig config, string dataDirectory, ToolLog log)
+    private static void AskListen(Prompter ask, DeploymentConfig config, string dataDirectory, ToolLog log)
     {
         AskEndpoint(ask, config, ConfigKeys.WEB, "面板", PANEL_LISTEN_OPTION, PANEL_PORT_OPTION, ConfigKeys.DEFAULT_PANEL_PORT);
         AskEndpoint(ask, config, ConfigKeys.MONITOR, "状态页", STATUS_LISTEN_OPTION, STATUS_PORT_OPTION, ConfigKeys.DEFAULT_STATUS_PORT);
@@ -271,7 +271,7 @@ public static class InitCommand
         AskCertificate(ask, config, ConfigKeys.MONITOR, "状态页", STATUS_CERT_PATH_OPTION, STATUS_CERT_PASSWORD_VARIABLE, dataDirectory, log);
     }
 
-    private static void AskEndpoint(Prompter ask, LocalConfig config, string section, string label, string listenOption, string portOption, int defaultPort)
+    private static void AskEndpoint(Prompter ask, DeploymentConfig config, string section, string label, string listenOption, string portOption, int defaultPort)
     {
         string addressKey = ConfigKeys.In(section, ConfigKeys.LISTEN_ADDRESS);
         string portKey = ConfigKeys.In(section, ConfigKeys.PORT);
@@ -284,7 +284,7 @@ public static class InitCommand
     // 返回证书路径；不启用 HTTPS 时为空字符串。证书无法加载时宿主只在 127.0.0.1 用 HTTP，这里提前告警。
     private static string AskCertificate(
         Prompter    ask,
-        LocalConfig config,
+        DeploymentConfig config,
         string      section,
         string      label,
         string      option,
@@ -318,7 +318,7 @@ public static class InitCommand
         return path;
     }
 
-    private static void SetSecret(Prompter ask, LocalConfig config, string key, string label, string variable, bool required)
+    private static void SetSecret(Prompter ask, DeploymentConfig config, string key, string label, string variable, bool required)
     {
         if (ask.Secret(label, variable, config.GetString(key) is not null, required) is { } value) config.Set(key, value);
     }

@@ -1,6 +1,6 @@
 namespace Shinano.Infrastructure.Storage;
 
-/// <summary>RustFS（S3 兼容）配置，对应配置节 <c>Shinano:RustFs</c>。密钥只写在本地配置文件中。</summary>
+/// <summary>RustFS（S3 兼容）配置，对应配置节 <c>Shinano:RustFs</c>。密钥只写在部署配置文件中。</summary>
 public sealed class RustFsOptions
 {
     /// <summary>配置节路径。</summary>

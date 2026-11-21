@@ -141,7 +141,7 @@ public static partial class Nb2SetupCommand
     // 期望值随 NB2Bridge 插件包发布，取自已安装的 NB2Bridge，使工具与正在运行的 NB2Bridge 使用同一份。
     private static string ExpectedBaseLock(string dataDirectory)
     {
-        LocalConfig config = LocalConfig.Load(Path.Combine(dataDirectory, DeploymentLayout.LOCAL_CONFIG_FILE_NAME));
+        DeploymentConfig config = DeploymentConfig.Load(Path.Combine(dataDirectory, DeploymentLayout.CONFIG_FILE_NAME));
         string pluginRoot = Path.GetFullPath(config.GetString(ConfigKeys.PLUGIN_DIRECTORY) ?? ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, dataDirectory);
         if (!PluginPackages.ScanInstalled(pluginRoot).TryGetValue(BRIDGE_PLUGIN_ID, out InstalledPlugin? bridge))
             throw new ToolException($"插件目录 {pluginRoot} 中没有安装 NB2Bridge，无法取得 NB2 基础锁定文件；请先在面板安装 NB2Bridge 插件包");

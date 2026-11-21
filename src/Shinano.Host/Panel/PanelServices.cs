@@ -13,7 +13,7 @@ public static class PanelServices
     public static IServiceCollection AddPanel(this IServiceCollection services, DeploymentPaths paths)
     {
         services.AddSingleton(paths);
-        services.AddSingleton<LocalConfigFile>();
+        services.AddSingleton<DeploymentConfigFile>();
         services.AddSingleton<PanelTokenStore>();
         services.AddSingleton<LoginThrottle>();
         services.AddSingleton<HostConfigConnectionCheck>();

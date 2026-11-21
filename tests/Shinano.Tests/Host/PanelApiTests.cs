@@ -162,7 +162,7 @@ public sealed class PanelApiTests
     }
 
     [Fact]
-    public async Task HostConfig_SecretsAreWriteOnly_ValidatedAndWrittenToLocalConfig()
+    public async Task HostConfig_SecretsAreWriteOnly_ValidatedAndWrittenToDeploymentConfig()
     {
         const string PASSWORD = "pfx-password";
         await using PanelHarness panel = await StartAsync();
@@ -218,7 +218,7 @@ public sealed class PanelApiTests
         string listed = await client.GetStringAsync("/api/config", Token);
         Assert.DoesNotContain(PASSWORD, listed);
 
-        JsonNode? local = JsonNode.Parse(await File.ReadAllTextAsync(panel.LocalConfigPath, Token));
+        JsonNode? local = JsonNode.Parse(await File.ReadAllTextAsync(panel.ConfigPath, Token));
         Assert.Equal("Warning", local?["Shinano"]?["Logging"]?["MinimumLevel"]?.GetValue<string>());
         Assert.Equal(2, local?["Shinano"]?["Deployment"]?["SuperUsers"]?.AsArray().Count);
         Assert.Equal(PASSWORD, local?["Shinano"]?["Monitor"]?["CertificatePassword"]?.GetValue<string>());
@@ -229,7 +229,7 @@ public sealed class PanelApiTests
             new JsonObject { ["Monitor"] = new JsonObject { ["CertificatePassword"] = null } },
             Token);
         Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
-        local = JsonNode.Parse(await File.ReadAllTextAsync(panel.LocalConfigPath, Token));
+        local = JsonNode.Parse(await File.ReadAllTextAsync(panel.ConfigPath, Token));
         Assert.Null(local?["Shinano"]?["Monitor"]?["CertificatePassword"]);
     }
 
@@ -356,7 +356,7 @@ public sealed class PanelApiTests
     {
         await using PanelHarness panel = await StartAsync();
         using HttpClient client = await LoggedInClientAsync(panel);
-        string installed = Path.Combine(Path.GetDirectoryName(panel.LocalConfigPath) ?? string.Empty, "plugins", "SampleD");
+        string installed = Path.Combine(Path.GetDirectoryName(panel.ConfigPath) ?? string.Empty, "plugins", "SampleD");
         Directory.CreateDirectory(installed);
         await File.WriteAllTextAsync(
             Path.Combine(installed, "plugin.json"),

@@ -45,11 +45,11 @@ public sealed class PanelHarness : IAsyncDisposable
     /// <summary>面板地址。</summary>
     public Uri BaseAddress { get; }
 
-    /// <summary>部署数据目录中的本地配置文件路径。</summary>
-    public string LocalConfigPath => Path.Combine(_dataDirectory, DeploymentPaths.LOCAL_CONFIG_FILE_NAME);
+    /// <summary>部署数据目录中的部署配置文件路径。</summary>
+    public string ConfigPath => Path.Combine(_dataDirectory, DeploymentPaths.CONFIG_FILE_NAME);
 
     /// <summary>当前面板 Token。</summary>
-    public string Token => new LocalConfigFile(Paths(_dataDirectory)).ReadString("Shinano", "Web", "Token") ?? string.Empty;
+    public string Token => new DeploymentConfigFile(Paths(_dataDirectory)).ReadString("Shinano", "Web", "Token") ?? string.Empty;
 
     /// <summary>启动面板与插件运行时。</summary>
     public static async Task<PanelHarness> StartAsync(

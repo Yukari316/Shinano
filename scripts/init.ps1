@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-# 初始化或重新配置本部署：逐项询问部署配置，写入 data/shinano.local.json。
+# 初始化或重新配置本部署：逐项询问部署配置，写入 data/shinano.json。
 # 逻辑在 host/Shinano.Tool 中，本脚本只是入口；参数原样传给工具，如 --accept-defaults。
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot

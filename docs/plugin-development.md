@@ -65,7 +65,7 @@ plugins/Example.Plugin.Hello/
 dotnet build Shinano.slnx
 ```
 
-开发时，可以把宿主本地配置中的插件目录 `Shinano:Plugins:Directory` 指向 `artifacts/plugins`。它默认为部署数据目录下的 `plugins`，相对路径基于部署数据目录。运行中的宿主会锁住插件程序集，构建前先停止宿主。
+开发时，可以把宿主部署配置中的插件目录 `Shinano:Plugins:Directory` 指向 `artifacts/plugins`。它默认为部署数据目录下的 `plugins`，相对路径基于部署数据目录。运行中的宿主会锁住插件程序集，构建前先停止宿主。
 
 ## 3. plugin.json
 

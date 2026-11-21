@@ -8,7 +8,7 @@ if (-not $IsWindows) {
     # 在 Windows 上打出的压缩包不一定保留可执行权限。
     chmod +x (Join-Path $root 'host/Shinano.Tool') (Join-Path $root 'host/Shinano.Host') (Join-Path $root 'monitor/Shinano.Monitor') 2>$null
 }
-if (-not (Test-Path (Join-Path $root 'data/shinano.local.json'))) {
+if (-not (Test-Path (Join-Path $root 'data/shinano.json'))) {
     & $tool init --no-start
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

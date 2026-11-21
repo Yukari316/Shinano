@@ -5,10 +5,10 @@ using Shinano.Tool.Cli;
 namespace Shinano.Tool.Configuration;
 
 /// <summary>
-/// 部署数据目录中本地配置文件（含敏感配置）的读写。只修改给出的配置项，保留其余内容；先写临时文件再替换，
+/// 部署数据目录中部署配置文件（含敏感配置）的读写。只修改给出的配置项，保留其余内容；先写临时文件再替换，
 /// 中途失败不会留下半个文件。路径格式为 <c>Shinano:Web:Port</c>。
 /// </summary>
-public sealed class LocalConfig
+public sealed class DeploymentConfig
 {
     private const char PATH_SEPARATOR = ':';
 
@@ -17,24 +17,24 @@ public sealed class LocalConfig
     private readonly string     _path;
     private readonly JsonObject _root;
 
-    private LocalConfig(string path, JsonObject root)
+    private DeploymentConfig(string path, JsonObject root)
     {
         _path = path;
         _root = root;
     }
 
-    /// <summary>读取本地配置；文件不存在时为空配置。</summary>
+    /// <summary>读取部署配置；文件不存在时为空配置。</summary>
     /// <exception cref="ToolException">文件不是有效的 JSON 对象。</exception>
-    public static LocalConfig Load(string path)
+    public static DeploymentConfig Load(string path)
     {
-        if (!File.Exists(path)) return new LocalConfig(path, []);
+        if (!File.Exists(path)) return new DeploymentConfig(path, []);
         try
         {
-            return new LocalConfig(path, JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? []);
+            return new DeploymentConfig(path, JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? []);
         }
         catch (JsonException exception)
         {
-            throw new ToolException($"本地配置文件不是有效的 JSON：{path}：{exception.Message}");
+            throw new ToolException($"部署配置文件不是有效的 JSON：{path}：{exception.Message}");
         }
     }
 

@@ -7,7 +7,7 @@ using Shinano.Tool.Configuration;
 namespace Shinano.Tool.Run;
 
 /// <summary>
-/// 按本地配置解析宿主面板的访问地址，规则与宿主相同：拒绝全部网卡地址；配置无效，或配置了证书却无法加载时，
+/// 按部署配置解析宿主面板的访问地址，规则与宿主相同：拒绝全部网卡地址；配置无效，或配置了证书却无法加载时，
 /// 宿主回退到 <c>127.0.0.1</c> 的 HTTP。
 /// </summary>
 public sealed class HostEndpoint
@@ -23,11 +23,11 @@ public sealed class HostEndpoint
     public string? Thumbprint { get; init; }
 
     /// <summary>解析配置节 <paramref name="section" /> 的监听配置。</summary>
-    /// <param name="config">本地配置。</param>
+    /// <param name="config">部署配置。</param>
     /// <param name="section">监听配置节，如 <see cref="ConfigKeys.WEB" />。</param>
     /// <param name="defaultPort">端口未配置或无效时使用的端口。</param>
     /// <param name="dataDirectory">部署数据目录，用于解析证书的相对路径。</param>
-    public static HostEndpoint Resolve(LocalConfig config, string section, int defaultPort, string dataDirectory)
+    public static HostEndpoint Resolve(DeploymentConfig config, string section, int defaultPort, string dataDirectory)
     {
         int port = config.GetInt(ConfigKeys.In(section, ConfigKeys.PORT)) is { } configured and >= MIN_PORT and <= MAX_PORT
             ? configured

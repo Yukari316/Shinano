@@ -9,7 +9,7 @@ namespace Shinano.Tool.HsoImport;
 
 /// <summary>
 /// <c>hso-import --dir &lt;目录&gt;</c>：把本地目录（含子目录）中的图片批量导入 Hso 插件图库。按 SHA256 去重后上传到插件 bucket，
-/// 并写入待补全作品信息的记录。数据库与 RustFS 默认取本部署的本地配置，也可用选项指定。
+/// 并写入待补全作品信息的记录。数据库与 RustFS 默认取本部署的部署配置，也可用选项指定。
 /// </summary>
 public static class HsoImportCommand
 {
@@ -134,7 +134,7 @@ public static class HsoImportCommand
 
     private static GalleryTarget ResolveTarget(ToolContext context)
     {
-        LocalConfig config = LocalConfig.Load(context.Layout.LocalConfigPath);
+        DeploymentConfig config = DeploymentConfig.Load(context.Layout.ConfigPath);
         string dsn = Pick(context, config, DSN_OPTION, ConfigKeys.DATABASE_DSN)
                      ?? throw new ToolException($"没有数据库 DSN：请先运行 init，或用 --{DSN_OPTION} 指定");
         string endpointText = Pick(context, config, RUSTFS_ENDPOINT_OPTION, ConfigKeys.RUSTFS_ENDPOINT)
@@ -155,8 +155,8 @@ public static class HsoImportCommand
         };
     }
 
-    // 选项优先，空值视为未给出；否则取本地配置。
-    private static string? Pick(ToolContext context, LocalConfig config, string option, string key) =>
+    // 选项优先，空值视为未给出；否则取部署配置。
+    private static string? Pick(ToolContext context, DeploymentConfig config, string option, string key) =>
         context.Arguments.Value(option) is { Length: > 0 } value ? value : config.GetString(key);
 }
 

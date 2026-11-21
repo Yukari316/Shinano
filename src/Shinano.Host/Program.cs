@@ -31,7 +31,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(
     });
 // 部署配置是唯一配置来源：去掉默认的 appsettings、环境变量与命令行，未写出的项取 Options 类的默认值。
 builder.Configuration.Sources.Clear();
-builder.Configuration.AddJsonFile(paths.LocalConfigPath, optional: true, reloadOnChange: false);
+builder.Configuration.AddJsonFile(paths.ConfigPath, optional: true, reloadOnChange: false);
 
 LoggingOptions loggingOptions = builder.Configuration.GetSection(LoggingOptions.SECTION_NAME).Get<LoggingOptions>()
                                 ?? new LoggingOptions();

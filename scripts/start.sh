@@ -6,7 +6,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 tool="$root/host/Shinano.Tool"
 # 在 Windows 上打出的压缩包不一定保留可执行权限。
 chmod +x "$tool" "$root/host/Shinano.Host" "$root/monitor/Shinano.Monitor" 2>/dev/null || true
-if [ ! -f "$root/data/shinano.local.json" ]; then
+if [ ! -f "$root/data/shinano.json" ]; then
     "$tool" init --no-start
 fi
 exec "$tool" run "$@"

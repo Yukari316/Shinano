@@ -240,10 +240,11 @@ __pycache__/
 agent_tmp/
 .claude/
 
-# 部署数据目录（本地配置、机密、插件暂存）与运行日志
+# 部署数据目录（部署配置、机密、插件暂存）与运行日志
 data/
 Logs/
 *.local.json
+shinano.json
 
 # 前端：管理面板与状态页的构建产物分别输出到宿主与监控的 wwwroot，由打包流程生成，不入库
 src/Shinano.Host/wwwroot/

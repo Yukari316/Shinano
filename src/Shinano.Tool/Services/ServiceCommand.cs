@@ -111,7 +111,7 @@ public static class ServiceCommand
         context.Log.Info("服务已删除");
         if (!removingBot) return true;
 
-        LocalConfig config = LocalConfig.Load(context.Layout.LocalConfigPath);
+        DeploymentConfig config = DeploymentConfig.Load(context.Layout.ConfigPath);
         context.Log.Say("以下资源仍然保留，需要时请自行处理：");
         context.Log.Say($"  部署目录：{context.Layout.Root}");
         context.Log.Say($"  数据库：{DatabaseName(config) ?? "（未配置）"}（保留以供再次部署时使用）");
@@ -239,12 +239,12 @@ public static class ServiceCommand
 
     private static async Task ReportReadyAsync(ToolContext context)
     {
-        LocalConfig config = LocalConfig.Load(context.Layout.LocalConfigPath);
+        DeploymentConfig config = DeploymentConfig.Load(context.Layout.ConfigPath);
         using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, context.Layout.DataDirectory));
         if (await probe.WaitReadyAsync(null, CancellationToken.None)) context.Log.Info("宿主已就绪");
         else context.Log.Warning($"宿主未在 {ReadinessProbe.ReadyTimeout.TotalSeconds} 秒内就绪，请查看 host/Logs 下的日志");
     }
 
-    private static string? DatabaseName(LocalConfig config) =>
+    private static string? DatabaseName(DeploymentConfig config) =>
         config.GetString(ConfigKeys.DATABASE_DSN) is { } dsn ? DsnFormat.Parse(dsn).Database : null;
 }

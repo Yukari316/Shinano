@@ -1,17 +1,17 @@
 namespace Shinano.Monitor.Web;
 
 /// <summary>
-/// 从主部署的本地配置文件读取的监控设置与探测目标。监控只读该文件，不写入；缺少的项使用与主进程相同的默认值。
+/// 从主部署的配置文件读取的监控设置与探测目标。监控只读该文件，不写入；缺少的项使用与主进程相同的默认值。
 /// 探测目标（主进程、数据库、RustFS、LLBot 的地址与凭据）在文件变化后的下一轮探测生效；
 /// 监控自身的监听地址、探测间隔、时区等其余设置修改后重启监控进程生效。
 /// </summary>
 public sealed class MonitorSettings
 {
-    /// <summary>指定部署数据目录的环境变量，与主进程相同；设置时其中的 <c>shinano.local.json</c> 即部署配置。</summary>
+    /// <summary>指定部署数据目录的环境变量，与主进程相同；设置时其中的 <c>shinano.json</c> 即部署配置。</summary>
     public const string DATA_DIRECTORY_VARIABLE = "SHINANO_DATA_DIR";
 
     /// <summary>部署配置文件名。</summary>
-    public const string CONFIG_FILE_NAME = "shinano.local.json";
+    public const string CONFIG_FILE_NAME = "shinano.json";
 
     /// <summary>监控自身的默认端口。</summary>
     public const int DEFAULT_PORT = 19101;

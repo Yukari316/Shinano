@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- 监控是独立网站：不引用主工程的任何程序集，只读主部署的本地配置文件并通过公开接口探测。 -->
+  <!-- 监控是独立网站：不引用主工程的任何程序集，只读主部署的配置文件并通过公开接口探测。 -->
   <PropertyGroup>
     <RootNamespace>Shinano.Monitor</RootNamespace>
   </PropertyGroup>

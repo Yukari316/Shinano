@@ -9,8 +9,8 @@ public sealed class DeploymentLayout
     /// <summary>宿主与监控读取部署数据目录的环境变量名。</summary>
     public const string DATA_DIRECTORY_VARIABLE = "SHINANO_DATA_DIR";
 
-    /// <summary>本地配置文件名，与宿主一致。</summary>
-    public const string LOCAL_CONFIG_FILE_NAME = "shinano.local.json";
+    /// <summary>部署配置文件名，与宿主一致。</summary>
+    public const string CONFIG_FILE_NAME = "shinano.json";
 
     /// <summary>升级时替换的程序目录；部署数据目录不在其中。</summary>
     public static readonly IReadOnlyList<string> ProgramDirectoryNames = [HOST_DIRECTORY, MONITOR_DIRECTORY, BUNDLED_PLUGINS_DIRECTORY, SCRIPTS_DIRECTORY];
@@ -51,8 +51,8 @@ public sealed class DeploymentLayout
     /// <summary>上一版程序目录的备份，只保留最近一次升级前的版本。</summary>
     public string PreviousDirectory => Path.Combine(Root, PREVIOUS_DIRECTORY);
 
-    /// <summary>本地配置文件。</summary>
-    public string LocalConfigPath => Path.Combine(DataDirectory, LOCAL_CONFIG_FILE_NAME);
+    /// <summary>部署配置文件。</summary>
+    public string ConfigPath => Path.Combine(DataDirectory, CONFIG_FILE_NAME);
 
     /// <summary>工具自己的部署状态文件，宿主不读取。</summary>
     public string StatePath => Path.Combine(DataDirectory, STATE_FILE_NAME);

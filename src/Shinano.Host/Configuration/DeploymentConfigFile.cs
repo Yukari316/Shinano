@@ -4,10 +4,10 @@ using System.Text.Json.Nodes;
 namespace Shinano.Host.Configuration;
 
 /// <summary>
-/// 部署数据目录中的本地配置文件（含敏感配置）的读写。写入时保留未修改的配置项，先写临时文件再替换，
+/// 部署数据目录中的部署配置文件（含敏感配置）的读写。写入时保留未修改的配置项，先写临时文件再替换，
 /// 避免中途失败留下半个文件。修改在进程重启后由配置系统读取。
 /// </summary>
-public sealed class LocalConfigFile
+public sealed class DeploymentConfigFile
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
@@ -15,9 +15,9 @@ public sealed class LocalConfigFile
     private readonly Lock   _lock = new();
 
     /// <summary>创建读写入口。</summary>
-    public LocalConfigFile(DeploymentPaths paths)
+    public DeploymentConfigFile(DeploymentPaths paths)
     {
-        _path = paths.LocalConfigPath;
+        _path = paths.ConfigPath;
     }
 
     /// <summary>读取配置项的字符串值；文件、配置节或配置项不存在时返回 null。</summary>

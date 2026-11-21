@@ -100,7 +100,7 @@ public sealed class Prompter
     /// <summary>取得敏感值。</summary>
     /// <param name="label">问题。</param>
     /// <param name="variable">提供该值的环境变量名。</param>
-    /// <param name="configured">本地配置中是否已有值；有值时直接回车保持不变。</param>
+    /// <param name="configured">部署配置中是否已有值；有值时直接回车保持不变。</param>
     /// <param name="required">没有现值时是否必须给出。</param>
     /// <returns>新值；保持现值时为 null。</returns>
     /// <exception cref="ToolException">非交互运行时缺少必填值。</exception>

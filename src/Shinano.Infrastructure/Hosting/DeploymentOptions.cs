@@ -1,7 +1,7 @@
 namespace Shinano.Infrastructure.Hosting;
 
 /// <summary>
-/// 部署级配置，对应配置节 <c>Shinano:Deployment</c>，由初始化脚本写入本地配置。
+/// 部署级配置，对应配置节 <c>Shinano:Deployment</c>，由初始化脚本写入部署配置。
 /// </summary>
 public sealed class DeploymentOptions
 {

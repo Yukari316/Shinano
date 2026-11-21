@@ -32,7 +32,7 @@ async function login(): Promise<void> {
         <fieldset class="fieldset">
           <legend class="fieldset-legend">面板 Token</legend>
           <input v-model="token" type="password" class="input w-full" autocomplete="current-password" required autofocus />
-          <p class="label whitespace-normal">Token 保存在部署数据目录的本地配置文件中。</p>
+          <p class="label whitespace-normal">Token 保存在部署数据目录的部署配置文件中。</p>
         </fieldset>
         <div v-if="error" role="alert" class="alert alert-error">{{ error }}</div>
         <div class="card-actions justify-end">

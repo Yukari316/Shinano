@@ -22,6 +22,9 @@ public static class UpgradeCommand
     private const char   METADATA_PREFIX  = '+';
     private const string UNKNOWN_VERSION  = "未知";
 
+    // 一次性迁移：1.0.0 及更早版本的部署配置文件名。全部部署都升级到改名之后的版本时，删除此常量及其迁移逻辑。
+    private const string LEGACY_CONFIG_FILE_NAME = "shinano.local.json";
+
     private static readonly TimeSpan StateTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>执行升级。</summary>
@@ -31,8 +34,13 @@ public static class UpgradeCommand
         string targetRoot = context.Arguments.Value(TARGET_OPTION) ?? throw new ToolException("用法：upgrade --target <要升级的部署根目录>");
         DeploymentLayout target = DeploymentLayout.At(targetRoot);
         if (DeploymentLayout.SamePath(source.Root, target.Root)) throw new ToolException("请把新发布包解压到另一个目录，再从那里对现有部署运行 upgrade");
-        if (!File.Exists(target.HostExecutable) || !File.Exists(target.LocalConfigPath))
+        string legacyConfig = LegacyConfigPath(target);
+        if (!File.Exists(target.HostExecutable) || !File.Exists(target.ConfigPath) && !File.Exists(legacyConfig))
             throw new ToolException($"{target.Root} 不是已初始化的 Shinano 部署");
+        if (File.Exists(target.ConfigPath) && File.Exists(legacyConfig))
+            throw new ToolException(
+                $"{target.DataDirectory} 中同时存在 {DeploymentLayout.CONFIG_FILE_NAME} 与旧文件名 {LEGACY_CONFIG_FILE_NAME}，"
+                + "请确认保留哪一份并删除另一份后重新运行 upgrade");
         DeploymentState state = DeploymentStateStore.Read(target)
                                 ?? throw new ToolException($"{target.Root} 缺少部署状态 {target.StatePath}，请先在该部署运行 init");
 
@@ -123,7 +131,7 @@ public static class UpgradeCommand
         string outcome = failure ?? $"升级完成：{upgrade.FromVersion} → {upgrade.ToVersion}";
         if (startFailure is not null) throw new ToolException($"{outcome}；但服务启动失败：{startFailure}");
 
-        LocalConfig config = LocalConfig.Load(target.LocalConfigPath);
+        DeploymentConfig config = DeploymentConfig.Load(target.ConfigPath);
         using ReadinessProbe probe = new(HostEndpoint.Resolve(config, ConfigKeys.WEB, ConfigKeys.DEFAULT_PANEL_PORT, target.DataDirectory));
         bool ready = await probe.WaitReadyAsync(null, CancellationToken.None);
 
@@ -153,7 +161,8 @@ public static class UpgradeCommand
 
         try
         {
-            LocalConfig config = LocalConfig.Load(target.LocalConfigPath);
+            MigrateConfigFileName(target, upgrade.Log);
+            DeploymentConfig config = DeploymentConfig.Load(target.ConfigPath);
             string pluginRoot = Path.GetFullPath(config.GetString(ConfigKeys.PLUGIN_DIRECTORY) ?? ConfigKeys.DEFAULT_PLUGIN_DIRECTORY, target.DataDirectory);
             BundledPluginSync.Upgrade(upgrade.Bundled, pluginRoot, target.DataDirectory, upgrade.State, upgrade.Log, DateTimeOffset.UtcNow);
             DeploymentStateStore.Write(target, upgrade.State);
@@ -173,6 +182,17 @@ public static class UpgradeCommand
             return $"新版本 {upgrade.ToVersion} 已安装，后续步骤失败：{exception.Message}";
         }
     }
+
+    // 在新版程序装好之后改名：替换失败还原旧版时，旧版仍按旧文件名读取。目标已存在时 File.Move 抛出 IOException，不覆盖。
+    private static void MigrateConfigFileName(DeploymentLayout target, ToolLog log)
+    {
+        string legacy = LegacyConfigPath(target);
+        if (!File.Exists(legacy)) return;
+        File.Move(legacy, target.ConfigPath);
+        log.Info($"部署配置文件已改名：{LEGACY_CONFIG_FILE_NAME} → {DeploymentLayout.CONFIG_FILE_NAME}");
+    }
+
+    private static string LegacyConfigPath(DeploymentLayout target) => Path.Combine(target.DataDirectory, LEGACY_CONFIG_FILE_NAME);
 
     // 返回失败说明，成功时为 null。
     private static string? StartServices(IServiceManager manager, ServiceSetup setup, ToolLog log)

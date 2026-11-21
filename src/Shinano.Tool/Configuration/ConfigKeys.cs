@@ -1,7 +1,7 @@
 namespace Shinano.Tool.Configuration;
 
 /// <summary>
-/// 工具读写的本地配置项路径，格式与 ASP.NET Core 配置路径相同。工具不引用主工程，这些路径与宿主、监控的选项类
+/// 工具读写的部署配置项路径，格式与 ASP.NET Core 配置路径相同。工具不引用主工程，这些路径与宿主、监控的选项类
 /// 必须一致，由契约测试核对。
 /// </summary>
 public static class ConfigKeys

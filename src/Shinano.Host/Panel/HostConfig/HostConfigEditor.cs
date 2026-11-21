@@ -116,21 +116,21 @@ public sealed class HostConfigEditor
     ];
 
     private readonly DeploymentPaths           _paths;
-    private readonly LocalConfigFile           _localConfig;
+    private readonly DeploymentConfigFile      _deploymentConfig;
     private readonly HostConfigConnectionCheck _check;
     private readonly ILogger<HostConfigEditor> _logger;
 
     /// <summary>创建编辑器。</summary>
     public HostConfigEditor(
         DeploymentPaths           paths,
-        LocalConfigFile           localConfig,
+        DeploymentConfigFile      deploymentConfig,
         HostConfigConnectionCheck check,
         ILogger<HostConfigEditor> logger)
     {
-        _paths       = paths;
-        _localConfig = localConfig;
-        _check       = check;
-        _logger      = logger;
+        _paths            = paths;
+        _deploymentConfig = deploymentConfig;
+        _check            = check;
+        _logger           = logger;
     }
 
     /// <summary>读取全部配置项的当前值；敏感项的值为是否已配置。</summary>
@@ -203,11 +203,11 @@ public sealed class HostConfigEditor
             return new HostConfigSaveResult { Errors = errors };
         }
 
-        _localConfig.Update(root =>
+        _deploymentConfig.Update(root =>
         {
             foreach ((HostConfigField field, JsonNode? value) in accepted)
             {
-                JsonObject section = LocalConfigFile.Section(root, ROOT_SECTION, field.Section);
+                JsonObject section = DeploymentConfigFile.Section(root, ROOT_SECTION, field.Section);
                 if (value is null) section.Remove(field.Key);
                 else section[field.Key] = value;
             }
@@ -256,7 +256,7 @@ public sealed class HostConfigEditor
     private IConfigurationRoot LoadConfiguration(IEnumerable<(HostConfigField Field, JsonNode? Value)> overrides) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(Defaults)
-            .AddJsonFile(_paths.LocalConfigPath, optional: true)
+            .AddJsonFile(_paths.ConfigPath, optional: true)
             .AddInMemoryCollection(
                 overrides.Where(item => item.Value is not JsonArray)
                          .Select(item => new KeyValuePair<string, string?>(

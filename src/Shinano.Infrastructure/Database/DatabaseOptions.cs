@@ -1,6 +1,6 @@
 namespace Shinano.Infrastructure.Database;
 
-/// <summary>数据库配置，对应配置节 <c>Shinano:Database</c>。DSN 含凭据，只写在本地配置文件中。</summary>
+/// <summary>数据库配置，对应配置节 <c>Shinano:Database</c>。DSN 含凭据，只写在部署配置文件中。</summary>
 public sealed class DatabaseOptions
 {
     /// <summary>配置节路径。</summary>

@@ -4,14 +4,14 @@ using Shinano.Tool.Cli;
 namespace Shinano.Tool.Setup;
 
 /// <summary>
-/// 本地配置中的数据库 DSN，格式与宿主、监控相同：<c>postgres://</c>/<c>postgresql://</c> URI，或 Npgsql 键值对字符串。
+/// 部署配置中的数据库 DSN，格式与宿主、监控相同：<c>postgres://</c>/<c>postgresql://</c> URI，或 Npgsql 键值对字符串。
 /// </summary>
 public static class DsnFormat
 {
     private const int DEFAULT_PORT = 5432;
 
     private const string URI_EXTRAS_ERROR =
-        "本地配置中的数据库 DSN 使用了 URI 写法的 ? 连接参数或 # 之后的内容，不支持。需要连接参数时改用键值对写法，"
+        "部署配置中的数据库 DSN 使用了 URI 写法的 ? 连接参数或 # 之后的内容，不支持。需要连接参数时改用键值对写法，"
         + "如 Host=db.example.com;Port=5432;Username=shinano;Password=密码;Database=shinano;SSL Mode=VerifyFull；"
         + "URI 写法中密码含 #、?、@、/、: 时需百分号编码，如 # 写作 %23";
 
@@ -44,7 +44,7 @@ public static class DsnFormat
         catch (Exception exception) when (exception is ArgumentException or UriFormatException)
         {
             // 不回显 DSN 本身，其中含密码。
-            throw new ToolException($"本地配置中的数据库 DSN 无法解析：{exception.GetType().Name}");
+            throw new ToolException($"部署配置中的数据库 DSN 无法解析：{exception.GetType().Name}");
         }
     }
 

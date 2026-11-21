@@ -2,7 +2,7 @@ namespace Shinano.Host.Web;
 
 /// <summary>
 /// 管理面板监听配置，对应配置节 <c>Shinano:Web</c>，修改后重启生效。
-/// 证书密码属于敏感配置，只写在本地配置文件中。
+/// 证书密码属于敏感配置，只写在部署配置文件中。
 /// </summary>
 public sealed class WebOptions
 {

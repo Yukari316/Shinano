@@ -15,7 +15,7 @@ public sealed class ProgramSwapTests : IDisposable
         Write(target.Root, "host/old.dll", "old");
         Write(target.Root, "host/Logs/run.log", "log");
         Write(target.Root, "monitor/data/probes.jsonl", "probe");
-        Write(target.Root, "data/shinano.local.json", "{}");
+        Write(target.Root, "data/shinano.json", "{}");
         Write(target.Root, ".previous/host/older.dll", "older");
         Write(source.Root, "host/new.dll", "new");
         Write(source.Root, "monitor/Shinano.Monitor.dll", "monitor");
@@ -27,7 +27,7 @@ public sealed class ProgramSwapTests : IDisposable
         Assert.False(File.Exists(Path.Combine(target.HostDirectory, "old.dll")));
         Assert.Equal("log", File.ReadAllText(Path.Combine(target.HostDirectory, "Logs", "run.log")));
         Assert.Equal("probe", File.ReadAllText(Path.Combine(target.MonitorDirectory, "data", "probes.jsonl")));
-        Assert.Equal("{}", File.ReadAllText(target.LocalConfigPath));
+        Assert.Equal("{}", File.ReadAllText(target.ConfigPath));
         Assert.True(File.Exists(Path.Combine(target.PreviousDirectory, "host", "old.dll")));
         Assert.False(File.Exists(Path.Combine(target.PreviousDirectory, "host", "older.dll")));
         Assert.True(File.Exists(Path.Combine(source.HostDirectory, "new.dll")));

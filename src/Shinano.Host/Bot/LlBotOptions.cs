@@ -1,6 +1,6 @@
 namespace Shinano.Host.Bot;
 
-/// <summary>LLBot（Milky）连接配置，对应配置节 <c>Shinano:LlBot</c>。AccessToken 只写在本地配置文件中。</summary>
+/// <summary>LLBot（Milky）连接配置，对应配置节 <c>Shinano:LlBot</c>。AccessToken 只写在部署配置文件中。</summary>
 public sealed class LlBotOptions
 {
     /// <summary>配置节路径。</summary>
