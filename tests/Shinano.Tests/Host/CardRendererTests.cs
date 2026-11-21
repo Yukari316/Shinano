@@ -159,6 +159,22 @@ public sealed class CardRendererTests
     }
 
     [Fact]
+    public void CodeHighlighter_PrefersMoreSpecificScopePrefix()
+    {
+        SKColor keywordColor = CodeHighlighter.MapColor(["keyword.control.cs"]);
+        SKColor operatorColor = CodeHighlighter.MapColor(["keyword.operator.assignment.cs"]);
+        SKColor newOperatorColor = CodeHighlighter.MapColor(["keyword.operator.new.cs"]);
+        Assert.Equal(keywordColor, newOperatorColor);
+        Assert.NotEqual(operatorColor, newOperatorColor);
+
+        SKColor typeColor = CodeHighlighter.MapColor(["support.type.cs"]);
+        SKColor propertyColor = CodeHighlighter.MapColor(["variable.other.property.cs"]);
+        SKColor jsonKeyColor = CodeHighlighter.MapColor(["support.type.property-name.json"]);
+        Assert.Equal(propertyColor, jsonKeyColor);
+        Assert.NotEqual(typeColor, jsonKeyColor);
+    }
+
+    [Fact]
     public void RenderDocument_RendersLatexFormulasAndFallsBackOnInvalidLatex()
     {
         string normalized = LatexMathRenderer.NormalizeDelimiters(

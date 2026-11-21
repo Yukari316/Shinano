@@ -94,6 +94,46 @@ internal static class CodeHighlighter
     private static readonly Registry                            Registry = new(Options);
     private static readonly Dictionary<string, IGrammar?>       Grammars = new(StringComparer.OrdinalIgnoreCase);
 
+    // 按作用域前缀长度降序预排，保证更具体的作用域（如 support.type.property-name、keyword.operator.new）优先匹配。
+    private static readonly ScopeColorRule[] ScopeColorRules = BuildScopeColorRules(
+    [
+        (CommentColor, ["comment"]),
+        (StringColor, ["string", "markup.inserted"]),
+        (ConstantColor, ["constant.numeric", "constant.language", "constant.character", "constant.other.color", "constant.regexp"]),
+        (KeywordColor, [
+            "keyword.operator.new",
+            "keyword.operator.expression",
+            "keyword.operator.wordlike",
+            "keyword.operator.logical.python",
+            "keyword.operator.sizeof",
+            "keyword.operator.typeof",
+            "keyword",
+            "storage",
+            "meta.preprocessor"
+        ]),
+        (PunctuationColor, ["keyword.operator", "punctuation"]),
+        (FunctionColor, ["entity.name.function", "support.function", "meta.function-call"]),
+        (TypeColor, [
+            "entity.name.type",
+            "entity.name.class",
+            "entity.name.struct",
+            "entity.name.interface",
+            "entity.name.enum",
+            "entity.other.inherited-class",
+            "support.type",
+            "support.class"
+        ]),
+        (TagOrErrorColor, ["entity.name.tag", "invalid", "markup.deleted"]),
+        (PropertyColor, [
+            "entity.other.attribute-name",
+            "variable.parameter",
+            "variable.other.property",
+            "variable.other.object.property",
+            "support.type.property-name",
+            "meta.object-literal.key"
+        ])
+    ]);
+
     /// <summary>
     /// 按指定语言对代码逐行分词着色。未知语言或空语言返回单色默认前景行。
     /// </summary>
@@ -205,34 +245,36 @@ internal static class CodeHighlighter
     }
 
     // TextMate 作用域从外到内排列，优先从最具体（末尾）的作用域匹配颜色。
-    private static SKColor MapColor(List<string> scopes)
+    internal static SKColor MapColor(List<string> scopes)
     {
         for (int index = scopes.Count - 1; index >= 0; index--)
         {
             string scope = scopes[index];
-            if (StartsWithAny(scope, "comment")) return CommentColor;
-            if (StartsWithAny(scope, "string", "markup.inserted")) return StringColor;
-            if (StartsWithAny(scope, "constant.numeric", "constant.language", "constant.character", "constant.other.color", "constant.regexp")) return ConstantColor;
-            if (StartsWithAny(scope, "keyword.operator.new", "keyword.operator.expression", "keyword.operator.wordlike", "keyword.operator.logical.python", "keyword.operator.sizeof", "keyword.operator.typeof")) return KeywordColor;
-            if (StartsWithAny(scope, "keyword.operator", "punctuation")) return PunctuationColor;
-            if (StartsWithAny(scope, "keyword", "storage", "meta.preprocessor")) return KeywordColor;
-            if (StartsWithAny(scope, "entity.name.function", "support.function", "meta.function-call")) return FunctionColor;
-            if (StartsWithAny(scope, "entity.name.type", "entity.name.class", "entity.name.struct", "entity.name.interface", "entity.name.enum", "entity.other.inherited-class", "support.type", "support.class")) return TypeColor;
-            if (StartsWithAny(scope, "entity.name.tag", "invalid", "markup.deleted")) return TagOrErrorColor;
-            if (StartsWithAny(scope, "entity.other.attribute-name", "variable.parameter", "variable.other.property", "variable.other.object.property", "support.type.property-name", "meta.object-literal.key")) return PropertyColor;
+            foreach (ScopeColorRule rule in ScopeColorRules)
+            {
+                if (scope.StartsWith(rule.Prefix, StringComparison.OrdinalIgnoreCase))
+                    return rule.Color;
+            }
         }
 
         return DefaultForeground;
     }
 
-    private static bool StartsWithAny(string scope, params ReadOnlySpan<string> prefixes)
-    {
-        foreach (string prefix in prefixes)
-        {
-            if (scope.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
-        }
+    private static ScopeColorRule[] BuildScopeColorRules((SKColor Color, string[] Prefixes)[] groups) =>
+    [
+        .. groups
+           .SelectMany(group => group.Prefixes.Select(prefix => new ScopeColorRule
+           {
+               Prefix = prefix,
+               Color  = group.Color
+           }))
+           .OrderByDescending(rule => rule.Prefix.Length)
+    ];
 
-        return false;
+    private sealed class ScopeColorRule
+    {
+        public required string  Prefix { get; init; }
+        public required SKColor Color  { get; init; }
     }
 }
 
