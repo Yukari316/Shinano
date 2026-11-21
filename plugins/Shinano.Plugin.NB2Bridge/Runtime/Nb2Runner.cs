@@ -258,11 +258,11 @@ public sealed class Nb2Runner : IDisposable
         }
 
         _state = Nb2ProcessState.Starting;
-        await PrepareEnvironmentAsync();
         MilkyServer?      server  = null;
         Nb2ControlClient? control = null;
         try
         {
+            await PrepareEnvironmentAsync();
             await _venv.WriteScriptsAsync(cancellationToken);
             await ResolveFfmpegAsync(cancellationToken);
 

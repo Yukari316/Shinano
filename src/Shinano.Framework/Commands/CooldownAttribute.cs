@@ -11,7 +11,8 @@ namespace Shinano.Framework.Commands;
 /// 指令冷却过滤器，按群与发送者计时，规则见 <see cref="CooldownTracker" />；Super User 不豁免。
 /// 标在方法上时该指令单独冷却，标在指令组类上时整组共享冷却（Sora 按特性实例缓存过滤器）。
 /// 冷却中拒绝执行：指令已命中，消息被占用；设置了 <see cref="Reply" /> 时回复该文字，否则不回复。
-/// 排在 <c>RequirePermission</c> 等默认顺序的过滤器之后，被拒绝的调用不计入冷却。
+/// 排在 <c>RequirePermission</c> 等默认顺序的过滤器之后，被它们拒绝的调用不计入冷却；
+/// 排在其后的过滤器（如 <see cref="RateLimitAttribute" />）拒绝时，冷却已经开始计时。
 /// 计时只在内存中，插件停用再启用时保留，进程重启后清空。
 /// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]

@@ -76,13 +76,14 @@ public sealed partial class Nb2Packages
             async _ =>
             {
                 // 同名即同一版本：插件层锁定文件按路径与哈希记录已装的 wheel，覆盖后安装失败时无法按锁定文件还原。
-                if (File.Exists(path))
+                // 只看插件清单：不在清单中的同名文件是中途退出留下的残留，直接覆盖。
+                if (_catalog.Entries().Any(item => string.Equals(item.Wheel, name, StringComparison.OrdinalIgnoreCase)))
                 {
                     File.Delete(temporary);
                     return Nb2ChangeResult.Failed($"已安装同名的 wheel {name}；要替换请先卸载该插件，或提高版本号后重新打包");
                 }
 
-                File.Move(temporary, path);
+                File.Move(temporary, path, overwrite: true);
                 Nb2ChangeResult result = await InstallCoreAsync(path, package, version, moduleName, name, relaxInstalled);
                 if (result.Error is not null) File.Delete(path);
                 return result;
@@ -156,6 +157,9 @@ public sealed partial class Nb2Packages
         if (result.Error is not null) return result;
 
         _catalog.Put(entry);
+        // 升级后插件层锁定文件只引用新的来源，旧 wheel 不再需要；留着会挡住以后回滚到该版本的上传。
+        if (existing?.Wheel is { } oldWheel && !string.Equals(oldWheel, wheel, StringComparison.OrdinalIgnoreCase))
+            File.Delete(Path.Combine(_layout.WheelsDirectory, oldWheel));
         _logger.LogInformation("已安装 NB2 插件 {Package} {Version}", package, version);
         return result;
     }

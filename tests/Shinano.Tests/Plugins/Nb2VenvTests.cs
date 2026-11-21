@@ -29,6 +29,8 @@ public sealed class Nb2VenvTests
         Assert.Equal(Nb2BaseState.Outdated, Nb2Venv.Compare(true, expected, "a==2\n"u8.ToArray(), true));
         Assert.Equal(Nb2BaseState.Incomplete, Nb2Venv.Compare(true, expected, expected, false));
         Assert.Equal(Nb2BaseState.Current, Nb2Venv.Compare(true, expected, expected, true));
+        // 只重新生成（头部注释中的 exclude-newer 日期不同）、包与哈希不变时不算基础层变化。
+        Assert.Equal(Nb2BaseState.Current, Nb2Venv.Compare(true, "# 2026-11-20\na==1\n"u8.ToArray(), "# 2026-11-21\r\na==1\r\n"u8.ToArray(), true));
     }
 
     [Fact]

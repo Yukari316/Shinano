@@ -259,7 +259,7 @@ public sealed class HelloCommands
 - 默认全部来源共用一份额度；`Scope = RateLimitScope.Session` 时按会话计数，群聊按群号，私聊按对方 QQ。
 - 标在方法上，单条指令计数；标在类上，整组共享额度。
 - 设置了 `Reply` 时，额度已满时回复该文字。Super User 不豁免。
-- 它排在 `Cooldown` 之后，被拒绝的调用（包括冷却中的）不计入额度。
+- 它排在 `Cooldown` 之后，被拒绝的调用（包括冷却中的）不计入额度。反过来，两者同时使用时，被限流拒绝的调用同样会开始冷却。
 - 需要在代码中判断时，使用 `RateLimitTracker` 的 `TryAcquire`。
 
 **占用消息**：

@@ -73,10 +73,16 @@ public sealed partial class Nb2Venv
         {
             (false, _)                                                  => Nb2BaseState.Missing,
             (_, null)                                                   => Nb2BaseState.Unmanaged,
-            (_, { } bytes) when !bytes.AsSpan().SequenceEqual(expected) => Nb2BaseState.Outdated,
-            _ when !pluginsLocked                                       => Nb2BaseState.Incomplete,
-            _                                                           => Nb2BaseState.Current
+            (_, { } bytes) when !SameLock(bytes, expected) => Nb2BaseState.Outdated,
+            _ when !pluginsLocked                          => Nb2BaseState.Incomplete,
+            _                                              => Nb2BaseState.Current
         };
+
+    /// <summary>
+    /// 两份锁定文件是否锁定同样的内容：忽略 <c>#</c> 注释行与行尾差异。uv 在头部注释记录生成命令（含 exclude-newer 日期），
+    /// 只重新生成而包与哈希不变时不算基础层变化。
+    /// </summary>
+    public static bool SameLock(byte[] left, byte[] right) => LockBody(left).SequenceEqual(LockBody(right));
 
     /// <summary>从插件资产覆盖 <c>bot.py</c> 与控制插件；启动 NB2 与试加载前调用。</summary>
     public async Task WriteScriptsAsync(CancellationToken cancellationToken)
@@ -156,7 +162,7 @@ public sealed partial class Nb2Venv
                 await File.WriteAllBytesAsync(expected, ExpectedBase(), token);
                 string? oldPlugins = File.Exists(_layout.PluginsLockFile) ? await File.ReadAllTextAsync(_layout.PluginsLockFile, token) : null;
                 bool baseUnchanged = File.Exists(_layout.BaseLockFile)
-                                     && (await File.ReadAllBytesAsync(_layout.BaseLockFile, token)).AsSpan().SequenceEqual(ExpectedBase());
+                                     && SameLock(await File.ReadAllBytesAsync(_layout.BaseLockFile, token), ExpectedBase());
 
                 if (oldPlugins is not null && baseUnchanged)
                 {
@@ -349,8 +355,8 @@ public sealed partial class Nb2Venv
             extra = ["-c", initialLock];
         }
 
-        return await InstallPluginsAsync([.. plugins.Except(initial)], expected, extra, cancellationToken)
-               ?? await ProbeAsync(plugins, work, cancellationToken);
+        // 试加载由调用方随后的 FinishAsync 执行。
+        return await InstallPluginsAsync([.. plugins.Except(initial)], expected, extra, cancellationToken);
     }
 
     private async Task<Nb2ChangeResult?> InstallPluginsAsync(
@@ -469,7 +475,8 @@ public sealed partial class Nb2Venv
         {
             Directory.Delete(directory, recursive: true);
         }
-        catch (IOException exception)
+        // 在 finally 中调用：抛出会让已经成功的变更报告为失败，插件清单与锁定文件随之不一致。
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(exception, "删除 NB2 依赖变更的临时目录 {Directory} 失败", directory);
         }
@@ -477,6 +484,12 @@ public sealed partial class Nb2Venv
 
     // PEP 503：包名不区分大小写，-、_、. 视为相同。
     private static string Normalize(string name) => SeparatorPattern().Replace(name.ToLowerInvariant(), "-");
+
+    private static IEnumerable<string> LockBody(byte[] content) =>
+        Encoding.UTF8.GetString(content)
+                .Split('\n')
+                .Select(line => line.TrimEnd('\r'))
+                .Where(line => !line.TrimStart().StartsWith('#'));
 
     private static string Tail(string output) => output.Length > OUTPUT_TAIL ? output[^OUTPUT_TAIL..] : output;
 
