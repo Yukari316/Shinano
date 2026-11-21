@@ -6,6 +6,7 @@ namespace Shinano.Plugin.Gemini.Api;
 /// Gemini 模型思考深度（effort / <c>thinkingLevel</c>）能力映射。
 /// 官方 <c>GET /v1beta/models</c> 只返回布尔字段 <c>thinking</c> 而非具体档位枚举，
 /// 因此结合 API 返回的 <c>thinking</c> 标记与已知模型族规则表确定可选档位，未知新模型安全回退全集。
+/// 规则表按 Gemini 官方 thinking 文档的「各模型支持的 thinking level」核对（2026-11）。
 /// </summary>
 public static class GeminiModelCapabilities
 {
@@ -35,11 +36,12 @@ public static class GeminiModelCapabilities
 
     private const string MODELS_PREFIX = "models/";
 
-    private static readonly string[] Gemini4UltraEfforts = [EFFORT_DEFAULT, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH, EFFORT_XHIGH];
-    private static readonly string[] Gemini4Efforts      = [EFFORT_DEFAULT, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH];
-    private static readonly string[] Gemini3Efforts      = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH];
-    private static readonly string[] LegacyThinkingOnly  = [EFFORT_DEFAULT];
-    private static readonly string[] AllEfforts          = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH, EFFORT_XHIGH];
+    private static readonly string[] LowToXHighEfforts    = [EFFORT_DEFAULT, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH, EFFORT_XHIGH];
+    private static readonly string[] LowToHighEfforts     = [EFFORT_DEFAULT, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH];
+    private static readonly string[] MinimalToHighEfforts = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH];
+    private static readonly string[] MinimalOrHighEfforts = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_HIGH];
+    private static readonly string[] LegacyThinkingOnly   = [EFFORT_DEFAULT];
+    private static readonly string[] AllEfforts           = [EFFORT_DEFAULT, EFFORT_MINIMAL, EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH, EFFORT_XHIGH];
 
     private static readonly FrozenSet<string> ExplicitThinkingLevels = new[]
     {
@@ -55,19 +57,24 @@ public static class GeminiModelCapabilities
         new()
         {
             Prefixes = ["gemini-4-hydrogen", "gemini-4-neon"],
-            Efforts  = Gemini4UltraEfforts
+            Efforts  = LowToXHighEfforts
         },
         new()
         {
-            Prefixes = ["gemini-4-", "gemini-4."],
-            Efforts  = Gemini4Efforts
+            Prefixes = ["gemini-4-", "gemini-4.", "gemini-3.8-flash", "gemini-3.1-pro"],
+            Efforts  = LowToHighEfforts
+        },
+        new()
+        {
+            Prefixes = ["gemini-3.1-flash-lite-image"],
+            Efforts  = MinimalOrHighEfforts
         },
         new()
         {
             Prefixes = ["gemini-3-", "gemini-3."],
-            Efforts  = Gemini3Efforts
+            Efforts  = MinimalToHighEfforts
         },
-        // Gemini 2.5 使用旧版 thinkingBudget 而非 thinkingLevel，只提供「默认（不传 thinkingLevel）」避免触发 400。
+        // generateContent 上的 Gemini 2.5 使用旧版 thinkingBudget 而非 thinkingLevel，只提供「默认（不传 thinkingLevel）」避免触发 400。
         new()
         {
             Prefixes = ["gemini-2.5-"],

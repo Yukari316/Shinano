@@ -11,14 +11,20 @@ namespace Shinano.Plugin.Gemini;
 /// <summary>Gemini 对话插件入口。</summary>
 public sealed class GeminiPlugin : IShinanoPlugin
 {
-    private const string PAGE_TITLE = "Gemini 对话设置";
-    private const string PAGE_ENTRY = "index.js";
+    private const string PAGE_TITLE        = "Gemini 对话设置";
+    private const string PAGE_ENTRY        = "index.js";
+    private const string SESSION_PURGE_JOB = "清理闲置对话上下文";
 
-    private GeminiScopeStore?         _scope;
-    private GeminiModelSettingsStore? _modelSettings;
-    private GeminiUsageStore?         _usage;
-    private GeminiMessageHandler?     _handler;
-    private GeminiPanelApi?           _panelApi;
+    // 闲置判断在每次提问时即时进行，此任务只负责及时释放闲置会话占用的内存（含历史图片）。
+    private static readonly TimeSpan SessionPurgeInterval = TimeSpan.FromMinutes(5);
+
+    private GeminiScopeStore?            _scope;
+    private GeminiModelSettingsStore?    _modelSettings;
+    private GeminiUsageStore?            _usage;
+    private GeminiMessageHandler?        _handler;
+    private GeminiPanelApi?              _panelApi;
+    private GeminiConversationStore?     _conversations;
+    private IPluginConfig<GeminiConfig>? _config;
 
     /// <inheritdoc />
     public void ConfigureServices(ContainerBuilder builder)
@@ -54,6 +60,8 @@ public sealed class GeminiPlugin : IShinanoPlugin
             _usage         = scope.Resolve<GeminiUsageStore>();
             _handler       = scope.Resolve<GeminiMessageHandler>();
             _panelApi      = scope.Resolve<GeminiPanelApi>();
+            _conversations = scope.Resolve<GeminiConversationStore>();
+            _config        = scope.Resolve<IPluginConfig<GeminiConfig>>();
         });
     }
 
@@ -72,7 +80,15 @@ public sealed class GeminiPlugin : IShinanoPlugin
         await _modelSettings!.LoadAsync();
         await _usage!.LoadAsync();
         context.Events.Subscribe<MessageReceivedEvent>(_handler!.HandleAsync);
+        context.Scheduler.Register(SESSION_PURGE_JOB, SessionPurgeInterval, PurgeSessionsAsync, runImmediately: false);
         context.Panel.UsePage(PAGE_TITLE, PAGE_ENTRY);
         context.Panel.MapApi(_panelApi!.Map);
+    }
+
+    private Task PurgeSessionsAsync(CancellationToken cancellationToken)
+    {
+        // SAFE: 任务在 InitializeAsync 中登记，此前 BuildCallback 已赋值。
+        _conversations!.PurgeExpired(TimeSpan.FromMinutes(_config!.Value.ConversationTimeoutMinutes));
+        return Task.CompletedTask;
     }
 }

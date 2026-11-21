@@ -98,8 +98,10 @@ internal static class GeminiPanelEndpoints
     {
         string model = GeminiModelCapabilities.NormalizeModelId(current.Model);
         if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
-        IReadOnlyList<string> allowed = GeminiModelCapabilities.GetAllowedEfforts(model, thinking);
-        string effort = GeminiModelCapabilities.NormalizeEffort(model, current.Effort, thinking);
+        // 空 effort 表示保存时已确认该模型不支持思考；重新读取时没有模型列表的 thinking 标记，不能再按模型名推断。
+        bool thinkingDisabled = current.Effort.Length == 0;
+        IReadOnlyList<string> allowed = thinkingDisabled ? [] : GeminiModelCapabilities.GetAllowedEfforts(model, thinking);
+        string effort = thinkingDisabled ? string.Empty : GeminiModelCapabilities.NormalizeEffort(model, current.Effort, thinking);
 
         return new GeminiModelSettingsView
         {

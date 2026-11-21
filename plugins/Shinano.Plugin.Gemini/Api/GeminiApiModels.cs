@@ -67,7 +67,7 @@ public sealed class GeminiGenerateRequest
     /// <summary>模型 ID。</summary>
     public required string Model { get; init; }
 
-    /// <summary>思考深度配置值。</summary>
+    /// <summary>思考深度配置值；空字符串表示关闭思考配置，不发送 <c>thinkingConfig</c>（含思考摘要）。</summary>
     public string Effort { get; init; } = string.Empty;
 
     /// <summary>可选系统提示词。</summary>

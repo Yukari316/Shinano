@@ -1,7 +1,7 @@
 {
   "id": "gemini",
   "name": "Gemini",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "使用 Google Gemini 模型进行群聊与好友私聊多轮多模态对话，回复以终末地长文卡片渲染",
   "entryAssembly": "Shinano.Plugin.Gemini.dll",
   "tables": {

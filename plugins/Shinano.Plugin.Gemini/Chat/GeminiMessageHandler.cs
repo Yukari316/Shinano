@@ -15,6 +15,7 @@ namespace Shinano.Plugin.Gemini.Chat;
 /// <summary>
 /// Gemini 普通事件消息处理器：按响应白名单过滤群聊与好友私聊（忽略临时会话），匹配可配置前缀，
 /// 处理新对话清空命令、多模态输入读取、按发言者全局冷却、内存多轮上下文管理与终末地长文卡片回复。
+/// 回复聊天的只有固定文案，失败原因只写日志。
 /// </summary>
 public sealed class GeminiMessageHandler
 {
@@ -32,6 +33,7 @@ public sealed class GeminiMessageHandler
     private readonly IPluginConfig<GeminiConfig>   _config;
     private readonly IPluginSecrets<GeminiSecrets> _secrets;
     private readonly IPluginImages                 _images;
+    private readonly TimeProvider                  _time;
     private readonly ILogger<GeminiMessageHandler> _logger;
 
     /// <summary>创建消息处理器。</summary>
@@ -46,6 +48,7 @@ public sealed class GeminiMessageHandler
         IPluginConfig<GeminiConfig>   config,
         IPluginSecrets<GeminiSecrets> secrets,
         IPluginImages                 images,
+        TimeProvider                  time,
         ILogger<GeminiMessageHandler> logger)
     {
         _scope         = scope;
@@ -58,6 +61,7 @@ public sealed class GeminiMessageHandler
         _config        = config;
         _secrets       = secrets;
         _images        = images;
+        _time          = time;
         _logger        = logger;
     }
 
@@ -100,39 +104,39 @@ public sealed class GeminiMessageHandler
         if (afterPrefix.Length == 0 && !HasImageOrReply(e.Message.Body))
             return;
 
-        GeminiInputReadResult input = await _inputReader.ReadAsync(e, afterPrefix, CancellationToken.None);
-        if (input.Status == GeminiInputReadStatus.Empty)
-            return;
-
-        e.IsContinueEventChain = false;
-
-        if (input.Status == GeminiInputReadStatus.Failed)
-        {
-            _logger.LogWarning("Gemini 输入校验失败：{Session}，发言者 {UserId}，原因 {Reason}", session, (long)userId, input.ErrorMessage);
-            await e.ReplyAsync(new MessageBody(input.ErrorMessage));
-            return;
-        }
-
         string apiKey = _secrets.Value.ApiKey;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
+            e.IsContinueEventChain = false;
             _logger.LogWarning("Gemini 触发失败（未配置 API Key）：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.API_KEY_MISSING));
             return;
         }
 
+        // 先占用会话与冷却再读取输入，生成中或冷却中的触发不必下载图片。
         int maxTurns = isGroup ? config.GroupMaxTurns : config.PrivateMaxTurns;
-        if (!_conversations.TryBeginTurn(groupId, userId, maxTurns, out GeminiTurnLease lease))
+        TimeSpan idleTimeout = TimeSpan.FromMinutes(config.ConversationTimeoutMinutes);
+        if (!_conversations.TryBeginTurn(groupId, userId, maxTurns, idleTimeout, out GeminiTurnLease lease))
         {
+            e.IsContinueEventChain = false;
             _logger.LogInformation("Gemini 跳过触发（上一条仍在生成中）：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.BUSY));
             return;
         }
 
         TimeSpan cooldown = TimeSpan.FromSeconds(Math.Max(0, config.UserCooldownSeconds));
-        if (!_cooldown.TryAcquire(userId, cooldown, out CooldownTicket ticket, out int remainingSeconds))
+        CooldownResult cooldownResult = _cooldown.TryAcquire(userId, cooldown, out CooldownTicket ticket, out int remainingSeconds);
+        if (cooldownResult != CooldownResult.Acquired)
         {
             _conversations.AbortTurn(lease);
+            e.IsContinueEventChain = false;
+            if (cooldownResult == CooldownResult.Busy)
+            {
+                _logger.LogInformation("Gemini 跳过触发（该发言者在其他会话的请求仍在生成中）：{Session}，发言者 {UserId}", session, (long)userId);
+                await e.ReplyAsync(new MessageBody(ReplyTexts.BUSY));
+                return;
+            }
+
             _logger.LogInformation(
                 "Gemini 跳过触发（冷却中，剩余 {RemainingSeconds} 秒）：{Session}，发言者 {UserId}",
                 remainingSeconds,
@@ -142,103 +146,137 @@ public sealed class GeminiMessageHandler
             return;
         }
 
-        string model = GeminiModelCapabilities.DEFAULT_MODEL;
+        GeminiInputReadResult input;
         try
         {
-            GeminiConversationMessage userMessage = BuildUserMessage(input);
-            GeminiModelSettingsRecord settings = _modelSettings.Current;
-            model = GeminiModelCapabilities.NormalizeModelId(settings.Model);
-            if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
-            string effort = GeminiModelCapabilities.NormalizeEffort(model, settings.Effort);
+            input = await _inputReader.ReadAsync(e, afterPrefix, CancellationToken.None);
+        }
+        catch
+        {
+            // 异常由宿主记录；先释放占用，否则该发言者会一直被视为生成中。
+            ReleaseTurn(lease, ticket);
+            throw;
+        }
 
-            _logger.LogInformation(
-                "Gemini 触发对话：{Session}，发言者 {UserId}，模型 {Model}（effort={Effort}），轮数 [{Turn}/{Limit}]{ResetFlag}，文本 {TextLength} 字，图片 {ImageCount} 张",
-                session,
-                (long)userId,
-                model,
-                effort.Length > 0 ? effort : "无",
-                lease.TurnNumber,
-                lease.TurnLimit,
-                lease.ResetPrevious ? "（新对话）" : string.Empty,
-                input.Prompt.Length,
-                input.Images.Count);
+        if (input.Status == GeminiInputReadStatus.Empty)
+        {
+            ReleaseTurn(lease, ticket);
+            return;
+        }
 
-            GeminiGenerateRequest request = new()
-            {
-                BaseUrl            = config.BaseUrl,
-                ProxyUrl           = config.ProxyUrl,
-                ApiKey             = apiKey,
-                Model              = model,
-                Effort             = effort,
-                SystemPrompt       = settings.SystemPrompt ?? string.Empty,
-                IncludeThoughts    = config.IncludeThoughts,
-                EnableGoogleSearch = config.EnableGoogleSearch,
-                MaxSearchSources   = config.MaxSearchSources,
-                TimeoutSeconds     = config.TimeoutSeconds,
-                Messages           = [.. lease.History, userMessage]
-            };
+        e.IsContinueEventChain = false;
+        if (input.Status == GeminiInputReadStatus.Failed)
+        {
+            ReleaseTurn(lease, ticket);
+            _logger.LogWarning("Gemini 输入校验失败：{Session}，发言者 {UserId}，原因 {Reason}", session, (long)userId, input.ErrorMessage);
+            await e.ReplyAsync(new MessageBody(input.ErrorMessage));
+            return;
+        }
 
-            GeminiGenerateResponse response = await _api.GenerateAsync(request, CancellationToken.None);
-            decimal costUsd = GeminiPricing.EstimateCostUsd(model, response.Usage);
-            if (string.IsNullOrWhiteSpace(response.AnswerText))
-            {
-                _conversations.AbortTurn(lease);
-                _cooldown.Refund(ticket);
-                await _usage.RecordAsync(model, succeeded: false, response.Usage, costUsd);
-                _logger.LogWarning("Gemini 返回空内容：{Session}，发言者 {UserId}，模型 {Model}", session, (long)userId, model);
-                await e.ReplyAsync(new MessageBody(ReplyTexts.EMPTY_RESPONSE));
-                return;
-            }
+        GeminiModelSettingsRecord settings = _modelSettings.Current;
+        string model = GeminiModelCapabilities.NormalizeModelId(settings.Model);
+        if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
+        // 空 effort 表示保存模型时已确认它不支持思考，不能再按模型名推断出档位。
+        string effort = settings.Effort.Length == 0 ? string.Empty : GeminiModelCapabilities.NormalizeEffort(model, settings.Effort);
 
-            await _usage.RecordAsync(model, succeeded: true, response.Usage, costUsd);
-            IReadOnlyList<GeminiConversationPart> modelParts = response.ModelParts.Count > 0
-                ? response.ModelParts
-                : [new GeminiConversationPart { Text = response.AnswerText }];
-            GeminiConversationMessage modelMessage = new()
-            {
-                Role  = "model",
-                Parts = modelParts
-            };
-            _conversations.CommitTurn(lease, userMessage, modelMessage);
+        GeminiConversationMessage userMessage = BuildUserMessage(input);
+        long inputMediaBytes = input.Images.Sum(image => (long)image.Data.Length);
+        List<GeminiConversationMessage> history = GeminiConversationStore.TrimMedia(lease.History, GeminiApiClient.MAX_INLINE_MEDIA_BYTES - inputMediaBytes);
 
-            string markdown = GeminiReplyFormatter.BuildMarkdown(response, config.IncludeThoughts, config.EnableGoogleSearch);
-            string footerLeft = GeminiReplyFormatter.BuildFooterLeft(model, effort);
-            string footerRight = GeminiReplyFormatter.BuildFooterRight(lease.TurnNumber, lease.TurnLimit);
-            await ReplyCardOrFallbackAsync(e, markdown, footerLeft, footerRight);
-            _logger.LogInformation(
-                "Gemini 回复完成：{Session}，发言者 {UserId}，轮数 [{Turn}/{Limit}]，回复 {AnswerLength} 字，耗时 {ElapsedMs} ms，{Usage}",
-                session,
-                (long)userId,
-                lease.TurnNumber,
-                lease.TurnLimit,
-                response.AnswerText.Length,
-                (long)response.Elapsed.TotalMilliseconds,
-                response.Usage?.FormatSummary(response.Elapsed, costUsd) ?? "未返回 token 用量");
+        _logger.LogInformation(
+            "Gemini 触发对话：{Session}，发言者 {UserId}，模型 {Model}（effort={Effort}），轮数 [{Turn}/{Limit}]{ResetFlag}，文本 {TextLength} 字，图片 {ImageCount} 张",
+            session,
+            (long)userId,
+            model,
+            effort.Length > 0 ? effort : "无",
+            lease.TurnNumber,
+            lease.TurnLimit,
+            lease.ResetPrevious ? "（新对话）" : string.Empty,
+            input.Prompt.Length,
+            input.Images.Count);
+
+        GeminiGenerateRequest request = new()
+        {
+            BaseUrl            = config.BaseUrl,
+            ProxyUrl           = config.ProxyUrl,
+            ApiKey             = apiKey,
+            Model              = model,
+            Effort             = effort,
+            SystemPrompt       = settings.SystemPrompt ?? string.Empty,
+            IncludeThoughts    = config.IncludeThoughts,
+            EnableGoogleSearch = config.EnableGoogleSearch,
+            MaxSearchSources   = config.MaxSearchSources,
+            TimeoutSeconds     = config.TimeoutSeconds,
+            Messages           = [.. history, userMessage]
+        };
+
+        GeminiGenerateResponse response;
+        try
+        {
+            response = await _api.GenerateAsync(request, CancellationToken.None);
         }
         catch (OperationCanceledException)
         {
-            _conversations.AbortTurn(lease);
-            _cooldown.Refund(ticket);
-            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
             _logger.LogWarning("Gemini 请求超时：{Session}，发言者 {UserId}，模型 {Model}", session, (long)userId, model);
-            await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_TIMEOUT));
+            await FailRequestAsync(e, lease, ticket, model, ReplyTexts.REQUEST_TIMEOUT);
+            return;
         }
         catch (GeminiApiException exception)
         {
-            _conversations.AbortTurn(lease);
-            _cooldown.Refund(ticket);
-            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
             _logger.LogWarning("Gemini 请求失败：{Session}，发言者 {UserId}，模型 {Model}，原因 {Reason}", session, (long)userId, model, exception.Message);
-            await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_FAILED_PREFIX + exception.Message));
+            await FailRequestAsync(e, lease, ticket, model, ReplyTexts.REQUEST_FAILED);
+            return;
         }
         catch (Exception exception)
         {
-            _conversations.AbortTurn(lease);
-            _cooldown.Refund(ticket);
-            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
             _logger.LogError(exception, "处理 Gemini 对话请求时出现未预期异常：{Session}，发言者 {UserId}", session, (long)userId);
-            await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_FAILED_PREFIX + "内部错误，请查看日志"));
+            await FailRequestAsync(e, lease, ticket, model, ReplyTexts.REQUEST_FAILED);
+            return;
         }
+
+        decimal costUsd = GeminiPricing.EstimateCostUsd(model, response.Usage, DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime));
+        if (string.IsNullOrWhiteSpace(response.AnswerText))
+        {
+            ReleaseTurn(lease, ticket);
+            await _usage.RecordAsync(model, succeeded: false, response.Usage, costUsd);
+            _logger.LogWarning("Gemini 返回空内容：{Session}，发言者 {UserId}，模型 {Model}", session, (long)userId, model);
+            await e.ReplyAsync(new MessageBody(ReplyTexts.EMPTY_RESPONSE));
+            return;
+        }
+
+        await _usage.RecordAsync(model, succeeded: true, response.Usage, costUsd);
+        IReadOnlyList<GeminiConversationPart> modelParts = response.ModelParts.Count > 0
+            ? response.ModelParts
+            : [new GeminiConversationPart { Text = response.AnswerText }];
+        GeminiConversationMessage modelMessage = new()
+        {
+            Role  = "model",
+            Parts = modelParts
+        };
+        _conversations.CommitTurn(lease, userMessage, modelMessage);
+
+        string markdown = GeminiReplyFormatter.BuildMarkdown(response, config.IncludeThoughts, config.EnableGoogleSearch);
+        string footerLeft = GeminiReplyFormatter.BuildFooterLeft(model, effort);
+        string footerRight = GeminiReplyFormatter.BuildFooterRight(lease.TurnNumber, lease.TurnLimit);
+        try
+        {
+            await ReplyCardOrFallbackAsync(e, markdown, footerLeft, footerRight);
+        }
+        finally
+        {
+            // 冷却从回复发出后开始计时。
+            _cooldown.Complete(ticket);
+        }
+
+        _logger.LogInformation(
+            "Gemini 回复完成：{Session}，发言者 {UserId}，轮数 [{Turn}/{Limit}]，回复 {AnswerLength} 字，耗时 {ElapsedMs} ms，{Usage}",
+            session,
+            (long)userId,
+            lease.TurnNumber,
+            lease.TurnLimit,
+            response.AnswerText.Length,
+            (long)response.Elapsed.TotalMilliseconds,
+            response.Usage?.FormatSummary(response.Elapsed, costUsd) ?? "未返回 token 用量");
     }
 
     private static string FormatSession(bool isGroup, GroupId groupId, UserId userId) =>
@@ -277,6 +315,20 @@ public sealed class GeminiMessageHandler
             Role  = "user",
             Parts = parts
         };
+    }
+
+    // 本轮未产生回复：释放会话与冷却占用，不计入轮数也不开始冷却。
+    private void ReleaseTurn(GeminiTurnLease lease, CooldownTicket ticket)
+    {
+        _conversations.AbortTurn(lease);
+        _cooldown.Release(ticket);
+    }
+
+    private async Task FailRequestAsync(MessageReceivedEvent e, GeminiTurnLease lease, CooldownTicket ticket, string model, string reply)
+    {
+        ReleaseTurn(lease, ticket);
+        await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
+        await e.ReplyAsync(new MessageBody(reply));
     }
 
     private async Task ReplyCardOrFallbackAsync(

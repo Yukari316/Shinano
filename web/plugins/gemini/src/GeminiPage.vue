@@ -28,13 +28,6 @@ const EFFORT_LABELS: Record<string, string> = {
 }
 
 const ALL_EFFORTS = ['default', 'minimal', 'low', 'medium', 'high', 'xhigh']
-const EFFORT_RULES: { prefixes: string[]; efforts: string[] }[] = [
-  { prefixes: ['gemini-4-hydrogen', 'gemini-4-neon'], efforts: ['default', 'low', 'medium', 'high', 'xhigh'] },
-  { prefixes: ['gemini-4-', 'gemini-4.'], efforts: ['default', 'low', 'medium', 'high'] },
-  { prefixes: ['gemini-3-', 'gemini-3.'], efforts: ['default', 'minimal', 'low', 'medium', 'high'] },
-  { prefixes: ['gemini-2.5-'], efforts: ['default'] },
-  { prefixes: ['gemini-2.0-', 'gemini-1.5-', 'gemini-1.0-'], efforts: [] }
-]
 
 const SYSTEM_PROMPT_MAX_LENGTH = 8000
 const error = ref('')
@@ -73,9 +66,12 @@ const filteredModels = computed(() => {
   )
 })
 
+// 档位规则只在后端维护：模型列表与已保存的设置都带有后端给出的档位；手动输入的新模型列出全部档位，保存时由后端校正。
 const allowedEfforts = computed(() => {
   if (matchedModel.value) return matchedModel.value.allowedEfforts
-  return inferAllowedEfforts(selectedModel.value)
+  const saved = modelSettings.value
+  if (saved && normalizeModelId(selectedModel.value).toLowerCase() === saved.model.toLowerCase()) return saved.allowedEfforts
+  return ALL_EFFORTS
 })
 
 const filteredCandidates = computed(() => {
@@ -98,22 +94,6 @@ watch(allowedEfforts, (allowed) => {
 function normalizeModelId(value: string): string {
   const trimmed = value.trim()
   return trimmed.toLowerCase().startsWith('models/') ? trimmed.slice('models/'.length) : trimmed
-}
-
-function inferAllowedEfforts(modelId: string): string[] {
-  const id = normalizeModelId(modelId).toLowerCase()
-  if (!id) return ALL_EFFORTS
-  let matched: string[] | null = null
-  let bestPrefixLength = -1
-  for (const rule of EFFORT_RULES) {
-    for (const prefix of rule.prefixes) {
-      if (prefix.length > bestPrefixLength && id.startsWith(prefix)) {
-        matched = rule.efforts
-        bestPrefixLength = prefix.length
-      }
-    }
-  }
-  return matched ?? ALL_EFFORTS
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
@@ -413,7 +393,7 @@ onBeforeUnmount(() => {
             当前模型不支持思考深度配置，请求时将不传递 thinkingConfig。
           </p>
           <p class="text-xs opacity-70">
-            可选档位根据模型能力自动更新；切换模型时会自动校正不兼容的档位。
+            可选档位根据模型能力自动更新；切换模型时会自动校正不兼容的档位，手动输入的模型保存时由后端校正。
           </p>
         </div>
       </div>

@@ -14,6 +14,7 @@ public sealed class GeminiUsageStore
 {
     private const string DATE_FORMAT = "yyyy-MM-dd";
 
+    // SQL_NEED: 并发请求对同一「日期 × 模型」行原子累加计数，需要 INSERT ... ON CONFLICT DO UPDATE，SqlSugar 实体 API 无法表达累加式 upsert。
     private const string UPSERT_SQL = """
         INSERT INTO gemini_usage_daily (
             stat_date, model, request_count, success_count,

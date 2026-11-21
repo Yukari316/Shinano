@@ -120,11 +120,12 @@ public sealed class GeminiStoreIntegrationTests
             ThoughtsTokens   = 100,
             TotalTokens      = 1300
         };
-        await store.RecordAsync("gemini-4-hydrogen", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-hydrogen", first));
+        DateOnly billingDate = new(2026, 11, 20);
+        await store.RecordAsync("gemini-4-hydrogen", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-hydrogen", first, billingDate));
         await store.RecordAsync("gemini-4-hydrogen", succeeded: false, usage: null, costUsd: 0m);
 
         time.Advance(TimeSpan.FromDays(1));
-        await store.RecordAsync("gemini-4-neon", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-neon", first));
+        await store.RecordAsync("gemini-4-neon", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-neon", first, billingDate.AddDays(1)));
 
         IReadOnlyList<GeminiUsageRecord> lastDay = await store.QueryAsync(days: 1);
         GeminiUsageRecord neonRow = Assert.Single(lastDay);
@@ -204,6 +205,21 @@ public sealed class GeminiStoreIntegrationTests
         Assert.Equal("规则一\n规则二", promptView?["systemPrompt"]?.GetValue<string>());
         Assert.Equal("gemini-4-carbon", promptView?["model"]?.GetValue<string>());
 
+        // 模型列表标记 thinking=false 的模型保存为空 effort，重新读取时不再按模型名推断出档位。
+        HttpResponseMessage saveNonThinking = await client.PutAsJsonAsync(
+            "/api/plugin-api/gemini/model",
+            new JsonObject
+            {
+                ["model"]    = "gemma-test-model",
+                ["effort"]   = "medium",
+                ["thinking"] = false
+            },
+            ct);
+        Assert.Equal(HttpStatusCode.OK, saveNonThinking.StatusCode);
+        JsonObject? nonThinkingView = await client.GetFromJsonAsync<JsonObject>("/api/plugin-api/gemini/model", ct);
+        Assert.Equal(string.Empty, nonThinkingView?["effort"]?.GetValue<string>());
+        Assert.Empty(nonThinkingView?["allowedEfforts"]?.AsArray() ?? [null]);
+
         HttpResponseMessage saveScope = await client.PutAsJsonAsync(
             "/api/plugin-api/gemini/scope/group",
             new JsonObject { ["ids"] = new JsonArray(PluginHarness.GROUP_ID, PluginHarness.GROUP_ID) },
@@ -219,7 +235,7 @@ public sealed class GeminiStoreIntegrationTests
 
         // 经模拟 Milky 连接推送群消息，验证白名单放行与 #新对话 命令端到端回复。
         await panel.Plugins.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "#新对话");
-        await panel.Plugins.ExpectReplyAsync("已开启新对话，当前会话上下文已清空。");
+        await panel.Plugins.ExpectReplyAsync("好，前面聊的我全忘光了！");
 
         // 停用插件后专有 API 恢复 404。
         await panel.Plugins.Runtime.DisableAsync("gemini", ct);

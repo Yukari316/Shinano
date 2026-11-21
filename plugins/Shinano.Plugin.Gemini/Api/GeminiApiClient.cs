@@ -14,6 +14,12 @@ namespace Shinano.Plugin.Gemini.Api;
 /// </summary>
 public sealed class GeminiApiClient : IDisposable
 {
+    /// <summary>
+    /// 单次请求内联媒体的原始字节上限（14 MiB，含历史轮次的图片）。Gemini 限制整个请求（文字、系统提示词与内联数据）不超过 20 MB，
+    /// 内联数据经 base64 编码膨胀为 4/3，按此上限编码后约 18.7 MiB，余量留给文字与 JSON 结构。
+    /// </summary>
+    public const long MAX_INLINE_MEDIA_BYTES = 14L * 1024 * 1024;
+
     private const string API_KEY_HEADER    = "x-goog-api-key";
     private const string API_VERSION_PATH  = "v1beta";
     private const string GENERATE_METHOD   = "generateContent";
@@ -191,7 +197,8 @@ public sealed class GeminiApiClient : IDisposable
             };
         }
 
-        if (GeminiModelCapabilities.SupportsThinking(modelId))
+        // 空 effort 表示保存模型时已确认该模型不支持思考，不能再按模型名推断出档位。
+        if (request.Effort.Length > 0 && GeminiModelCapabilities.SupportsThinking(modelId))
         {
             JsonObject thinkingConfig = [];
             string normalizedEffort = GeminiModelCapabilities.NormalizeEffort(modelId, request.Effort);
