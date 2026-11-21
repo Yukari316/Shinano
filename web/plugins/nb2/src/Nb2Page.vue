@@ -436,7 +436,7 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
     <section class="flex flex-col gap-3">
       <h3 class="font-semibold">响应范围</h3>
       <p class="text-sm opacity-70">只限制交付给 NB2 的消息与事件，保存后立即生效；好友申请、入群邀请与 NB2 主动发送不受限制。</p>
-      <div v-if="scopes" class="grid grid-cols-[auto_1fr_auto] items-center gap-x-6 gap-y-2 text-sm">
+      <div v-if="scopes" class="grid grid-cols-[auto_auto_auto] justify-start items-center gap-x-6 gap-y-2 text-sm">
         <template v-for="kind in SCOPE_KINDS" :key="kind">
           <span class="opacity-70">{{ SCOPE_LABEL[kind].title }}</span>
           <span>
@@ -582,8 +582,8 @@ onBeforeUnmount(() => window.clearInterval(refreshTimer))
           </header>
           <div class="flex items-center gap-2">
             <div class="join" role="group" aria-label="名单模式">
-              <button class="btn join-item btn-sm" :class="{ 'btn-active': scopeWhitelist }" :aria-pressed="scopeWhitelist" @click="scopeWhitelist = true">白名单</button>
-              <button class="btn join-item btn-sm" :class="{ 'btn-active': !scopeWhitelist }" :aria-pressed="!scopeWhitelist" @click="scopeWhitelist = false">黑名单</button>
+              <button class="btn join-item btn-sm" :class="{ 'btn-primary': scopeWhitelist }" :aria-pressed="scopeWhitelist" @click="scopeWhitelist = true">白名单</button>
+              <button class="btn join-item btn-sm" :class="{ 'btn-primary': !scopeWhitelist }" :aria-pressed="!scopeWhitelist" @click="scopeWhitelist = false">黑名单</button>
             </div>
             <button class="btn btn-ghost btn-sm ml-auto" :disabled="scopeSelected.length === 0" @click="scopeSelected = []">清空选择</button>
           </div>
