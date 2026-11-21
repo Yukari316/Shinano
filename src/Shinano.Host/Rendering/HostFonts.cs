@@ -9,11 +9,18 @@ namespace Shinano.Host.Rendering;
 /// JetBrains Mono（均为 OFL）、Twemoji Mozilla（图形 CC-BY 4.0）。使用静态字重文件：SkiaSharp 直接加载可变字体时只取默认字重。
 /// 选用 COLRv0 格式的 Twemoji：当前 Noto Color Emoji（COLRv1 + SVG）在 Windows 上经 SkiaSharp 绘制为空白。
 /// 字体缺失时不阻止宿主启动，访问时抛出异常，由调用方改用文字。
+/// 同目录另有只供公式渲染使用的中文后备字体 <see cref="MATH_CJK_FILE" />，不属于插件可用的公共字体。
 /// </summary>
 public sealed class HostFonts : IPluginFonts, IDisposable
 {
     /// <summary>资源目录名，位于程序目录下，随宿主输出。</summary>
     public const string RESOURCE_DIRECTORY = "Resource";
+
+    /// <summary>
+    /// 公式渲染的中文后备字体：由 <c>build/math-cjk-font.py</c> 从 Noto Sans SC 截取 GB2312 汉字与 CJK 标点并转为 TrueType 轮廓，
+    /// 因为 CSharpMath 使用的 Typography 无法解析 CFF 字形。
+    /// </summary>
+    internal const string MATH_CJK_FILE = "NotoSansSC-Regular-GB2312.ttf";
 
     private const string FONTS_DIRECTORY = "Fonts";
     private const string REGULAR_FILE    = "NotoSansSC-Regular.otf";
@@ -90,6 +97,9 @@ public sealed class HostFonts : IPluginFonts, IDisposable
         _mono?.Dispose();
         _emoji?.Dispose();
     }
+
+    /// <summary>程序目录下字体文件的完整路径。</summary>
+    internal static string FontPath(string baseDirectory, string file) => Path.Combine(baseDirectory, RESOURCE_DIRECTORY, FONTS_DIRECTORY, file);
 
     private InvalidOperationException Unavailable() => new(LoadError ?? "宿主字体不可用");
 

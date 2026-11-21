@@ -3,20 +3,27 @@ using System.Text;
 using CSharpMath.Atom;
 using CSharpMath.Rendering.FrontEnd;
 using SkiaSharp;
+using Typography.OpenFont;
+using MathFonts = CSharpMath.Rendering.BackEnd.Fonts;
 using MathPath = CSharpMath.Rendering.FrontEnd.Path;
 
 namespace Shinano.Host.Rendering;
 
 /// <summary>
 /// 基于 <c>CSharpMath.Rendering</c> 与自写 SkiaSharp 4 画布适配层的 LaTeX 数学公式渲染器。
-/// 单条公式解析或排版失败时返回 null，由调用方回退为原样纯文本。
+/// CSharpMath 自带字体没有中文字形，公式含中文时加入宿主的中文后备字体（<see cref="HostFonts.MATH_CJK_FILE" />）。
+/// 单条公式解析或排版失败、或含有任何字体都没有的字符时返回 null，由调用方回退为原样纯文本。
 /// </summary>
 internal static class LatexMathRenderer
 {
-    private const float PADDING = 1.5f;
+    private const float PADDING         = 1.5f;
+    private const int   FIRST_NON_ASCII = 0x80;
 
     // CSharpMath 内部共享字体缓存，串行排版避免潜在并发初始化竞争。
     private static readonly Lock Sync = new();
+
+    // 约 2 MB，首次遇到含中文的公式时才加载；加载失败时缓存 null，含中文的公式一律回退原文。
+    private static readonly Lazy<Typeface?> CjkTypeface = new(LoadCjkTypeface);
 
     /// <summary>
     /// 将 Markdown 中的 <c>\[...\]</c> 与 <c>\(...\)</c> 转为 Markdig 数学扩展识别的 <c>$$...$$</c> 与 <c>$...$</c>，
@@ -79,13 +86,16 @@ internal static class LatexMathRenderer
         {
             try
             {
+                if (!TryResolveTypefaces(trimmed, out Typeface[] localTypefaces)) return null;
+
                 SkiaMathPainter painter = new()
                 {
                     LaTeX              = trimmed,
                     FontSize           = fontSize,
                     TextColor          = color,
                     LineStyle          = displayStyle ? LineStyle.Display : LineStyle.Text,
-                    DisplayErrorInline = false
+                    DisplayErrorInline = false,
+                    LocalTypefaces     = localTypefaces
                 };
 
                 if (!string.IsNullOrEmpty(painter.ErrorMessage)) return null;
@@ -119,6 +129,39 @@ internal static class LatexMathRenderer
             {
                 return null;
             }
+        }
+    }
+
+    // 缺字时 CSharpMath 不报错而画成方框：按码点核对字体覆盖，自带字体缺的字符由中文后备字体补齐，
+    // 仍有字符没有任何字体覆盖（如 emoji）时放弃排版，由调用方按原文绘制。
+    private static bool TryResolveTypefaces(string latex, out Typeface[] localTypefaces)
+    {
+        localTypefaces = [];
+        int[] missing =
+        [
+            .. latex.EnumerateRunes()
+                    .Select(rune => rune.Value)
+                    .Where(code => code >= FIRST_NON_ASCII && !MathFonts.GlobalTypefaces.Any(typeface => typeface.GetGlyphIndex(code) != 0))
+                    .Distinct()
+        ];
+        if (missing.Length == 0) return true;
+
+        if (CjkTypeface.Value is not { } cjk || missing.Any(code => cjk.GetGlyphIndex(code) == 0)) return false;
+        localTypefaces = [cjk];
+        return true;
+    }
+
+    private static Typeface? LoadCjkTypeface()
+    {
+        string path = HostFonts.FontPath(AppContext.BaseDirectory, HostFonts.MATH_CJK_FILE);
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            return new OpenFontReader().Read(stream);
+        }
+        catch
+        {
+            return null;
         }
     }
 

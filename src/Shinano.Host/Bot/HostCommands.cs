@@ -7,7 +7,6 @@ using Shinano.Infrastructure.Health;
 using Shinano.Infrastructure.Hosting;
 using Shinano.Infrastructure.Logging;
 using Sora.Command.Attributes;
-using Sora.Core.Enums;
 using Sora.Entities.Events;
 using Sora.Entities.Message;
 
@@ -32,6 +31,8 @@ public sealed class HostCommands
         ## 行内与块级 LaTeX 公式
 
         质能方程 $E = mc^2$ 与欧拉恒等式 \(e^{i\pi} + 1 = 0\) 应与正文同基线排布，复杂分数如 $\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$ 会自动扩展行高。
+
+        含中文的公式 $\text{速度} = \frac{\text{路程}}{\text{时间}}$ 使用中文后备字体排版。
 
         $$
         \int_{-\infty}^{+\infty} e^{-x^2}\,dx = \sqrt{\pi}, \qquad \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
@@ -71,6 +72,7 @@ public sealed class HostCommands
         | --- | :---: | ---: |
         | 宿主文档卡片 | 正常 | 1200 |
         | 公式容错回退 | 正常 | 100% |
+        | 单元格公式 | $$a^2 + b^2 = c^2$$ | 3 |
 
         ---
 

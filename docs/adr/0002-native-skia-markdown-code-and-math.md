@@ -12,6 +12,7 @@ Status: accepted
 
 - **语法高亮**：引入纯托管的 `TextMateSharp` 与 `TextMateSharp.Grammars`，将 TextMate token 作用域映射到参考 `endfield-ui-skill` 的终末地暗色代码块色板，逐段绘制高亮代码。
 - **LaTeX 数学公式**：引入不依赖 SkiaSharp 的 `CSharpMath.Rendering` 作为 TeX 解析与排版引擎，在宿主内自写轻量 SkiaSharp 4 画布适配层（实现 `CSharpMath.Rendering.FrontEnd.ICanvas`）；行内与块级公式独立容错，单条公式解析或渲染失败时退回原样文本。
+- **公式中的中文**：CSharpMath 自带字体没有中文字形，缺字时不报错而是画成方框；它使用的 Typography 又无法解析 Noto Sans SC 的 CFF 字形。因此由 `build/math-cjk-font.py` 从宿主的 Noto Sans SC 截取 GB2312 汉字、CJK 标点与全角字符并转为 TrueType 轮廓（约 2 MB，随宿主交付），公式含中文时作为后备字体加入；子集不含 ASCII，公式里的字母、数字与运算符仍用数学字体。排版前按码点核对字体覆盖，仍有字符没有任何字体覆盖（如 emoji、GB2312 以外的生僻字）时退回原样文本，不画方框。
 
 ## Considered Options
 
@@ -23,3 +24,4 @@ Status: accepted
 - `Shinano.Host` 直接维护 `CSharpMath.Rendering` 到 SkiaSharp 4 的小型画布适配层；未来升级 SkiaSharp 时只需维护该适配层，不依赖上游 `CSharpMath.SkiaSharp` 发布进度。
 - 语法高亮与公式渲染全部在进程内离线完成，不依赖 Chrome for Testing 与外网，且所有复用 `IPluginImages.RenderDocument` 的插件与宿主调试指令同步受益。
 - 受限于 `CSharpMath` 的 TeX 子集，极少数生僻宏或非标准公式语法会自动回退为原始文本显示，不会导致整张文档卡片渲染失败。
+- 宿主多带一份约 2 MB 的中文后备字体，首次排版含中文的公式时加载（约 80 ms、9 MB 内存）；更换宿主的 Noto Sans SC 后需重新运行生成脚本。

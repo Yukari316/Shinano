@@ -524,7 +524,7 @@ internal sealed class DocumentRenderer
     {
         TableCell? cell = row.OfType<TableCell>().FirstOrDefault(item => item.ColumnIndex == column)
                           ?? (column < row.Count ? row[column] as TableCell : null);
-        return cell?.FirstOrDefault() is ParagraphBlock paragraph ? [.. Segments(paragraph.Inline).OfType<RichSpan>()] : [];
+        return cell?.FirstOrDefault() is ParagraphBlock paragraph ? Spans(paragraph.Inline) : [];
     }
 
     private static bool IsNumeric(List<RichSpan> spans)
@@ -568,7 +568,16 @@ internal sealed class DocumentRenderer
 
     private SKColor BodyColor => _quoteDepth > 0 ? CardPalette.InkSecondary : CardPalette.Ink;
 
-    private List<RichSpan> Spans(ContainerInline? inline) => [.. Segments(inline).OfType<RichSpan>()];
+    private List<RichSpan> Spans(ContainerInline? inline) => [.. Segments(inline).Select(AsInlineSpan).OfType<RichSpan>()];
+
+    // 标题与表格单元格只能排成文字行：块级公式就地按行内公式排版，图片不显示。
+    private RichSpan? AsInlineSpan(object segment) =>
+        segment switch
+        {
+            RichSpan span        => span,
+            InlineMathBlock math => FormulaSpan(math.LaTeX, math.Style, displayStyle: true),
+            _                    => null
+        };
 
     // 行内元素展开为样式文字段；内嵌模式下可解码的图片作为 InlineImage 返回。
     private IEnumerable<object> Segments(ContainerInline? inline, SpanStyle style = SpanStyle.None)
@@ -691,32 +700,43 @@ internal sealed class DocumentRenderer
             IsAntialias = true
         };
 
+    // 行内的 $$...$$ 交给段落单独成块，段落之外由 Spans 就地排版。
     private IEnumerable<object> MathSegments(MathInline math, SpanStyle style)
     {
         string latex = math.Content.ToString();
         if (math.DelimiterCount >= 2)
         {
-            yield return new InlineMathBlock { LaTeX = latex };
-            yield break;
-        }
-
-        RenderedMathFormula? formula = LatexMathRenderer.TryRender(latex, MATH_INLINE_SIZE, BodyColor, displayStyle: false);
-        if (formula is not null)
-        {
-            _formulas.Add(formula);
-            yield return new RichSpan
+            yield return new InlineMathBlock
             {
-                Text    = latex,
-                Style   = style,
-                Formula = formula
+                LaTeX = latex,
+                Style = style
             };
             yield break;
         }
 
-        yield return new RichSpan
+        yield return FormulaSpan(latex, style, displayStyle: false);
+    }
+
+    // 排版失败时按原文显示，保留定界符。
+    private RichSpan FormulaSpan(string latex, SpanStyle style, bool displayStyle)
+    {
+        RenderedMathFormula? formula = LatexMathRenderer.TryRender(latex, MATH_INLINE_SIZE, BodyColor, displayStyle);
+        if (formula is null)
         {
-            Text  = $"${latex}$",
-            Style = style
+            string delimiter = displayStyle ? "$$" : "$";
+            return new RichSpan
+            {
+                Text  = delimiter + latex + delimiter,
+                Style = style
+            };
+        }
+
+        _formulas.Add(formula);
+        return new RichSpan
+        {
+            Text    = latex,
+            Style   = style,
+            Formula = formula
         };
     }
 
@@ -728,6 +748,7 @@ internal sealed class DocumentRenderer
 
     private sealed class InlineMathBlock
     {
-        public required string LaTeX { get; init; }
+        public required string    LaTeX { get; init; }
+        public required SpanStyle Style { get; init; }
     }
 }

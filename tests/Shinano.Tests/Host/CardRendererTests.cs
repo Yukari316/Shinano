@@ -201,6 +201,26 @@ public sealed class CardRendererTests
     }
 
     [Fact]
+    public void LatexMathRenderer_RendersChineseWithFallbackFontAndRejectsUncoveredCharacters()
+    {
+        // 中文后备字体随宿主输出；CSharpMath 自带字体没有中文字形，只有加载了后备字体才能通过覆盖检查。
+        Assert.True(File.Exists(HostFonts.FontPath(AppContext.BaseDirectory, HostFonts.MATH_CJK_FILE)));
+        using RenderedMathFormula? chinese = LatexMathRenderer.TryRender(@"\text{速度} = \frac{\text{路程}}{\text{时间}}，", 18, CardPalette.Ink, displayStyle: false);
+        Assert.NotNull(chinese);
+
+        // 没有任何字体覆盖的字符不画成方框，交给调用方按原文显示。
+        Assert.Null(LatexMathRenderer.TryRender(@"\text{😀} + 1", 18, CardPalette.Ink, displayStyle: false));
+    }
+
+    [Fact]
+    public void RenderDocument_KeepsDisplayFormulasInHeadingsAndTableCells()
+    {
+        // 标题与表格单元格无法单独成块，其中的 $$...$$ 就地按行内公式排版，不能被丢弃。
+        Assert.NotEqual(RenderMarkdown("## 勾股定理"), RenderMarkdown("## 勾股定理 $$a^2+b^2=c^2$$"));
+        Assert.NotEqual(RenderMarkdown("| 公式 |\n| --- |\n|  |"), RenderMarkdown("| 公式 |\n| --- |\n| $$x^2$$ |"));
+    }
+
+    [Fact]
     public void HostCommands_ExtractMarkdownSampleSupportsDefaultAndCustomBody()
     {
         string defaultSample = HostCommands.ExtractMarkdownSample("渲染测试");
@@ -210,6 +230,8 @@ public sealed class CardRendererTests
         string custom = HostCommands.ExtractMarkdownSample("md测试\n# 自定义标题\n$x+1$");
         Assert.Equal("# 自定义标题\n$x+1$", custom);
     }
+
+    private static byte[] RenderMarkdown(string markdown) => TestRendering.Images.RenderDocument(new DocumentCard { Markdown = markdown }).Image;
 
     private static bool HasPixelCloseTo(SKBitmap bitmap, SKColor expected)
     {
