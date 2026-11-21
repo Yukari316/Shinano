@@ -124,6 +124,48 @@ public sealed class GeminiPluginTests
     }
 
     [Fact]
+    public void ApiClient_ParsesUsageMetadataCacheAndEstimatesCost()
+    {
+        const string RESPONSE_JSON = """
+            {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [{ "text": "测试回答" }]
+                  }
+                }
+              ],
+              "usageMetadata": {
+                "promptTokenCount": 1000,
+                "cachedContentTokenCount": 400,
+                "candidatesTokenCount": 300,
+                "thoughtsTokenCount": 200,
+                "totalTokenCount": 1500
+              }
+            }
+            """;
+
+        TimeSpan elapsed = TimeSpan.FromSeconds(10);
+        GeminiGenerateResponse parsed = GeminiApiClient.ParseGenerateResponse(RESPONSE_JSON, maxSearchSources: 5, elapsed);
+
+        Assert.NotNull(parsed.Usage);
+        Assert.Equal(1000, parsed.Usage.PromptTokens);
+        Assert.Equal(400, parsed.Usage.CachedTokens);
+        Assert.Equal(300, parsed.Usage.CandidatesTokens);
+        Assert.Equal(200, parsed.Usage.ThoughtsTokens);
+        Assert.Equal(1500, parsed.Usage.TotalTokens);
+        Assert.Equal(500, parsed.Usage.OutputTokens);
+        Assert.Equal(50.0, parsed.Usage.TokensPerSecond(elapsed), 1);
+
+        // gemini-4-hydrogen: 未缓存输入 600 * 1.5 + 缓存输入 400 * 0.075 + 输出(含思考) 500 * 7.5 = 4680 / 1,000,000 = $0.00468
+        decimal cost = GeminiPricing.EstimateCostUsd("gemini-4-hydrogen", parsed.Usage);
+        Assert.Equal(0.00468m, cost);
+        Assert.Equal(0m, GeminiPricing.EstimateCostUsd("unknown-custom-model", parsed.Usage));
+        Assert.Equal("输入 1000（缓存 400） / 输出 300 / 思考 200 / 总计 1500 tokens，速度 50.0 tok/s，费用 $0.0047", parsed.Usage.FormatSummary(elapsed, cost));
+    }
+
+    [Fact]
     public async Task ApiClient_ListModelsFiltersGenerateContentAndUsesHeaderKey()
     {
         string? capturedHeader = null;

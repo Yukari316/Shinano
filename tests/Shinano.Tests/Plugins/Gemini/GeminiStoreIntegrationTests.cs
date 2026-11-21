@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Shinano.Framework.Plugins;
 using Shinano.Infrastructure.Hosting;
+using Shinano.Plugin.Gemini.Api;
 using Shinano.Plugin.Gemini.Persistence;
 using Shinano.Tests.Host;
 using Shinano.Tests.Host.Plugins;
@@ -98,6 +100,46 @@ public sealed class GeminiStoreIntegrationTests
     }
 
     [Fact]
+    public async Task UsageStore_AggregatesTokensCacheAndCostAcrossDays()
+    {
+        TestEnvironment.RequireConfigured();
+        HostInfrastructure infrastructure = _fixture.Ready;
+        await ClearTablesAsync(infrastructure);
+        StoreTestContext context = new() { Database = new GlobalDatabase { Global = infrastructure.Database.Global } };
+        FakeTimeProvider time = new(new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero));
+        GeminiUsageStore store = new(context, time, NullLogger<GeminiUsageStore>.Instance);
+        await store.LoadAsync();
+
+        GeminiUsageMetadata first = new()
+        {
+            PromptTokens     = 1000,
+            CachedTokens     = 500,
+            CandidatesTokens = 200,
+            ThoughtsTokens   = 100,
+            TotalTokens      = 1300
+        };
+        await store.RecordAsync("gemini-4-hydrogen", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-hydrogen", first));
+        await store.RecordAsync("gemini-4-hydrogen", succeeded: false, usage: null, costUsd: 0m);
+
+        time.Advance(TimeSpan.FromDays(1));
+        await store.RecordAsync("gemini-4-neon", succeeded: true, first, GeminiPricing.EstimateCostUsd("gemini-4-neon", first));
+
+        IReadOnlyList<GeminiUsageRecord> lastDay = await store.QueryAsync(days: 1);
+        GeminiUsageRecord neonRow = Assert.Single(lastDay);
+        Assert.Equal("gemini-4-neon", neonRow.Model);
+        Assert.Equal(1, neonRow.RequestCount);
+
+        IReadOnlyList<GeminiUsageRecord> all = await store.QueryAsync(days: 0);
+        Assert.Equal(2, all.Count);
+        GeminiUsageRecord hydrogenRow = Assert.Single(all, row => row.Model == "gemini-4-hydrogen");
+        Assert.Equal(2, hydrogenRow.RequestCount);
+        Assert.Equal(1, hydrogenRow.SuccessCount);
+        Assert.Equal(1000, hydrogenRow.PromptTokens);
+        Assert.Equal(500, hydrogenRow.CachedTokens);
+        Assert.True(hydrogenRow.CostUsd > 0m);
+    }
+
+    [Fact]
     public async Task Panel_LoadsBundledGeminiPluginAndServesConfigSecretsScopeAndModelApi()
     {
         TestEnvironment.RequireConfigured();
@@ -158,6 +200,11 @@ public sealed class GeminiStoreIntegrationTests
         JsonObject? scopes = await client.GetFromJsonAsync<JsonObject>("/api/plugin-api/gemini/scope", ct);
         Assert.Equal(PluginHarness.GROUP_ID, Assert.Single(scopes?["group"]?["ids"]?.AsArray() ?? [])?.GetValue<long>());
 
+        // 查询用量统计接口返回零值结构。
+        JsonObject? usage = await client.GetFromJsonAsync<JsonObject>("/api/plugin-api/gemini/usage?days=30", ct);
+        Assert.Equal(30, usage?["days"]?.GetValue<int>());
+        Assert.Equal(0, usage?["totals"]?["requestCount"]?.GetValue<long>());
+
         // 经模拟 Milky 连接推送群消息，验证白名单放行与 #新对话 命令端到端回复。
         await panel.Plugins.Server.PushGroupMessageAsync(PluginHarness.GROUP_ID, PluginHarness.MEMBER_ID, "member", "#新对话");
         await panel.Plugins.ExpectReplyAsync("已开启新对话，当前会话上下文已清空。");
@@ -168,7 +215,7 @@ public sealed class GeminiStoreIntegrationTests
     }
 
     private static Task ClearTablesAsync(HostInfrastructure infrastructure) =>
-        infrastructure.Database.Global.Ado.ExecuteCommandAsync("DROP TABLE IF EXISTS gemini_scope, gemini_model_settings");
+        infrastructure.Database.Global.Ado.ExecuteCommandAsync("DROP TABLE IF EXISTS gemini_scope, gemini_model_settings, gemini_usage_daily");
 
     private sealed class GlobalDatabase : IPluginDatabase
     {

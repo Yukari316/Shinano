@@ -16,6 +16,7 @@ public sealed class GeminiPlugin : IShinanoPlugin
 
     private GeminiScopeStore?         _scope;
     private GeminiModelSettingsStore? _modelSettings;
+    private GeminiUsageStore?         _usage;
     private GeminiMessageHandler?     _handler;
     private GeminiPanelApi?           _panelApi;
 
@@ -38,6 +39,7 @@ public sealed class GeminiPlugin : IShinanoPlugin
         builder.RegisterInstance(TimeProvider.System).As<TimeProvider>();
         builder.RegisterType<GeminiScopeStore>().SingleInstance();
         builder.RegisterType<GeminiModelSettingsStore>().SingleInstance();
+        builder.RegisterType<GeminiUsageStore>().SingleInstance();
         builder.RegisterType<GeminiApiClient>().SingleInstance();
         builder.RegisterType<GeminiCooldownTracker>().SingleInstance();
         builder.RegisterType<GeminiInputReader>().SingleInstance();
@@ -49,6 +51,7 @@ public sealed class GeminiPlugin : IShinanoPlugin
         {
             _scope         = scope.Resolve<GeminiScopeStore>();
             _modelSettings = scope.Resolve<GeminiModelSettingsStore>();
+            _usage         = scope.Resolve<GeminiUsageStore>();
             _handler       = scope.Resolve<GeminiMessageHandler>();
             _panelApi      = scope.Resolve<GeminiPanelApi>();
         });
@@ -67,6 +70,7 @@ public sealed class GeminiPlugin : IShinanoPlugin
         // SAFE: ConfigureServices 阶段已由 Autofac BuildCallback 解析并赋值。
         await _scope!.LoadAsync();
         await _modelSettings!.LoadAsync();
+        await _usage!.LoadAsync();
         context.Events.Subscribe<MessageReceivedEvent>(_handler!.HandleAsync);
         context.Panel.UsePage(PAGE_TITLE, PAGE_ENTRY);
         context.Panel.MapApi(_panelApi!.Map);

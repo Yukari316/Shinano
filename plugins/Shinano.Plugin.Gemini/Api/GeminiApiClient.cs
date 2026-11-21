@@ -120,26 +120,20 @@ public sealed class GeminiApiClient : IDisposable
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         using HttpResponseMessage response = await SendAsync(client, message, timeout.Token);
+        TimeSpan responseStartElapsed = DateTimeOffset.UtcNow - startedAt;
+        _logger.LogInformation(
+            "Gemini API 开始响应：model={Model}，HTTP {StatusCode}，等待 {FirstResponseMs} ms",
+            modelId,
+            (int)response.StatusCode,
+            (long)responseStartElapsed.TotalMilliseconds);
+
         string body = await response.Content.ReadAsStringAsync(timeout.Token);
         TimeSpan elapsed = DateTimeOffset.UtcNow - startedAt;
 
         if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning(
-                "Gemini 调用失败：model={Model}，HTTP {StatusCode}，耗时 {ElapsedMs} ms",
-                modelId,
-                (int)response.StatusCode,
-                (long)elapsed.TotalMilliseconds);
             throw CreateHttpException(response.StatusCode, body);
-        }
 
-        _logger.LogInformation(
-            "Gemini 调用完成：model={Model}，HTTP {StatusCode}，耗时 {ElapsedMs} ms",
-            modelId,
-            (int)response.StatusCode,
-            (long)elapsed.TotalMilliseconds);
-
-        return ParseGenerateResponse(body, request.MaxSearchSources);
+        return ParseGenerateResponse(body, request.MaxSearchSources, elapsed);
     }
 
     /// <summary>构造 <c>generateContent</c> 请求体 JSON（独立公开便于单元测试断言）。</summary>
@@ -230,10 +224,11 @@ public sealed class GeminiApiClient : IDisposable
     }
 
     /// <summary>解析 <c>generateContent</c> 响应体 JSON（独立公开便于单元测试断言）。</summary>
-    internal static GeminiGenerateResponse ParseGenerateResponse(string responseJson, int maxSearchSources)
+    internal static GeminiGenerateResponse ParseGenerateResponse(string responseJson, int maxSearchSources, TimeSpan elapsed = default)
     {
         using JsonDocument document = ParseJson(responseJson);
         JsonElement root = document.RootElement;
+        GeminiUsageMetadata? usage = ParseUsage(root);
 
         if (!root.TryGetProperty("candidates", out JsonElement candidates)
             || candidates.ValueKind != JsonValueKind.Array
@@ -245,7 +240,9 @@ public sealed class GeminiApiClient : IDisposable
             return new GeminiGenerateResponse
             {
                 AnswerText = string.Empty,
-                ModelParts = []
+                ModelParts = [],
+                Usage      = usage,
+                Elapsed    = elapsed
             };
         }
 
@@ -321,9 +318,41 @@ public sealed class GeminiApiClient : IDisposable
             AnswerText     = answerText,
             ThoughtSummary = string.Join("\n\n", thoughtSegments),
             ModelParts     = modelParts,
-            Sources        = sources
+            Sources        = sources,
+            Usage          = usage,
+            Elapsed        = elapsed
         };
     }
+
+    private static GeminiUsageMetadata? ParseUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("usageMetadata", out JsonElement usage) || usage.ValueKind != JsonValueKind.Object)
+            return null;
+
+        int? prompt = TryReadInt(usage, "promptTokenCount");
+        int? cached = TryReadInt(usage, "cachedContentTokenCount");
+        int? candidates = TryReadInt(usage, "candidatesTokenCount");
+        int? thoughts = TryReadInt(usage, "thoughtsTokenCount");
+        int? total = TryReadInt(usage, "totalTokenCount");
+        if (!prompt.HasValue && !cached.HasValue && !candidates.HasValue && !thoughts.HasValue && !total.HasValue)
+            return null;
+
+        return new GeminiUsageMetadata
+        {
+            PromptTokens     = prompt,
+            CachedTokens     = cached,
+            CandidatesTokens = candidates,
+            ThoughtsTokens   = thoughts,
+            TotalTokens      = total
+        };
+    }
+
+    private static int? TryReadInt(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out JsonElement value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out int parsed)
+            ? parsed
+            : null;
 
     /// <inheritdoc />
     public void Dispose()

@@ -102,6 +102,67 @@ public sealed class GeminiSearchSource
     public string Uri { get; init; } = string.Empty;
 }
 
+/// <summary>Gemini 响应中的 token 用量统计。</summary>
+public sealed class GeminiUsageMetadata
+{
+    /// <summary>输入（提示词与上下文，含缓存命中部分）token 数。</summary>
+    public int? PromptTokens { get; init; }
+
+    /// <summary>命中隐式/显式缓存的输入 token 数（未命中或未返回时为 null）。</summary>
+    public int? CachedTokens { get; init; }
+
+    /// <summary>模型可见回答输出 token 数。</summary>
+    public int? CandidatesTokens { get; init; }
+
+    /// <summary>模型思考过程消耗 token 数（未返回时为 null）。</summary>
+    public int? ThoughtsTokens { get; init; }
+
+    /// <summary>总计 token 数。</summary>
+    public int? TotalTokens { get; init; }
+
+    /// <summary>本次实际生成的输出 token 数（含思考 token），用于计算生成速度与输出成本。</summary>
+    public int OutputTokens
+    {
+        get
+        {
+            if (CandidatesTokens.HasValue || ThoughtsTokens.HasValue)
+                return (CandidatesTokens ?? 0) + (ThoughtsTokens ?? 0);
+            if (TotalTokens.HasValue && PromptTokens.HasValue)
+                return Math.Max(0, TotalTokens.Value - PromptTokens.Value);
+            return 0;
+        }
+    }
+
+    /// <summary>按给定耗时计算输出 token 生成速度（tokens/s）。</summary>
+    public double TokensPerSecond(TimeSpan elapsed) =>
+        elapsed.TotalSeconds > 0 && OutputTokens > 0 ? OutputTokens / elapsed.TotalSeconds : 0;
+
+    /// <summary>格式化供日志输出的用量、速度与可选估算成本摘要。</summary>
+    public string FormatSummary(TimeSpan elapsed, decimal? costUsd = null)
+    {
+        List<string> items = [];
+        if (PromptTokens.HasValue)
+        {
+            items.Add(CachedTokens is > 0
+                ? $"输入 {PromptTokens.Value}（缓存 {CachedTokens.Value}）"
+                : $"输入 {PromptTokens.Value}");
+        }
+
+        if (CandidatesTokens.HasValue) items.Add($"输出 {CandidatesTokens.Value}");
+        if (ThoughtsTokens is > 0) items.Add($"思考 {ThoughtsTokens.Value}");
+        if (TotalTokens.HasValue) items.Add($"总计 {TotalTokens.Value}");
+
+        string tokenText = items.Count > 0 ? $"{string.Join(" / ", items)} tokens" : "未返回 token 明细";
+        double speed = TokensPerSecond(elapsed);
+        string summary = speed > 0
+            ? $"{tokenText}，速度 {speed.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} tok/s"
+            : tokenText;
+        if (costUsd is > 0m)
+            summary += $"，费用 ${costUsd.Value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}";
+        return summary;
+    }
+}
+
 /// <summary>Gemini <c>generateContent</c> 解析结果。</summary>
 public sealed class GeminiGenerateResponse
 {
@@ -116,6 +177,12 @@ public sealed class GeminiGenerateResponse
 
     /// <summary>联网搜索去重后的参考来源列表。</summary>
     public IReadOnlyList<GeminiSearchSource> Sources { get; init; } = [];
+
+    /// <summary>上游返回的 token 用量统计；未返回时为 null。</summary>
+    public GeminiUsageMetadata? Usage { get; init; }
+
+    /// <summary>本次 API 调用耗时。</summary>
+    public TimeSpan Elapsed { get; init; }
 }
 
 /// <summary>Gemini REST API 返回非成功状态或响应无效时的异常。</summary>

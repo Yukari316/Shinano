@@ -2,10 +2,16 @@
 import { PhArrowsClockwise, PhPencilSimple, PhX } from '@phosphor-icons/vue'
 import { type ApiResult, callApi, jsonBody, type PluginPageContext } from '@shinano/plugin-sdk'
 import { computed, onMounted, ref, watch } from 'vue'
-import type { ModelOption, ModelSettings, ScopeCandidate, ScopeKind, Scopes } from './types'
+import type { ModelOption, ModelSettings, ScopeCandidate, ScopeKind, Scopes, UsageSummary } from './types'
 
 const props = defineProps<{ context: PluginPageContext }>()
 
+const USAGE_RANGES: { label: string; days: number }[] = [
+  { label: '今日', days: 1 },
+  { label: '近 7 天', days: 7 },
+  { label: '近 30 天', days: 30 },
+  { label: '全部', days: 0 }
+]
 const SCOPE_KINDS: ScopeKind[] = ['group', 'private']
 const SCOPE_LABEL: Record<ScopeKind, { title: string; noun: string }> = {
   group: { title: '群聊', noun: '群' },
@@ -23,6 +29,10 @@ const EFFORT_LABELS: Record<string, string> = {
 
 const error = ref('')
 const notice = ref('')
+const usageDays = ref(30)
+const usage = ref<UsageSummary | null>(null)
+const usageLoading = ref(false)
+const usageDetailModal = ref<'model' | 'daily' | null>(null)
 const modelSettings = ref<ModelSettings | null>(null)
 const selectedModel = ref('gemini-4-hydrogen')
 const selectedEffort = ref('medium')
@@ -95,6 +105,30 @@ async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> 
   if (result.error) error.value = result.error
   return result
 }
+
+async function loadUsage(days = usageDays.value) {
+  usageDays.value = days
+  usageLoading.value = true
+  const result = await call<UsageSummary>(`/usage?days=${days}`)
+  usageLoading.value = false
+  if (result.ok) usage.value = result.body
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString('zh-CN')
+}
+
+function formatUsd(value: number): string {
+  if (value === 0) return '$0.0000'
+  if (value < 0.01) return `$${value.toFixed(5)}`
+  return `$${value.toFixed(4)}`
+}
+
+function formatRate(rate: number, promptTokens: number): string {
+  return promptTokens > 0 ? `${(rate * 100).toFixed(1)}%` : '—'
+}
+
+const usageRangeLabel = computed(() => USAGE_RANGES.find((item) => item.days === usageDays.value)?.label ?? `近 ${usageDays.value} 天`)
 
 async function loadModelSettings() {
   const result = await call<ModelSettings>('/model')
@@ -186,7 +220,7 @@ function describeScope(kind: ScopeKind): string {
 }
 
 onMounted(async () => {
-  await Promise.all([loadModelSettings(), refreshScopes()])
+  await Promise.all([loadUsage(), loadModelSettings(), refreshScopes()])
   if (modelSettings.value?.hasApiKey) {
     await fetchModels()
     notice.value = ''
@@ -198,6 +232,61 @@ onMounted(async () => {
   <div class="flex flex-col gap-6">
     <div v-if="error" role="alert" class="alert alert-error text-sm">{{ error }}</div>
     <div v-if="notice" role="status" class="alert alert-success text-sm">{{ notice }}</div>
+
+    <section class="flex flex-col gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="font-semibold">用量统计</h3>
+        <div class="join ml-auto" role="group" aria-label="统计范围">
+          <button
+            v-for="range in USAGE_RANGES"
+            :key="range.days"
+            class="btn join-item btn-xs"
+            :class="{ 'btn-active': usageDays === range.days }"
+            :disabled="usageLoading"
+            @click="loadUsage(range.days)"
+          >
+            {{ range.label }}
+          </button>
+        </div>
+        <button class="btn btn-ghost btn-xs btn-square" aria-label="刷新用量统计" :disabled="usageLoading" @click="loadUsage()">
+          <PhArrowsClockwise class="size-4" :class="{ 'animate-spin': usageLoading }" />
+        </button>
+      </div>
+
+      <div v-if="usage" class="stats stats-vertical lg:stats-horizontal w-full border border-base-300 bg-base-100">
+        <div class="stat">
+          <div class="stat-title">估算成本（USD）</div>
+          <div class="stat-value text-2xl tabular-nums">{{ formatUsd(usage.totals.costUsd) }}</div>
+          <div class="stat-desc">按内置公开单价估算</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">请求数</div>
+          <div class="stat-value text-2xl tabular-nums">{{ formatNumber(usage.totals.requestCount) }}</div>
+          <div class="stat-desc tabular-nums">成功 {{ formatNumber(usage.totals.successCount) }} · 失败 {{ formatNumber(usage.totals.failedCount) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Token 消耗</div>
+          <div class="stat-value text-2xl tabular-nums">{{ formatNumber(usage.totals.totalTokens) }}</div>
+          <div class="stat-desc tabular-nums">
+            输入 {{ formatNumber(usage.totals.promptTokens) }} · 输出 {{ formatNumber(usage.totals.candidatesTokens) }}<template v-if="usage.totals.thoughtsTokens > 0"> · 思考 {{ formatNumber(usage.totals.thoughtsTokens) }}</template>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">缓存命中率</div>
+          <div class="stat-value text-2xl tabular-nums">{{ formatRate(usage.totals.cacheHitRate, usage.totals.promptTokens) }}</div>
+          <div class="stat-desc tabular-nums">命中 {{ formatNumber(usage.totals.cachedTokens) }} / 输入 {{ formatNumber(usage.totals.promptTokens) }}</div>
+        </div>
+      </div>
+
+      <div v-if="usage && (usage.byModel.length > 0 || usage.daily.length > 0)" class="flex flex-wrap items-center gap-2">
+        <button v-if="usage.byModel.length > 0" class="btn btn-sm" @click="usageDetailModal = 'model'">
+          按模型明细（{{ usage.byModel.length }}）
+        </button>
+        <button v-if="usage.daily.length > 0" class="btn btn-sm" @click="usageDetailModal = 'daily'">
+          按日明细（{{ usage.daily.length }}）
+        </button>
+      </div>
+    </section>
 
     <section class="flex flex-col gap-3">
       <div class="flex flex-wrap items-center gap-2">
@@ -337,6 +426,102 @@ onMounted(async () => {
             <span class="text-sm opacity-70 tabular-nums">已选 {{ scopeSelected.length }} 个{{ SCOPE_LABEL[scopeEditing].noun }}</span>
             <button class="btn btn-ghost btn-sm ml-auto" @click="scopeEditing = null">取消</button>
             <button class="btn btn-primary btn-sm" :disabled="scopeLoading" @click="saveScope">保存</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="usage && usageDetailModal"
+        class="modal modal-open"
+        role="dialog"
+        aria-labelledby="gemini-usage-modal-title"
+        @click.self="usageDetailModal = null"
+      >
+        <div class="modal-box flex max-h-[80vh] w-11/12 max-w-4xl flex-col gap-3">
+          <header class="flex flex-wrap items-center gap-2">
+            <h3 id="gemini-usage-modal-title" class="text-lg font-semibold">
+              {{ usageDetailModal === 'model' ? '按模型用量明细' : '按日用量明细' }}
+            </h3>
+            <span class="badge badge-sm badge-ghost">{{ usageRangeLabel }}</span>
+            <div class="join ml-auto" role="group" aria-label="切换明细维度">
+              <button
+                class="btn join-item btn-xs"
+                :class="{ 'btn-active': usageDetailModal === 'model' }"
+                :disabled="usage.byModel.length === 0"
+                @click="usageDetailModal = 'model'"
+              >
+                按模型（{{ usage.byModel.length }}）
+              </button>
+              <button
+                class="btn join-item btn-xs"
+                :class="{ 'btn-active': usageDetailModal === 'daily' }"
+                :disabled="usage.daily.length === 0"
+                @click="usageDetailModal = 'daily'"
+              >
+                按日（{{ usage.daily.length }}）
+              </button>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-square" aria-label="关闭" @click="usageDetailModal = null">
+              <PhX class="size-4" />
+            </button>
+          </header>
+
+          <div class="min-h-0 flex-1 overflow-auto">
+            <table v-if="usageDetailModal === 'model'" class="table table-sm table-pin-rows">
+              <thead>
+                <tr>
+                  <th>模型</th>
+                  <th class="text-right">请求数</th>
+                  <th class="text-right">输入（缓存）</th>
+                  <th class="text-right">输出（思考）</th>
+                  <th class="text-right">总计 Token</th>
+                  <th class="text-right">缓存命中率</th>
+                  <th class="text-right">成本 (USD)</th>
+                </tr>
+              </thead>
+              <tbody class="tabular-nums">
+                <tr v-for="row in usage.byModel" :key="row.model">
+                  <td class="font-mono">{{ row.model }}</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.requestCount) }}</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.promptTokens) }}（{{ formatNumber(row.metrics.cachedTokens) }}）</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.candidatesTokens) }}（{{ formatNumber(row.metrics.thoughtsTokens) }}）</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.totalTokens) }}</td>
+                  <td class="text-right">{{ formatRate(row.metrics.cacheHitRate, row.metrics.promptTokens) }}</td>
+                  <td class="text-right font-mono">{{ formatUsd(row.metrics.costUsd) }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <table v-else class="table table-sm table-pin-rows">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th class="text-right">请求数</th>
+                  <th class="text-right">输入（缓存）</th>
+                  <th class="text-right">输出（思考）</th>
+                  <th class="text-right">总计 Token</th>
+                  <th class="text-right">缓存命中率</th>
+                  <th class="text-right">成本 (USD)</th>
+                </tr>
+              </thead>
+              <tbody class="tabular-nums">
+                <tr v-for="row in usage.daily" :key="row.date">
+                  <td class="font-mono">{{ row.date }}</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.requestCount) }}</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.promptTokens) }}（{{ formatNumber(row.metrics.cachedTokens) }}）</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.candidatesTokens) }}（{{ formatNumber(row.metrics.thoughtsTokens) }}）</td>
+                  <td class="text-right">{{ formatNumber(row.metrics.totalTokens) }}</td>
+                  <td class="text-right">{{ formatRate(row.metrics.cacheHitRate, row.metrics.promptTokens) }}</td>
+                  <td class="text-right font-mono">{{ formatUsd(row.metrics.costUsd) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <footer class="flex items-center justify-end gap-2">
+            <button class="btn btn-sm" @click="usageDetailModal = null">关闭</button>
           </footer>
         </div>
       </div>

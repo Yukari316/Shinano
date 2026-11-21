@@ -5,6 +5,6 @@
   "description": "使用 Google Gemini 模型进行群聊与好友私聊多轮多模态对话，回复以终末地长文卡片渲染",
   "entryAssembly": "Shinano.Plugin.Gemini.dll",
   "tables": {
-    "global": ["gemini_scope", "gemini_model_settings"]
+    "global": ["gemini_scope", "gemini_model_settings", "gemini_usage_daily"]
   }
 }

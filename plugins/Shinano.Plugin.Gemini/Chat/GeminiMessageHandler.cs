@@ -24,6 +24,7 @@ public sealed class GeminiMessageHandler
 
     private readonly GeminiScopeStore              _scope;
     private readonly GeminiModelSettingsStore      _modelSettings;
+    private readonly GeminiUsageStore              _usage;
     private readonly GeminiApiClient               _api;
     private readonly GeminiCooldownTracker         _cooldown;
     private readonly GeminiInputReader             _inputReader;
@@ -37,6 +38,7 @@ public sealed class GeminiMessageHandler
     public GeminiMessageHandler(
         GeminiScopeStore              scope,
         GeminiModelSettingsStore      modelSettings,
+        GeminiUsageStore              usage,
         GeminiApiClient               api,
         GeminiCooldownTracker         cooldown,
         GeminiInputReader             inputReader,
@@ -48,6 +50,7 @@ public sealed class GeminiMessageHandler
     {
         _scope         = scope;
         _modelSettings = modelSettings;
+        _usage         = usage;
         _api           = api;
         _cooldown      = cooldown;
         _inputReader   = inputReader;
@@ -81,12 +84,14 @@ public sealed class GeminiMessageHandler
 
         GroupId groupId = isGroup ? e.Message.GroupId : default;
         UserId userId = e.Message.SenderId;
+        string session = FormatSession(isGroup, groupId, userId);
 
         // 新对话清空命令：受白名单约束、不消耗冷却、终止事件链。
         if (IsResetCommand(afterPrefix))
         {
             e.IsContinueEventChain = false;
             _conversations.Clear(groupId, userId);
+            _logger.LogInformation("Gemini 清空对话上下文：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.NEW_CONVERSATION));
             return;
         }
@@ -103,6 +108,7 @@ public sealed class GeminiMessageHandler
 
         if (input.Status == GeminiInputReadStatus.Failed)
         {
+            _logger.LogWarning("Gemini 输入校验失败：{Session}，发言者 {UserId}，原因 {Reason}", session, (long)userId, input.ErrorMessage);
             await e.ReplyAsync(new MessageBody(input.ErrorMessage));
             return;
         }
@@ -110,6 +116,7 @@ public sealed class GeminiMessageHandler
         string apiKey = _secrets.Value.ApiKey;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
+            _logger.LogWarning("Gemini 触发失败（未配置 API Key）：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.API_KEY_MISSING));
             return;
         }
@@ -117,6 +124,7 @@ public sealed class GeminiMessageHandler
         int maxTurns = isGroup ? config.GroupMaxTurns : config.PrivateMaxTurns;
         if (!_conversations.TryBeginTurn(groupId, userId, maxTurns, out GeminiTurnLease lease))
         {
+            _logger.LogInformation("Gemini 跳过触发（上一条仍在生成中）：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.BUSY));
             return;
         }
@@ -125,17 +133,35 @@ public sealed class GeminiMessageHandler
         if (!_cooldown.TryAcquire(userId, cooldown, out CooldownTicket ticket, out int remainingSeconds))
         {
             _conversations.AbortTurn(lease);
+            _logger.LogInformation(
+                "Gemini 跳过触发（冷却中，剩余 {RemainingSeconds} 秒）：{Session}，发言者 {UserId}",
+                remainingSeconds,
+                session,
+                (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.Cooldown(remainingSeconds)));
             return;
         }
 
+        string model = GeminiModelCapabilities.DEFAULT_MODEL;
         try
         {
             GeminiConversationMessage userMessage = BuildUserMessage(input);
             GeminiModelSettingsRecord settings = _modelSettings.Current;
-            string model = GeminiModelCapabilities.NormalizeModelId(settings.Model);
+            model = GeminiModelCapabilities.NormalizeModelId(settings.Model);
             if (model.Length == 0) model = GeminiModelCapabilities.DEFAULT_MODEL;
             string effort = GeminiModelCapabilities.NormalizeEffort(model, settings.Effort);
+
+            _logger.LogInformation(
+                "Gemini 触发对话：{Session}，发言者 {UserId}，模型 {Model}（effort={Effort}），轮数 [{Turn}/{Limit}]{ResetFlag}，文本 {TextLength} 字，图片 {ImageCount} 张",
+                session,
+                (long)userId,
+                model,
+                effort.Length > 0 ? effort : "无",
+                lease.TurnNumber,
+                lease.TurnLimit,
+                lease.ResetPrevious ? "（新对话）" : string.Empty,
+                input.Prompt.Length,
+                input.Images.Count);
 
             GeminiGenerateRequest request = new()
             {
@@ -153,14 +179,18 @@ public sealed class GeminiMessageHandler
             };
 
             GeminiGenerateResponse response = await _api.GenerateAsync(request, CancellationToken.None);
+            decimal costUsd = GeminiPricing.EstimateCostUsd(model, response.Usage);
             if (string.IsNullOrWhiteSpace(response.AnswerText))
             {
                 _conversations.AbortTurn(lease);
                 _cooldown.Refund(ticket);
+                await _usage.RecordAsync(model, succeeded: false, response.Usage, costUsd);
+                _logger.LogWarning("Gemini 返回空内容：{Session}，发言者 {UserId}，模型 {Model}", session, (long)userId, model);
                 await e.ReplyAsync(new MessageBody(ReplyTexts.EMPTY_RESPONSE));
                 return;
             }
 
+            await _usage.RecordAsync(model, succeeded: true, response.Usage, costUsd);
             IReadOnlyList<GeminiConversationPart> modelParts = response.ModelParts.Count > 0
                 ? response.ModelParts
                 : [new GeminiConversationPart { Text = response.AnswerText }];
@@ -175,27 +205,44 @@ public sealed class GeminiMessageHandler
             string footerLeft = GeminiReplyFormatter.BuildFooterLeft(model, effort);
             string footerRight = GeminiReplyFormatter.BuildFooterRight(lease.TurnNumber, lease.TurnLimit);
             await ReplyCardOrFallbackAsync(e, markdown, footerLeft, footerRight);
+            _logger.LogInformation(
+                "Gemini 回复完成：{Session}，发言者 {UserId}，轮数 [{Turn}/{Limit}]，回复 {AnswerLength} 字，耗时 {ElapsedMs} ms，{Usage}",
+                session,
+                (long)userId,
+                lease.TurnNumber,
+                lease.TurnLimit,
+                response.AnswerText.Length,
+                (long)response.Elapsed.TotalMilliseconds,
+                response.Usage?.FormatSummary(response.Elapsed, costUsd) ?? "未返回 token 用量");
         }
         catch (OperationCanceledException)
         {
             _conversations.AbortTurn(lease);
             _cooldown.Refund(ticket);
+            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
+            _logger.LogWarning("Gemini 请求超时：{Session}，发言者 {UserId}，模型 {Model}", session, (long)userId, model);
             await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_TIMEOUT));
         }
         catch (GeminiApiException exception)
         {
             _conversations.AbortTurn(lease);
             _cooldown.Refund(ticket);
+            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
+            _logger.LogWarning("Gemini 请求失败：{Session}，发言者 {UserId}，模型 {Model}，原因 {Reason}", session, (long)userId, model, exception.Message);
             await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_FAILED_PREFIX + exception.Message));
         }
         catch (Exception exception)
         {
             _conversations.AbortTurn(lease);
             _cooldown.Refund(ticket);
-            _logger.LogError(exception, "处理 Gemini 对话请求时出现未预期异常");
+            await _usage.RecordAsync(model, succeeded: false, usage: null, costUsd: 0m);
+            _logger.LogError(exception, "处理 Gemini 对话请求时出现未预期异常：{Session}，发言者 {UserId}", session, (long)userId);
             await e.ReplyAsync(new MessageBody(ReplyTexts.REQUEST_FAILED_PREFIX + "内部错误，请查看日志"));
         }
     }
+
+    private static string FormatSession(bool isGroup, GroupId groupId, UserId userId) =>
+        isGroup ? $"群 {(long)groupId}" : $"好友私聊 {(long)userId}";
 
     /// <summary>判断是否匹配前缀，并提取前缀后去掉首尾空白的内容。</summary>
     internal static bool TryMatchPrefix(string trimmedText, string prefix, out string afterPrefix)

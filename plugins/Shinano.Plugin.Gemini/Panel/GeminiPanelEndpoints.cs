@@ -141,6 +141,84 @@ internal static class GeminiPanelEndpoints
         }
     }
 
+    /// <summary>查询指定时间窗口内的用量统计（成本 USD、请求数、token 消耗与缓存命中率）。</summary>
+    internal static async Task<IResult> UsageAsync(GeminiUsageStore store, int? days)
+    {
+        int window = days is null ? 30 : days.Value <= 0 ? 0 : Math.Clamp(days.Value, 1, 3650);
+        IReadOnlyList<GeminiUsageRecord> rows = await store.QueryAsync(window);
+
+        GeminiUsageMetricsView totals = Aggregate(rows);
+        GeminiModelUsageView[] byModel =
+        [
+            .. rows.GroupBy(row => row.Model, StringComparer.OrdinalIgnoreCase)
+                   .Select(group => new GeminiModelUsageView
+                   {
+                       Model   = group.First().Model,
+                       Metrics = Aggregate(group)
+                   })
+                   .OrderByDescending(item => item.Metrics.CostUsd)
+                   .ThenByDescending(item => item.Metrics.RequestCount)
+        ];
+        GeminiDailyUsageView[] daily =
+        [
+            .. rows.GroupBy(row => row.StatDate, StringComparer.Ordinal)
+                   .Select(group => new GeminiDailyUsageView
+                   {
+                       Date    = group.Key,
+                       Metrics = Aggregate(group)
+                   })
+                   .OrderByDescending(item => item.Date, StringComparer.Ordinal)
+        ];
+
+        return Results.Ok(
+            new GeminiUsageSummaryView
+            {
+                Days    = window,
+                Totals  = totals,
+                ByModel = byModel,
+                Daily   = daily
+            });
+    }
+
+    private static GeminiUsageMetricsView Aggregate(IEnumerable<GeminiUsageRecord> rows)
+    {
+        long requests = 0;
+        long successes = 0;
+        long prompt = 0;
+        long cached = 0;
+        long candidates = 0;
+        long thoughts = 0;
+        long total = 0;
+        decimal cost = 0m;
+
+        foreach (GeminiUsageRecord row in rows)
+        {
+            requests   += row.RequestCount;
+            successes  += row.SuccessCount;
+            prompt     += row.PromptTokens;
+            cached     += row.CachedTokens;
+            candidates += row.CandidatesTokens;
+            thoughts   += row.ThoughtsTokens;
+            total      += row.TotalTokens;
+            cost       += row.CostUsd;
+        }
+
+        double cacheHitRate = prompt > 0 ? Math.Clamp((double)cached / prompt, 0, 1) : 0;
+        return new GeminiUsageMetricsView
+        {
+            RequestCount     = requests,
+            SuccessCount     = successes,
+            FailedCount      = Math.Max(0, requests - successes),
+            PromptTokens     = prompt,
+            CachedTokens     = cached,
+            CandidatesTokens = candidates,
+            ThoughtsTokens   = thoughts,
+            TotalTokens      = total,
+            CacheHitRate     = cacheHitRate,
+            CostUsd          = Math.Round(cost, 6, MidpointRounding.AwayFromZero)
+        };
+    }
+
     private static GeminiScopeKind? ParseKind(string kind) =>
         kind switch
         {

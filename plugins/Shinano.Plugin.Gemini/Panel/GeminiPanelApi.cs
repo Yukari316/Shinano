@@ -11,6 +11,7 @@ public sealed class GeminiPanelApi
 {
     private readonly GeminiScopeStore              _scope;
     private readonly GeminiModelSettingsStore      _modelSettings;
+    private readonly GeminiUsageStore              _usage;
     private readonly GeminiApiClient               _api;
     private readonly IPluginConfig<GeminiConfig>   _config;
     private readonly IPluginSecrets<GeminiSecrets> _secrets;
@@ -20,6 +21,7 @@ public sealed class GeminiPanelApi
     public GeminiPanelApi(
         GeminiScopeStore              scope,
         GeminiModelSettingsStore      modelSettings,
+        GeminiUsageStore              usage,
         GeminiApiClient               api,
         IPluginConfig<GeminiConfig>   config,
         IPluginSecrets<GeminiSecrets> secrets,
@@ -27,6 +29,7 @@ public sealed class GeminiPanelApi
     {
         _scope         = scope;
         _modelSettings = modelSettings;
+        _usage         = usage;
         _api           = api;
         _config        = config;
         _secrets       = secrets;
@@ -44,5 +47,6 @@ public sealed class GeminiPanelApi
         routes.MapGet("/model", () => GeminiPanelEndpoints.GetModelSettings(_modelSettings, _secrets));
         routes.MapPut("/model", (GeminiModelSettingsUpdate update) => GeminiPanelEndpoints.SaveModelSettingsAsync(_modelSettings, _secrets, update));
         routes.MapGet("/models", (CancellationToken cancellationToken) => GeminiPanelEndpoints.ListModelsAsync(_api, _config, _secrets, cancellationToken));
+        routes.MapGet("/usage", (int? days) => GeminiPanelEndpoints.UsageAsync(_usage, days));
     }
 }

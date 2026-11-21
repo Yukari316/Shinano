@@ -28,3 +28,33 @@ export interface ModelOption {
   thinking: boolean | null
   allowedEfforts: string[]
 }
+
+export interface UsageMetrics {
+  requestCount: number
+  successCount: number
+  failedCount: number
+  promptTokens: number
+  cachedTokens: number
+  candidatesTokens: number
+  thoughtsTokens: number
+  totalTokens: number
+  cacheHitRate: number
+  costUsd: number
+}
+
+export interface ModelUsageRow {
+  model: string
+  metrics: UsageMetrics
+}
+
+export interface DailyUsageRow {
+  date: string
+  metrics: UsageMetrics
+}
+
+export interface UsageSummary {
+  days: number
+  totals: UsageMetrics
+  byModel: ModelUsageRow[]
+  daily: DailyUsageRow[]
+}
